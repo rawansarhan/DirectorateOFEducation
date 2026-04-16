@@ -9,34 +9,48 @@ module.exports = {
         primaryKey: true,
         autoIncrement: true,
       },
-      device_id: {
+
+      userName: {
         type: Sequelize.STRING,
-        allowNull: false,
+        allowNull: true,
         unique: true,
       },
-      name: {
+
+      email: {
+        type: Sequelize.STRING,
+        allowNull: true,
+        unique: true,
+      },
+
+      phone_number: {
         type: Sequelize.STRING,
         allowNull: true,
       },
-      phone: {
-        type: Sequelize.STRING,
-        allowNull: true,
-      },
+
       password: {
         type: Sequelize.STRING,
-        allowNull: true,
-      },
-      createdAt: {
-        type: Sequelize.DATE,
         allowNull: false,
       },
-      updatedAt: {
-        type: Sequelize.DATE,
-        allowNull: false,
+
+      is_active: {
+        type: Sequelize.BOOLEAN,
+        defaultValue: true,
       },
-    });
+
+      created_at: {
+        allowNull: false,
+        type: Sequelize.DATE,
+        defaultValue: Sequelize.fn('NOW')
+      },
+      updated_at: {
+        allowNull: false,
+        type: Sequelize.DATE,
+        defaultValue: Sequelize.fn('NOW')
+      }
+    })
   },
-  down: async (queryInterface) => {
+
+  down: async (queryInterface, Sequelize) => {
     await queryInterface.dropTable('users');
   },
 };
