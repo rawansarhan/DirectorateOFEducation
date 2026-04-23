@@ -1,11 +1,10 @@
 'use strict';
 
 module.exports = (sequelize, DataTypes) => {
-
   class Stage extends sequelize.Sequelize.Model {
     static associate(models) {
 
-      // process definition relation
+      // 🔗 Process Definition
       Stage.belongsTo(models.ProcessDefinition, {
         foreignKey: 'process_definition_id',
         as: 'process_definition',
@@ -23,6 +22,30 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
       },
 
+      name: {
+        type: DataTypes.STRING,
+        allowNull: false,
+      },
+
+      code: {
+        type: DataTypes.STRING,
+        allowNull: false,
+      },
+
+      type: {
+        type: DataTypes.ENUM(
+          'USER_TASK',
+          'APPROVAL',
+          'SYSTEM_TASK',
+          'DOCUMENT',
+          'UPLOAD',
+          'DECISION',
+          'NOTIFICATION',
+          'END'
+        ),
+        allowNull: false,
+      },
+
       camunda_task_key: {
         type: DataTypes.STRING,
         allowNull: true,
@@ -30,32 +53,12 @@ module.exports = (sequelize, DataTypes) => {
 
       order: {
         type: DataTypes.INTEGER,
-        allowNull: false,
-      },
-
-      version: {
-        type: DataTypes.INTEGER,
-        defaultValue: 1,
+        allowNull: true,
       },
 
       is_active: {
         type: DataTypes.BOOLEAN,
         defaultValue: true,
-      },
-
-      requires_signature: {
-        type: DataTypes.BOOLEAN,
-        defaultValue: false,
-      },
-
-      end_time: {
-        type: DataTypes.DATE,
-        allowNull: true,
-      },
-
-      code: {
-        type: DataTypes.STRING,
-        allowNull: true,
       },
 
       created_at: {

@@ -48,14 +48,17 @@ module.exports = {
           key: 'id'
         },
         onDelete: 'SET NULL',
-        comment: "الدور الأعلى (Hierarchy)"
+        comment: 'الدور الأعلى (Hierarchy)'
       },
 
       is_active: {
         type: Sequelize.BOOLEAN,
         defaultValue: true
       },
-
+      camunda_group_key: {
+        type: Sequelize.STRING,
+        allowNull: false
+      },
       created_at: {
         allowNull: false,
         type: Sequelize.DATE,
@@ -77,7 +80,7 @@ module.exports = {
     })
   },
 
-  down: async (queryInterface) => {
+  down: async queryInterface => {
     await queryInterface.dropTable('organization_department_roles')
   }
 }

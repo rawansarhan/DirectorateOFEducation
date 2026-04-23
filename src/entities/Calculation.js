@@ -4,10 +4,7 @@ module.exports = (sequelize, DataTypes) => {
 
   class Calculation extends sequelize.Sequelize.Model {
     static associate(models) {
-        Calculation.hasMany(models.StageCalculation, {
-            foreignKey: 'calculation_id',
-            as: 'calculation',
-          });
+        
     }
   }
 
@@ -27,7 +24,10 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING,
         allowNull: true,
       },
-
+      version: {
+        type: DataTypes.INTEGER,
+        defaultValue: 1
+      },
       created_at: {
         type: DataTypes.DATE,
         allowNull: false,

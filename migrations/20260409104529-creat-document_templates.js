@@ -10,26 +10,6 @@ module.exports = {
         type: Sequelize.INTEGER
       },
 
-      stage_id: {
-        type: Sequelize.INTEGER,
-        allowNull: false,
-        references: {
-          model: 'stages',
-          key: 'id'
-        },
-        onDelete: 'CASCADE'
-      },
-
-      file_type_id: {
-        type: Sequelize.INTEGER,
-        allowNull: false,
-        references: {
-          model: 'type_file',
-          key: 'id'
-        },
-        onDelete: 'CASCADE'
-      },
-
       name: {
         type: Sequelize.STRING,
         allowNull: false
@@ -37,14 +17,33 @@ module.exports = {
 
       file_path: {
         type: Sequelize.STRING,
-        allowNull: false,
-        comment: "مسار الملف الأساسي (DOCX أو HTML أو أي صيغة قابلة للتحويل لـ PDF)"
+        allowNull: false
+      },
+
+      file_type: {
+        type: Sequelize.ENUM('pdf', 'docx', 'html'),
+        allowNull: false
       },
 
       engine_type: {
         type: Sequelize.ENUM('ACROFORM', 'POSITIONED'),
         defaultValue: 'ACROFORM',
         allowNull: false
+      },
+
+      config_json: {
+        type: Sequelize.JSON,
+        allowNull: true
+      },
+
+      version: {
+        type: Sequelize.INTEGER,
+        defaultValue: 1
+      },
+
+      is_latest: {
+        type: Sequelize.BOOLEAN,
+        defaultValue: true
       },
 
       is_active: {
@@ -66,7 +65,7 @@ module.exports = {
     })
   },
 
-  down: async (queryInterface) => {
+  down: async queryInterface => {
     await queryInterface.dropTable('document_templates')
   }
 }

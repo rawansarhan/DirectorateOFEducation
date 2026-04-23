@@ -11,6 +11,10 @@ const errorHandler = (err, req, res, next) => {
     return ApiResponder.unauthorizedResponse(res, err.message);
   }
 
+  if (err.statusCode === 404) {
+    return ApiResponder.notFoundResponse(res, err.message);
+  }
+
   return ApiResponder.errorResponse(res, 'Something went wrong');
 };
 

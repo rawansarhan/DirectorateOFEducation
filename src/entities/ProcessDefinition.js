@@ -63,17 +63,6 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.ENUM('draft', 'deployed'),
         defaultValue: 'draft',
       },
-
-      is_latest: {
-        type: DataTypes.BOOLEAN,
-        defaultValue: true,
-      },
-
-      bpmn_file_path: {
-        type: DataTypes.STRING,
-        allowNull: false,
-      },
-
       bpmn_xml: {
         type: DataTypes.TEXT,
         allowNull: true,
@@ -97,6 +86,15 @@ module.exports = (sequelize, DataTypes) => {
       priority: {
         type: DataTypes.INTEGER,
         defaultValue: 1,
+      },
+         start_date: {
+        type: DataTypes.DATE,
+        allowNull: true
+      },
+
+      end_date: {
+        type: DataTypes.DATE,
+        allowNull: true
       },
 
       created_at: {

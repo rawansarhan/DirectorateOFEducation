@@ -24,7 +24,10 @@ module.exports = {
         type: Sequelize.STRING,
         allowNull: true
       },
-
+      version: {
+        type: Sequelize.INTEGER,
+        defaultValue: 1
+      },
       created_at: {
         allowNull: false,
         type: Sequelize.DATE,
@@ -39,7 +42,7 @@ module.exports = {
     })
   },
 
-  down: async (queryInterface) => {
+  down: async queryInterface => {
     await queryInterface.dropTable('calculations')
   }
 }

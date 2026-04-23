@@ -1,39 +1,14 @@
 'use strict';
 
 module.exports = (sequelize, DataTypes) => {
-
   class DocumentTemplate extends sequelize.Sequelize.Model {
     static associate(models) {
-
-      DocumentTemplate.belongsTo(models.Stage, {
-        foreignKey: 'stage_id',
-        as: 'stage',
-        onDelete: 'CASCADE',
-        onUpdate: 'CASCADE',
-      });
-
-      DocumentTemplate.belongsTo(models.TypeFile, {
-        foreignKey: 'file_type_id',
-        as: 'file_type',
-        onDelete: 'CASCADE',
-        onUpdate: 'CASCADE',
-      });
 
     }
   }
 
   DocumentTemplate.init(
     {
-      stage_id: {
-        type: DataTypes.INTEGER,
-        allowNull: false,
-      },
-
-      file_type_id: {
-        type: DataTypes.INTEGER,
-        allowNull: false,
-      },
-
       name: {
         type: DataTypes.STRING,
         allowNull: false,
@@ -44,10 +19,30 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
       },
 
+      file_type: {
+        type: DataTypes.ENUM('pdf', 'docx', 'html'),
+        allowNull: false,
+      },
+
       engine_type: {
         type: DataTypes.ENUM('ACROFORM', 'POSITIONED'),
-        allowNull: false,
         defaultValue: 'ACROFORM',
+        allowNull: false,
+      },
+
+      config_json: {
+        type: DataTypes.JSON,
+        allowNull: true,
+      },
+
+      version: {
+        type: DataTypes.INTEGER,
+        defaultValue: 1,
+      },
+
+      is_latest: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: true,
       },
 
       is_active: {

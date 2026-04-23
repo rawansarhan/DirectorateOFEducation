@@ -36,15 +36,7 @@ module.exports = {
         comment: "في حال وجود أكثر من موظف بنفس الدور"
       },
 
-      start_date: {
-        type: Sequelize.DATE,
-        allowNull: true
-      },
-
-      end_date: {
-        type: Sequelize.DATE,
-        allowNull: true
-      },
+   
 
       is_active: {
         type: Sequelize.BOOLEAN,

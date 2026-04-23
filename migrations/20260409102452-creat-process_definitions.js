@@ -39,17 +39,7 @@ module.exports = {
         type: Sequelize.ENUM('draft', 'deployed'),
         defaultValue: 'draft'
       },
-    
-      is_latest: {
-        type: Sequelize.BOOLEAN,
-        defaultValue: true
-      },
-    
-      bpmn_file_path: {
-        type: Sequelize.STRING,
-        allowNull: false
-      },
-    
+
       bpmn_xml: {
         type: Sequelize.TEXT,
         allowNull: true
@@ -84,7 +74,19 @@ module.exports = {
         type: Sequelize.INTEGER,
         defaultValue: 1
       },
-    
+        endDate: {
+        type: Sequelize.DATE,
+        allowNull: true,
+      },
+       start_date: {
+        type: Sequelize.DATE,
+        allowNull: true
+      },
+
+      end_date: {
+        type: Sequelize.DATE,
+        allowNull: true
+      },
       created_at: {
         allowNull: false,
         type: Sequelize.DATE,

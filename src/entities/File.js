@@ -5,17 +5,8 @@ module.exports = (sequelize, DataTypes) => {
   class File extends sequelize.Sequelize.Model {
     static associate(models) {
 
-      File.belongsTo(models.TypeFile, {
-        foreignKey: 'type_file_id',
-        as: 'type_file',
-        onDelete: 'SET NULL',
-        onUpdate: 'CASCADE',
-      });
 
-      File.hasMany(models.StageRequiredFile, {
-        foreignKey: 'file_id',
-        as: 'stage_required_files',
-      });
+   
 
     }
   }
@@ -32,14 +23,14 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
       },
 
-      type_file_id: {
-        type: DataTypes.INTEGER,
-        allowNull: true,
-      },
-
-      is_active: {
-        type: DataTypes.BOOLEAN,
-        defaultValue: true,
+    
+      type: {
+        type: DataTypes.ENUM(
+          'اضبارة',
+          'وثائق للمواطن',
+          'كتاب وزاري'
+        ),
+        allowNull: false,
       },
 
       created_at: {

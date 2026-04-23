@@ -2,7 +2,7 @@
 
 module.exports = {
   up: async (queryInterface, Sequelize) => {
-    await queryInterface.createTable('stagefield_fields', {
+    await queryInterface.createTable('stage_configs', {
       id: {
         allowNull: false,
         autoIncrement: true,
@@ -10,30 +10,26 @@ module.exports = {
         type: Sequelize.INTEGER
       },
 
-      stage_field_id: {
+      stage_id: {
         type: Sequelize.INTEGER,
         allowNull: false,
         references: {
-          model: 'stage_fields',
+          model: 'stages',
           key: 'id'
         },
         onDelete: 'CASCADE'
       },
 
-      field_id: {
-        type: Sequelize.INTEGER,
-        allowNull: false,
-        references: {
-          model: 'fields',
-          key: 'id'
-        },
-        onDelete: 'CASCADE'
+      config_json: {
+        type: Sequelize.JSON,
+        allowNull: false
       },
 
-      required: {
-        type: Sequelize.BOOLEAN,
-        defaultValue: false
+      priority: {
+        type: Sequelize.INTEGER,
+        defaultValue: 1
       },
+
       is_active: {
         type: Sequelize.BOOLEAN,
         defaultValue: true
@@ -53,7 +49,7 @@ module.exports = {
     })
   },
 
-  down: async (queryInterface) => {
-    await queryInterface.dropTable('stagefield_fields')
+  down: async queryInterface => {
+    await queryInterface.dropTable('stage_configs')
   }
 }

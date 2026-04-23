@@ -1,44 +1,41 @@
-'use strict';
+'use strict'
 
 module.exports = (sequelize, DataTypes) => {
-
   class OrgDeptRole extends sequelize.Sequelize.Model {
-    static associate(models) {
-
+    static associate (models) {
       OrgDeptRole.belongsTo(models.Role, {
         foreignKey: 'role_id',
         as: 'role',
-        onDelete: 'CASCADE',
-      });
+        onDelete: 'CASCADE'
+      })
 
       OrgDeptRole.belongsTo(models.Organization, {
         foreignKey: 'organization_id',
         as: 'organization',
-        onDelete: 'CASCADE',
-      });
+        onDelete: 'CASCADE'
+      })
 
       OrgDeptRole.belongsTo(models.Department, {
         foreignKey: 'department_id',
         as: 'department',
-        onDelete: 'CASCADE',
-      });
+        onDelete: 'CASCADE'
+      })
 
       OrgDeptRole.belongsTo(models.OrgDeptRole, {
         foreignKey: 'parent_id',
         as: 'parent',
-        onDelete: 'SET NULL',
-      });
+        onDelete: 'SET NULL'
+      })
 
       OrgDeptRole.hasMany(models.OrgDeptRole, {
         foreignKey: 'parent_id',
-        as: 'children',
-      });
+        as: 'children'
+      })
 
       OrgDeptRole.hasMany(models.UserRoleAssignment, {
         foreignKey: 'organization_department_role_id',
-        as: 'user_assignments',
-      });
-
+        as: 'user_assignments'
+      })
     }
   }
 
@@ -46,40 +43,43 @@ module.exports = (sequelize, DataTypes) => {
     {
       role_id: {
         type: DataTypes.INTEGER,
-        allowNull: false,
+        allowNull: false
       },
 
       organization_id: {
         type: DataTypes.INTEGER,
-        allowNull: false,
+        allowNull: false
       },
 
       department_id: {
         type: DataTypes.INTEGER,
-        allowNull: false,
+        allowNull: false
       },
 
       parent_id: {
         type: DataTypes.INTEGER,
-        allowNull: true,
+        allowNull: true
       },
-
+      camunda_group_key: {
+        type: DataTypes.STRING,
+        allowNull: false
+      },
       is_active: {
         type: DataTypes.BOOLEAN,
-        defaultValue: true,
+        defaultValue: true
       },
 
       created_at: {
         type: DataTypes.DATE,
         allowNull: false,
-        defaultValue: DataTypes.NOW,
+        defaultValue: DataTypes.NOW
       },
 
       updated_at: {
         type: DataTypes.DATE,
         allowNull: false,
-        defaultValue: DataTypes.NOW,
-      },
+        defaultValue: DataTypes.NOW
+      }
     },
     {
       sequelize,
@@ -88,9 +88,9 @@ module.exports = (sequelize, DataTypes) => {
       timestamps: true,
       underscored: true,
       createdAt: 'created_at',
-      updatedAt: 'updated_at',
+      updatedAt: 'updated_at'
     }
-  );
+  )
 
-  return OrgDeptRole;
-};
+  return OrgDeptRole
+}

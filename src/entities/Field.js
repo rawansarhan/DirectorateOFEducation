@@ -25,7 +25,10 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.ENUM('string', 'int', 'text', 'date', 'boolean', 'float'),
         allowNull: false,
       },
-
+      list_json: {
+        type: DataTypes.JSON,
+        allowNull: true
+      },
       created_at: {
         type: DataTypes.DATE,
         allowNull: false,

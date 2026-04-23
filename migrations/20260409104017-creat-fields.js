@@ -16,10 +16,20 @@ module.exports = {
       },
 
       field_type: {
-        type: Sequelize.ENUM('string','int','text','date','boolean','float'),
+        type: Sequelize.ENUM(
+          'string',
+          'int',
+          'text',
+          'date',
+          'boolean',
+          'float'
+        ),
         allowNull: false
       },
-
+      list_json: {
+        type: Sequelize.JSON,
+        allowNull: true
+      },
       created_at: {
         allowNull: false,
         type: Sequelize.DATE,
@@ -34,7 +44,7 @@ module.exports = {
     })
   },
 
-  down: async (queryInterface) => {
+  down: async queryInterface => {
     await queryInterface.dropTable('fields')
   }
 }

@@ -2,15 +2,25 @@
 
 module.exports = {
   up: async (queryInterface, Sequelize) => {
-    await queryInterface.createTable('stage_calculations', {
+    await queryInterface.createTable('stage_transitions', {
+
       id: {
-        allowNull: false,
+        type: Sequelize.INTEGER,
         autoIncrement: true,
-        primaryKey: true,
-        type: Sequelize.INTEGER
+        primaryKey: true
       },
 
-      stage_id: {
+      process_definition_id: {
+        type: Sequelize.INTEGER,
+        allowNull: false,
+        references: {
+          model: 'process_definitions',
+          key: 'id'
+        },
+        onDelete: 'CASCADE'
+      },
+
+      from_stage_id: {
         type: Sequelize.INTEGER,
         allowNull: false,
         references: {
@@ -20,19 +30,21 @@ module.exports = {
         onDelete: 'CASCADE'
       },
 
-      name: {
-        type: Sequelize.STRING,
-        allowNull: false
-      },
-
-      calculation_id: {
+      to_stage_id: {
         type: Sequelize.INTEGER,
         allowNull: false,
         references: {
-          model: 'calculations',
+          model: 'stages',
           key: 'id'
         },
         onDelete: 'CASCADE'
+      },
+      
+      //هون بحط اسم ال botton
+
+      action: {
+        type: Sequelize.Text,
+        allowNull: false
       },
 
       priority: {
@@ -46,13 +58,11 @@ module.exports = {
       },
 
       created_at: {
-        allowNull: false,
         type: Sequelize.DATE,
         defaultValue: Sequelize.fn('NOW')
       },
 
       updated_at: {
-        allowNull: false,
         type: Sequelize.DATE,
         defaultValue: Sequelize.fn('NOW')
       }
@@ -60,6 +70,6 @@ module.exports = {
   },
 
   down: async (queryInterface) => {
-    await queryInterface.dropTable('stage_calculations')
+    await queryInterface.dropTable('stage_transitions')
   }
 }

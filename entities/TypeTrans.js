@@ -2,24 +2,25 @@
 
 module.exports = (sequelize, DataTypes) => {
 
-  class StageType extends sequelize.Sequelize.Model {
+  class TypeTrans extends sequelize.Sequelize.Model {
     static associate(models) {
-      // ممكن تربطها لاحقاً بـ Stage أو configs
+        TypeTrans.hasMany(models.Transaction, {
+            foreignKey: 'type_trans_id',
+            as: 'type_trans',
+          });
+
+          TypeTrans.hasMany(models.ProcessDefinition, {
+            foreignKey: 'type_trans_id',
+            as: 'process_definitions',
+          });
     }
   }
 
-  StageType.init(
+  TypeTrans.init(
     {
-      code: {
-        type: DataTypes.STRING,
-        allowNull: false,
-        unique: true,
-      },
-
       name: {
         type: DataTypes.STRING,
         allowNull: false,
-        unique: true,
       },
 
       is_active: {
@@ -41,8 +42,8 @@ module.exports = (sequelize, DataTypes) => {
     },
     {
       sequelize,
-      modelName: 'StageType',
-      tableName: 'stage_type',
+      modelName: 'TypeTrans',
+      tableName: 'type_trans',
       timestamps: true,
       underscored: true,
       createdAt: 'created_at',
@@ -50,5 +51,5 @@ module.exports = (sequelize, DataTypes) => {
     }
   );
 
-  return StageType;
+  return TypeTrans;
 };

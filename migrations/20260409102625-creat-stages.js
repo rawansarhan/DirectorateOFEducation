@@ -20,6 +20,30 @@ module.exports = {
         onDelete: 'CASCADE'
       },
 
+      name: {
+        type: Sequelize.STRING,
+        allowNull: false
+      },
+
+      code: {
+        type: Sequelize.STRING,
+        allowNull: false
+      },
+
+      type: {
+        type: Sequelize.ENUM(
+          'USER_TASK',       // إدخال / تعديل
+          'START EVENT',        // توقيع
+          'END EVENT',     // حسابات
+          'SERVICE TASK',        // توليد مستند
+          'UPLOAD',          // رفع ملفات
+          'DECISION',        // شرط (gateway)
+          'NOTIFICATION' ,    // إشعار
+          'END'
+        ),
+        allowNull: false
+      },
+
       camunda_task_key: {
         type: Sequelize.STRING,
         allowNull: true
@@ -27,32 +51,12 @@ module.exports = {
 
       order: {
         type: Sequelize.INTEGER,
-        allowNull: false
-      },
-
-      version: {
-        type: Sequelize.INTEGER,
-        defaultValue: 1
+        allowNull: true
       },
 
       is_active: {
         type: Sequelize.BOOLEAN,
         defaultValue: true
-      },
-
-      requires_signature: {
-        type: Sequelize.BOOLEAN,
-        defaultValue: false
-      },
-
-      end_time: {
-        type: Sequelize.DATE,
-        allowNull: true
-      },
-
-      code: {
-        type: Sequelize.STRING,
-        allowNull: true
       },
 
       created_at: {

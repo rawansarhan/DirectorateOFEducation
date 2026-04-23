@@ -21,19 +21,13 @@ module.exports = {
         comment: "صيغة الملف مثل PDF, DOCX, JPG..."
       },
 
-      type_file_id: {
-        type: Sequelize.INTEGER,
-        allowNull: true,
-        references: {
-          model: 'type_file',
-          key: 'id'
-        },
-        onDelete: 'SET NULL'
-      },
-
-      is_active: {
-        type: Sequelize.BOOLEAN,
-        defaultValue: true
+      type: {
+        type: Sequelize.ENUM(
+          'اضبارة',
+          'وثائق للمواطن',
+          'كتاب وزاري'
+        ),
+        allowNull: false,
       },
 
       created_at: {
