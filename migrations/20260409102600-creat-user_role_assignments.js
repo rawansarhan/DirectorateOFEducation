@@ -20,7 +20,7 @@ module.exports = {
         onDelete: 'CASCADE'
       },
 
-      organization_department_role_id: {
+      organization_department_roles_id: {
         type: Sequelize.INTEGER,
         allowNull: false,
         references: {
@@ -36,7 +36,7 @@ module.exports = {
         comment: "في حال وجود أكثر من موظف بنفس الدور"
       },
 
-   
+      
 
       is_active: {
         type: Sequelize.BOOLEAN,
@@ -58,7 +58,7 @@ module.exports = {
 
     // 🔥 منع التكرار
     await queryInterface.addConstraint('user_role_assignments', {
-      fields: ['user_id', 'organization_department_role_id'],
+      fields: ['user_id', 'organization_department_roles_id'],
       type: 'unique',
       name: 'unique_user_role_context'
     })

@@ -1,17 +1,15 @@
-'use strict';
+'use strict'
 
 module.exports = (sequelize, DataTypes) => {
   class Stage extends sequelize.Sequelize.Model {
-    static associate(models) {
-
+    static associate (models) {
       // 🔗 Process Definition
       Stage.belongsTo(models.ProcessDefinition, {
         foreignKey: 'process_definition_id',
         as: 'process_definition',
         onDelete: 'CASCADE',
-        onUpdate: 'CASCADE',
-      });
-
+        onUpdate: 'CASCADE'
+      })
     }
   }
 
@@ -19,59 +17,39 @@ module.exports = (sequelize, DataTypes) => {
     {
       process_definition_id: {
         type: DataTypes.INTEGER,
-        allowNull: false,
+        allowNull: false
       },
 
       name: {
         type: DataTypes.STRING,
-        allowNull: false,
+        allowNull: false
       },
 
       code: {
         type: DataTypes.STRING,
-        allowNull: false,
+        allowNull: false
       },
 
       type: {
-        type: DataTypes.ENUM(
-          'USER_TASK',
-          'APPROVAL',
-          'SYSTEM_TASK',
-          'DOCUMENT',
-          'UPLOAD',
-          'DECISION',
-          'NOTIFICATION',
-          'END'
-        ),
-        allowNull: false,
+        type: DataTypes.ENUM('USER_TASK', 'SERVICE_TASK'),
+        allowNull: false
       },
 
       camunda_task_key: {
         type: DataTypes.STRING,
-        allowNull: true,
+        allowNull: true
       },
-
-      order: {
-        type: DataTypes.INTEGER,
-        allowNull: true,
-      },
-
-      is_active: {
-        type: DataTypes.BOOLEAN,
-        defaultValue: true,
-      },
-
       created_at: {
         type: DataTypes.DATE,
         allowNull: false,
-        defaultValue: DataTypes.NOW,
+        defaultValue: DataTypes.NOW
       },
 
       updated_at: {
         type: DataTypes.DATE,
         allowNull: false,
-        defaultValue: DataTypes.NOW,
-      },
+        defaultValue: DataTypes.NOW
+      }
     },
     {
       sequelize,
@@ -80,9 +58,9 @@ module.exports = (sequelize, DataTypes) => {
       timestamps: true,
       underscored: true,
       createdAt: 'created_at',
-      updatedAt: 'updated_at',
+      updatedAt: 'updated_at'
     }
-  );
+  )
 
-  return Stage;
-};
+  return Stage
+}

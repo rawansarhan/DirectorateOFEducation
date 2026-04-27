@@ -4,8 +4,9 @@ const { Model } = require('sequelize');
 module.exports = (sequelize, DataTypes) => {
   class RolePermission extends Model {
     static associate(models) {
-      RolePermission.belongsTo(models.Role, {
-        foreignKey: 'role_id',
+      RolePermission.belongsTo(models.OrgDeptRole, {
+        foreignKey: 'organization_department_roles_id',
+        as: 'orgDeptRole',
         onDelete: 'CASCADE'
       });
       RolePermission.belongsTo(models.Permission, {
@@ -17,11 +18,11 @@ module.exports = (sequelize, DataTypes) => {
   }
 
   RolePermission.init({
-    role_id: {
+    organization_department_roles_id: {
       type: DataTypes.INTEGER,
       allowNull: false,
       references: {
-        model: 'roles',
+        model: 'organization_department_roles',
         key: 'id'
       }
     },
@@ -38,7 +39,7 @@ module.exports = (sequelize, DataTypes) => {
     modelName: 'RolePermission',
     tableName: 'role_permissions',
     timestamps: false,
-    primaryKey: ['role_id', 'permission_id']
+   primaryKey: ['organization_department_roles_id', 'permission_id']
   });
 
   return RolePermission;

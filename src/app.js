@@ -18,5 +18,8 @@ setupSwagger(app);
 app.use('/api', routes);
 
 app.use(errorHandler);
-
+const authRoutes = require('./routes/auth');
+app.use('/api/auth', authRoutes);
+const typeProcessRoutes = require('./routes/typeProcess');
+app.use('/api/typeProcess', typeProcessRoutes);
 module.exports = app;

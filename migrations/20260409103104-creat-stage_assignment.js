@@ -20,7 +20,7 @@ module.exports = {
         onDelete: 'CASCADE'
       },
 
-      organization_department_role_id: {
+      organization_department_roles_id: {
         type: Sequelize.INTEGER,
         allowNull: false,
         references: {

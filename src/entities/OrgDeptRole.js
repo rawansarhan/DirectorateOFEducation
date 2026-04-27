@@ -33,7 +33,7 @@ module.exports = (sequelize, DataTypes) => {
       })
 
       OrgDeptRole.hasMany(models.UserRoleAssignment, {
-        foreignKey: 'organization_department_role_id',
+        foreignKey: 'organization_department_roles_id',
         as: 'user_assignments'
       })
     }

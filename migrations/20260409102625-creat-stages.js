@@ -33,24 +33,13 @@ module.exports = {
       type: {
         type: Sequelize.ENUM(
           'USER_TASK',       // إدخال / تعديل
-          'START EVENT',        // توقيع
-          'END EVENT',     // حسابات
-          'SERVICE TASK',        // توليد مستند
-          'UPLOAD',          // رفع ملفات
-          'DECISION',        // شرط (gateway)
-          'NOTIFICATION' ,    // إشعار
-          'END'
+          'SERVICE_TASK',        // توليد مستند
         ),
         allowNull: false
       },
 
       camunda_task_key: {
         type: Sequelize.STRING,
-        allowNull: true
-      },
-
-      order: {
-        type: Sequelize.INTEGER,
         allowNull: true
       },
 

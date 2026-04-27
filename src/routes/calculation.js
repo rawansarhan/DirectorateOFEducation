@@ -6,7 +6,7 @@ const {
   createCalculation,
   updateCalculation,
   getAllcalculations
-} = require('../controllers/Calculation')
+} = require('../controllers/CalculationController')
 
 /**
  * @openapi

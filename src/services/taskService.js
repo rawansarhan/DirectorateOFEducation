@@ -85,7 +85,7 @@ async function getTaskFormService(taskId, user) {
   }
 
   const userRoles = userURA.map(
-    u => u.organization_department_role_id
+    u => u.organization_department_roles_id
   )
 
   // ==============================
@@ -109,7 +109,7 @@ async function getTaskFormService(taskId, user) {
         as: 'stage_assignments',
         required: true,
         where: {
-          organization_department_role_id: {
+          organization_department_roles_id: {
             [Op.in]: userRoles
           }
         }
@@ -207,7 +207,7 @@ async function completeTaskService(taskId, user, data) {
   }
 
   const roleIds = userURA.map(
-    r => r.organization_department_role_id
+    r => r.organization_department_roles_id
   )
 
   // ==============================
@@ -231,7 +231,7 @@ async function completeTaskService(taskId, user, data) {
         as: 'stage_assignments',
         required: true,
         where: {
-          organization_department_role_id: {
+          organization_department_roles_id: {
             [Op.in]: roleIds
           }
         }
@@ -347,10 +347,10 @@ async function getMyTasksService(user, query) {
       user_id: user.id,
       is_active: true
     },
-    attributes: ['organization_department_role_id']
+    attributes: ['organization_department_roles_id']
   })
 
-  const roleIds = userRoles.map(r => r.organization_department_role_id)
+  const roleIds = userRoles.map(r => r.organization_department_roles_id)
 
   if (!roleIds.length) {
     return { data: [], page, limit, total: 0, totalPages: 0 }

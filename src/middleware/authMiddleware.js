@@ -1,96 +1,143 @@
-const jwt = require('jsonwebtoken');
-const { QueryTypes } = require('sequelize');
-const ApiResponder = require('../utils/apiResponder');
-const sequelize = require('../config/database');
-const dotenv = require('dotenv');
-dotenv.config();
+const jwt = require('jsonwebtoken')
+const { Op } = require('sequelize')
+const {
+  UserRoleAssignment,
+  RolePermission,
+  Permission
+} = require('../entities')
 
-const SECRET_KEY = process.env.JWT_SECRET || 'default_secret_key';
+const JWT_SECRET = process.env.JWT_SECRET || 'your_very_secret_key'
 
-/**
- * يتحقق من أن للمستخدم صلاحية عبر أدواره النشطة.
- * ترتيب الـ JOIN يتوافق مع الفهارس:
- * - permissions.name (UNIQUE)
- * - role_permissions(permission_id)
- * - organization_department_roles(role_id)
- * - user_role_assignments الجزئي (user_id) WHERE is_active = true
- */
-async function userHasPermission (userId, permissionName) {
-  const rows = await sequelize.query(
-    `
-    SELECT 1 AS ok
-    FROM permissions p
-    INNER JOIN role_permissions rp ON rp.permission_id = p.id
-    INNER JOIN organization_department_roles odr ON odr.role_id = rp.role_id
-      AND (odr.is_active = true OR odr.is_active IS NULL)
-    INNER JOIN user_role_assignments ura
-      ON ura.organization_department_role_id = odr.id
-      AND ura.user_id = :userId
-      AND ura.is_active = true
-      AND (ura.end_date IS NULL OR ura.end_date > NOW())
-    WHERE p.name = :permissionName
-    LIMIT 1
-    `,
-    {
-      replacements: { userId, permissionName },
-      type: QueryTypes.SELECT
-    }
-  );
-
-  return rows.length > 0;
-}
-
-const authMiddlewaree = (req, res, next) => {
-  const authHeader = req.header('Authorization');
-  console.log('Authorization Header:', authHeader);
-
-  const token = authHeader?.replace('Bearer ', '');
-  console.log('Extracted Token:', token);
-
-  if (!token) {
-    return ApiResponder.unauthorizedResponse(res, 'No token provided');
-  }
-
-  console.log('AUTH SECRET_KEY:', SECRET_KEY);
-
+/* ================= AUTH MIDDLEWARE ================= */
+const authMiddleware = async (req, res, next) => {
   try {
-    const decoded = jwt.verify(token, SECRET_KEY);
-    console.log('Decoded Token:', decoded);
-    req.user = decoded;
-    next();
+    const authHeader = req.header('Authorization')
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ message: 'No token provided' })
+    }
+
+    const token = authHeader.split(' ')[1]
+
+    console.log("TOKEN RECEIVED:", token)
+
+    const decoded = jwt.verify(token, JWT_SECRET)
+
+    // جلب كل الـ roles الخاصة بالمستخدم
+    const userAssignments = await UserRoleAssignment.findAll({
+      where: { user_id: decoded.id },
+      attributes: ['organization_department_roles_id']
+    })
+
+    if (!userAssignments.length) {
+      return res.status(403).json({ message: 'User has no roles' })
+    }
+
+    const roleIds = userAssignments.map(
+      r => r.organization_department_roles_id
+    )
+
+    req.user = {
+      id: decoded.id,
+      roles: roleIds
+    }
+
+    next()
   } catch (err) {
     if (err.name === 'TokenExpiredError') {
-      return ApiResponder.unauthorizedResponse(res, 'Token has expired');
+      return res.status(401).json({ message: 'Token expired' })
     }
-    return ApiResponder.unauthorizedResponse(res, 'Invalid token');
+
+    return res.status(401).json({ message: 'Invalid token' })
   }
-};
+}
 
-/**
- * يُستخدم بعد authMiddlewaree. يمرّر الطلب فقط إذا كان أحد أدوار المستخدم (عبر التعيين) يملك هذه الصلاحية.
- * مثال: router.get('/x', authMiddlewaree, hasPermission('reports.view'), handler)
- */
-const hasPermission = (permissionName) => async (req, res, next) => {
-  try {
-    const userId = req.user?.id;
-    if (userId == null) {
-      return ApiResponder.unauthorizedResponse(res, 'Invalid token payload');
+/* ================= AUTHORIZE MIDDLEWARE ================= */
+function authorize(requiredPermission) {
+  return async (req, res, next) => {
+    try {
+      const user = req.user
+
+      console.log("STEP 1 - USER:", user)
+
+      if (!user?.id) {
+        console.log("❌ No user found")
+        return res.status(401).json({ message: 'Unauthorized' })
+      }
+
+      // ================= STEP 2 =================
+      const userAssignments = await UserRoleAssignment.findAll({
+        where: { user_id: user.id }
+      })
+
+      console.log("STEP 2 - userAssignments:", userAssignments)
+
+      if (!userAssignments.length) {
+        return res.status(403).json({ message: 'User has no roles' })
+      }
+
+      // ================= STEP 3 =================
+      const roleIds = userAssignments.map(
+        r => r.organization_department_roles_id
+      )
+
+      console.log("STEP 3 - roleIds:", roleIds)
+
+      if (!roleIds.length) {
+        return res.status(403).json({ message: 'No role IDs found' })
+      }
+
+      // ================= STEP 4 =================
+      const rolePermissions = await RolePermission.findAll({
+        where: {
+          organization_department_roles_id: {
+            [Op.in]: roleIds
+          }
+        },
+        include: [
+          {
+            model: Permission,
+            as: 'permissions',
+            attributes: ['name']
+          }
+        ]
+      })
+
+      console.log("STEP 4 - rolePermissions:", JSON.stringify(rolePermissions, null, 2))
+
+      if (!rolePermissions.length) {
+        return res.status(403).json({ message: 'No permissions found' })
+      }
+
+      // ================= STEP 5 =================
+      const permissionNames = rolePermissions
+        .map(r => r.permissions?.name)
+        .filter(Boolean)
+
+      console.log("STEP 5 - permissionNames:", permissionNames)
+
+      if (!permissionNames.includes(requiredPermission)) {
+        return res.status(403).json({
+          message: 'Forbidden - missing permission'
+        })
+      }
+
+      console.log("✅ AUTH SUCCESS")
+
+      next()
+    } catch (err) {
+      console.error("🔥 AUTH ERROR:")
+      console.error(err)
+
+      return res.status(500).json({
+        message: 'Authorization error',
+        error: err.message
+      })
     }
-
-    const allowed = await userHasPermission(userId, permissionName);
-    if (!allowed) {
-      return ApiResponder.forbiddenResponse(res, 'You do not have permission for this action');
-    }
-
-    next();
-  } catch (err) {
-    console.error(err);
-    return ApiResponder.errorResponse(res, err.message || 'Permission check failed');
   }
-};
+}
 
 module.exports = {
-  authMiddlewaree,
-  hasPermission,
-  userHasPermission
-};
+  authMiddleware,
+  authorize
+}

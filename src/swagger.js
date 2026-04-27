@@ -25,7 +25,14 @@ const swaggerOptions = {
         description: 'تعريف العمليات (Process Definitions)'
       },
       { name: 'Tasks', description: 'إدارة المهام (Workflow Tasks)' },
-      { name: 'StageConfig', description: 'إعدادات المراحل (Stage Configuration)' }
+      {
+        name: 'StageConfig',
+        description: 'إعدادات المراحل (Stage Configuration)'
+      },
+      {
+        name: 'TypeProcess',
+        description: 'أنواع العمليات (Type Process)'
+      }
     ],
     components: {
       securitySchemes: {
@@ -36,6 +43,76 @@ const swaggerOptions = {
         }
       },
       schemas: {
+        User: {
+          type: 'object',
+          properties: {
+            id: { type: 'integer', example: 1 },
+            userName: { type: 'string', example: 'john_doe' },
+            email: { type: 'string', example: 'john@gmail.com' },
+            phone_number: { type: 'string', example: '0954263526' },
+            created_at: { type: 'string', format: 'date-time' },
+            updated_at: { type: 'string', format: 'date-time' }
+          }
+        },
+
+        LoginRequest: {
+          type: 'object',
+          required: ['userName', 'password'],
+          properties: {
+            userName: { type: 'string', example: 'john_doe' },
+            password: { type: 'string', example: '123456' }
+          }
+        },
+
+        RegisterEmployeeRequest: {
+          type: 'object',
+          required: [
+            'userName',
+            'email',
+            'password',
+            'phone_number',
+            'organization_department_role_ids'
+          ],
+          properties: {
+            userName: { type: 'string', example: 'john_doe' },
+            email: { type: 'string', example: 'john@gmail.com' },
+            phone_number: { type: 'string', example: '0954263536' },
+            password: { type: 'string', example: '123456' },
+            is_active: { type: 'boolean', example: true },
+            organization_department_role_ids: {
+              type: 'array',
+              items: { type: 'integer' },
+              example: [1, 2, 3]
+            }
+          }
+        },
+
+        RegisterCitizenRequest: {
+          type: 'object',
+          required: ['userName', 'email', 'password', 'phone_number'],
+          properties: {
+            userName: { type: 'string', example: 'citizen_1' },
+            email: { type: 'string', example: 'citizen@gmail.com' },
+            phone_number: { type: 'string', example: '0954263536' },
+            password: { type: 'string', example: '123456' }
+          }
+        },
+
+        AuthResponse: {
+          type: 'object',
+          properties: {
+            token: {
+              type: 'string',
+              example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6...'
+            },
+            user: { $ref: '#/components/schemas/User' },
+            roles: {
+              type: 'array',
+              items: { type: 'integer' },
+              example: [1, 2]
+            }
+          }
+        },
         // ===================== Calculation ==========================
         CalculationCreate: {
           type: 'object',
@@ -310,7 +387,7 @@ const swaggerOptions = {
             }
           }
         },
-  //====================================== Task ======================================================
+        //====================================== Task ======================================================
 
         Task: {
           type: 'object',
@@ -413,7 +490,59 @@ const swaggerOptions = {
             }
           }
         },
-        // ========================    
+        // ======================== type Process ==========================
+        TypeProcess: {
+          type: 'object',
+          properties: {
+            id: { type: 'integer', example: 1 },
+            name: { type: 'string', example: 'تحويل طالب' },
+            is_active: { type: 'boolean', example: true },
+            created_at: { type: 'string', format: 'date-time' },
+            updated_at: { type: 'string', format: 'date-time' }
+          }
+        },
+
+        TypeProcessCreate: {
+          type: 'object',
+          required: ['name'],
+          properties: {
+            name: { type: 'string', example: 'تحويل طالب' }
+          }
+        },
+
+        TypeProcessUpdate: {
+          type: 'object',
+          minProperties: 1,
+          properties: {
+            name: { type: 'string', example: 'تحويل طالب محدث' },
+            is_active: { type: 'boolean', example: true }
+          }
+        },
+
+        TypeProcessEnvelope: {
+          type: 'object',
+          properties: {
+            message: {
+              type: 'string',
+              example: 'تم إنشاء نوع العملية بنجاح !'
+            },
+            data: { $ref: '#/components/schemas/TypeProcess' }
+          }
+        },
+
+        TypeProcessListEnvelope: {
+          type: 'object',
+          properties: {
+            message: {
+              type: 'string',
+              example: 'عرض كل أنواع العمليات بنجاح !'
+            },
+            data: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/TypeProcess' }
+            }
+          }
+        }
       }
     }
   },

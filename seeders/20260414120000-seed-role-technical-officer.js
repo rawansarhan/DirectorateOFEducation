@@ -9,6 +9,12 @@ module.exports = {
         created_at: new Date(),
         updated_at: new Date()
       },
+       {
+        name: 'مواطن',
+        code: 'CITIZEN',
+        created_at: new Date(),
+        updated_at: new Date()
+      },
       {
         name: 'مدير التربية',
         code: 'DIRECTOR_OF_EDUCATION',
@@ -45,12 +51,7 @@ module.exports = {
         created_at: new Date(),
         updated_at: new Date()
       },
-      {
-        name: 'مواطن',
-        code: 'CITIZEN',
-        created_at: new Date(),
-        updated_at: new Date()
-      }
+     
     ])
   },
 

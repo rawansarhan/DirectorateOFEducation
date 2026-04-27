@@ -10,16 +10,6 @@ module.exports = {
         type: Sequelize.INTEGER
       },
 
-      stage_id: {
-        type: Sequelize.INTEGER,
-        allowNull: false,
-        references: {
-          model: 'stages',
-          key: 'id'
-        },
-        onDelete: 'CASCADE'
-      },
-
       config_json: {
         type: Sequelize.JSON,
         allowNull: false

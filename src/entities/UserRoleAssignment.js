@@ -1,21 +1,23 @@
-'use strict';
+'use strict'
+
+const { Model } = require('sequelize')
 
 module.exports = (sequelize, DataTypes) => {
 
-  class UserRoleAssignment extends sequelize.Sequelize.Model {
+  class UserRoleAssignment extends Model {
     static associate(models) {
 
       UserRoleAssignment.belongsTo(models.User, {
         foreignKey: 'user_id',
         as: 'user',
-        onDelete: 'CASCADE',
-      });
+        onDelete: 'CASCADE'
+      })
 
       UserRoleAssignment.belongsTo(models.OrgDeptRole, {
-        foreignKey: 'organization_department_role_id',
+        foreignKey: 'organization_department_roles_id',
         as: 'org_department_role',
-        onDelete: 'CASCADE',
-      });
+        onDelete: 'CASCADE'
+      })
 
     }
   }
@@ -24,45 +26,23 @@ module.exports = (sequelize, DataTypes) => {
     {
       user_id: {
         type: DataTypes.INTEGER,
-        allowNull: false,
+        allowNull: false
       },
 
-      organization_department_role_id: {
+      organization_department_roles_id: {
         type: DataTypes.INTEGER,
-        allowNull: false,
+        allowNull: false
       },
 
       priority: {
         type: DataTypes.INTEGER,
-        defaultValue: 1,
-      },
-
-      start_date: {
-        type: DataTypes.DATE,
-        allowNull: true,
-      },
-
-      end_date: {
-        type: DataTypes.DATE,
-        allowNull: true,
+        defaultValue: 1
       },
 
       is_active: {
         type: DataTypes.BOOLEAN,
-        defaultValue: true,
-      },
-
-      created_at: {
-        type: DataTypes.DATE,
-        allowNull: false,
-        defaultValue: DataTypes.NOW,
-      },
-
-      updated_at: {
-        type: DataTypes.DATE,
-        allowNull: false,
-        defaultValue: DataTypes.NOW,
-      },
+        defaultValue: true
+      }
     },
     {
       sequelize,
@@ -71,9 +51,9 @@ module.exports = (sequelize, DataTypes) => {
       timestamps: true,
       underscored: true,
       createdAt: 'created_at',
-      updatedAt: 'updated_at',
+      updatedAt: 'updated_at'
     }
-  );
+  )
 
-  return UserRoleAssignment;
-};
+  return UserRoleAssignment
+}

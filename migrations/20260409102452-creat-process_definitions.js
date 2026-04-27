@@ -9,32 +9,32 @@ module.exports = {
         primaryKey: true,
         type: Sequelize.INTEGER
       },
-    
+
       name: {
         type: Sequelize.STRING,
         allowNull: false
       },
-    
+
       code: {
         type: Sequelize.STRING,
         allowNull: true
       },
-    
+
       camunda_process_key: {
         type: Sequelize.STRING,
         allowNull: true
       },
-    
+
       camunda_deployment_id: {
         type: Sequelize.STRING,
         allowNull: true
       },
-    
+
       version: {
         type: Sequelize.INTEGER,
         defaultValue: 1
       },
-    
+
       status: {
         type: Sequelize.ENUM('draft', 'deployed'),
         defaultValue: 'draft'
@@ -44,12 +44,12 @@ module.exports = {
         type: Sequelize.TEXT,
         allowNull: true
       },
-    
+
       is_active: {
         type: Sequelize.BOOLEAN,
         defaultValue: true
       },
-    
+
       organization_id: {
         type: Sequelize.INTEGER,
         allowNull: true,
@@ -59,7 +59,7 @@ module.exports = {
         },
         onDelete: 'SET NULL'
       },
-    
+
       type_trans_id: {
         type: Sequelize.INTEGER,
         allowNull: false,
@@ -69,16 +69,13 @@ module.exports = {
         },
         onDelete: 'CASCADE'
       },
-    
+
       priority: {
         type: Sequelize.INTEGER,
         defaultValue: 1
       },
-        endDate: {
-        type: Sequelize.DATE,
-        allowNull: true,
-      },
-       start_date: {
+
+      start_date: {
         type: Sequelize.DATE,
         allowNull: true
       },
@@ -87,12 +84,13 @@ module.exports = {
         type: Sequelize.DATE,
         allowNull: true
       },
+
       created_at: {
         allowNull: false,
         type: Sequelize.DATE,
         defaultValue: Sequelize.fn('NOW')
       },
-    
+
       updated_at: {
         allowNull: false,
         type: Sequelize.DATE,

@@ -13,7 +13,7 @@ module.exports = (sequelize, DataTypes) => {
       });
 
       StageAssignment.belongsTo(models.OrgDeptRole, {
-        foreignKey: 'organization_department_role_id',
+        foreignKey: 'organization_department_roles_id',
         as: 'organization_department_role',
         onDelete: 'CASCADE',
         onUpdate: 'CASCADE',
@@ -29,7 +29,7 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
       },
 
-      organization_department_role_id: {
+      organization_department_roles_id: {
         type: DataTypes.INTEGER,
         allowNull: false,
       },
