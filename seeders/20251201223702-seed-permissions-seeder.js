@@ -43,7 +43,11 @@ const perms = [
 ];
 
 
-await queryInterface.bulkInsert('permissions', perms.map(p => ({ name: p, created_at: new Date(), updated_at: new Date() })), {});
+await queryInterface.bulkInsert(
+  'permissions',
+  perms.map(p => ({ name: p, created_at: new Date(), updated_at: new Date() })),
+  { ignoreDuplicates: true }
+);
 },
 down: async (queryInterface) => {
 await queryInterface.bulkDelete('permissions', null, {});

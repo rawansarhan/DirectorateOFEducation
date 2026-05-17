@@ -234,9 +234,9 @@ module.exports = {
     ]
 
     // =========================================
-    // INSERT
+    // INSERT (idempotent)
     // =========================================
-    await queryInterface.bulkInsert('role_permissions', data)
+    await queryInterface.bulkInsert('role_permissions', data, { ignoreDuplicates: true })
   },
 
   async down(queryInterface) {
