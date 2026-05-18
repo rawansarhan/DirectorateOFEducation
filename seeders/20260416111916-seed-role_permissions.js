@@ -230,6 +230,10 @@ module.exports = {
       {
         organization_department_roles_id: roleMap.TECHNICAL_OFFICER,
         permission_id: permMap.ROLE_TOGGLE_STATUS
+      },
+      {
+        organization_department_roles_id: roleMap.TECHNICAL_OFFICER,
+        permission_id: permMap.LOCATION_VIEW
       }
     ]
 
