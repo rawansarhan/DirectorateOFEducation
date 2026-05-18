@@ -25,7 +25,7 @@ const { LoginOutputDTO } = require('../dto/LoginOutputDTO')
 const { sendSms } = require('./smsService')
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your_very_secret_key'
-const OTP_TTL_MINUTES = 2
+const OTP_TTL_MINUTES = 5
 
 function generateOtp() {
   return Math.floor(100000 + Math.random() * 900000).toString()
@@ -165,7 +165,7 @@ async function registerCitizen(userData) {
 
     return {
       session_id,
-      message: 'تم إرسال رمز التحقق على رقم الموبايل. أدخله خلال دقيقتين.',
+      message: `تم إرسال رمز التحقق على رقم الموبايل. أدخله خلال ${OTP_TTL_MINUTES} دقائق.`,
     }
 
   } catch (error) {
@@ -198,7 +198,7 @@ async function login(userData) {
 
   return {
     session_id,
-    message: 'تم إرسال رمز التحقق على رقم الموبايل. أدخله خلال دقيقتين.',
+    message: `تم إرسال رمز التحقق على رقم الموبايل. أدخله خلال ${OTP_TTL_MINUTES} دقائق.`,
   }
 }
 
@@ -208,11 +208,15 @@ async function verifyRegisterOtp({ session_id, otp }) {
   if (error) throw new Error(error.details.map(d => d.message).join(', '))
 
   const record = await otpCodeRepository.findBySessionId(session_id)
-  if (!record) throw new Error('جلسة التحقق غير صالحة أو منتهية. يرجى إعادة المحاولة')
-  if (record.otp !== otp) throw new Error('رمز التحقق غير صحيح. يرجى التأكد من الرمز المرسل')
+  if (!record) throw new Error('جلسة التحقق غير صالحة أو منتهية. يرجى طلب رمز تحقق جديد')
+
   if (new Date() > record.expires_at) {
     await otpCodeRepository.destroyInstance(record)
-    throw new Error('انتهت صلاحية رمز التحقق. يرجى طلب رمز جديد')
+    throw new Error(`انتهت صلاحية رمز التحقق (مدة الصلاحية ${OTP_TTL_MINUTES} دقائق). يرجى طلب رمز تحقق جديد`)
+  }
+
+  if (record.otp !== otp) {
+    throw new Error('رمز التحقق غير صحيح. يرجى التأكد من الرمز المرسل إلى رقم هاتفك والمحاولة مرة أخرى')
   }
 
   const user = await userRepository.updateById(record.user_id, { is_active: true })
@@ -236,11 +240,15 @@ async function verifyLoginOtp({ session_id, otp }) {
   if (error) throw new Error(error.details.map(d => d.message).join(', '))
 
   const record = await otpCodeRepository.findBySessionId(session_id)
-  if (!record) throw new Error('جلسة التحقق غير صالحة أو منتهية. يرجى إعادة المحاولة')
-  if (record.otp !== otp) throw new Error('رمز التحقق غير صحيح. يرجى التأكد من الرمز المرسل')
+  if (!record) throw new Error('جلسة التحقق غير صالحة أو منتهية. يرجى تسجيل الدخول مرة أخرى لإرسال رمز تحقق جديد')
+
   if (new Date() > record.expires_at) {
     await otpCodeRepository.destroyInstance(record)
-    throw new Error('انتهت صلاحية رمز التحقق. يرجى طلب رمز جديد')
+    throw new Error(`انتهت صلاحية رمز التحقق (مدة الصلاحية ${OTP_TTL_MINUTES} دقائق). يرجى تسجيل الدخول مرة أخرى لإرسال رمز تحقق جديد`)
+  }
+
+  if (record.otp !== otp) {
+    throw new Error('رمز التحقق غير صحيح. يرجى التأكد من الرمز المرسل إلى رقم هاتفك والمحاولة مرة أخرى')
   }
 
   const user = await userRepository.findById(record.user_id)
