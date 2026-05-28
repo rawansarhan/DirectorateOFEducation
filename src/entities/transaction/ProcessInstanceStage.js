@@ -50,7 +50,10 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.ENUM('pending','in_progress','completed','rejected'),
         defaultValue: 'pending',
       },
-
+         version: {
+        type: DataTypes.INTEGER,
+        defaultValue: 1
+      },
       created_at: {
         type: DataTypes.DATE,
         allowNull: false,

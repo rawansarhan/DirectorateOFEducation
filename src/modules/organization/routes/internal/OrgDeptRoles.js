@@ -10,19 +10,27 @@ const {
 } = require('../../controllers/internal/OrgDeptRoleController')
 
 // =====================================
-// GET BY ID
-// =====================================
-router.get(
-  '/:id',
-  getOrgDeptRoleById
-)
-
-// =====================================
 // GET ACTIVE
 // =====================================
 router.get(
   '/active',
   getActiveRoles
+)
+
+// =====================================
+// CITIZEN ROLE
+// =====================================
+router.get(
+  '/citizen',
+  getCitizenRole
+)
+
+// =====================================
+// GET BY ID
+// =====================================
+router.get(
+  '/:id',
+  getOrgDeptRoleById
 )
 
 // =====================================
@@ -39,14 +47,6 @@ router.post(
 router.post(
   '/bulk',
   getOrgDeptRolesByIds
-)
-
-// =====================================
-// CITIZEN ROLE (NEW)
-// =====================================
-router.get(
-  '/citizen',
-  getCitizenRole
 )
 
 module.exports = router

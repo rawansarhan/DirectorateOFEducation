@@ -22,6 +22,7 @@ const swaggerOptions = {
       { name: 'Field', description: 'إدارة الحقول (Fields)' },
       { name: 'File', description: 'إدارة الملفات (Files)' },
       { name: 'Tasks', description: 'إدارة المهام (Workflow Tasks)' },
+      { name: 'Workflow', description: 'إدارة سير العمل مع Camunda (Workflow Tasks)' },
       {
         name: 'TypeProcess',
         description: 'أنواع العمليات (Type Process)'
@@ -74,31 +75,64 @@ const swaggerOptions = {
           required: [
             'userName',
             'email',
-            'password',
             'phone_number',
+            'pin',
             'organization_id',
             'department_id',
-            'role_id'
+            'role_id',
+            'public_key'
           ],
           properties: {
-            userName: { type: 'string', example: 'john_doe' },
-            email: { type: 'string', example: 'john@gmail.com' },
-            phone_number: { type: 'string', example: '0954263536' },
-            password: { type: 'string', example: 'pass1234' },
+            userName: {
+              type: 'string',
+              minLength: 3,
+              maxLength: 50,
+              pattern: '^\\S+$',
+              example: 'john_doe',
+              description: 'بدون مسافات'
+            },
+            email: {
+              type: 'string',
+              format: 'email',
+              example: 'john@gmail.com'
+            },
+            phone_number: {
+              type: 'string',
+              pattern: '^09\\d{8}$',
+              example: '0912345678',
+              description: '10 أرقام تبدأ بـ 09'
+            },
+            pin: {
+              type: 'string',
+              minLength: 6,
+              maxLength: 6,
+              pattern: '^\\d{6}$',
+              example: '123456',
+              description: 'رمز PIN مكون من 6 أرقام'
+            },
             organization_id: {
               type: 'integer',
+              minimum: 1,
               example: 1,
               description: 'معرف المؤسسة'
             },
             department_id: {
               type: 'integer',
+              minimum: 1,
               example: 5,
               description: 'معرف آخر قسم في الهرمية (مثل: شعبة التدقيق داخل قسم المحاسبة)'
             },
             role_id: {
               type: 'integer',
+              minimum: 1,
               example: 2,
               description: 'معرف الدور (Role)'
+            },
+            public_key: {
+              type: 'string',
+              minLength: 40,
+              example: '-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEA...\n-----END PUBLIC KEY-----',
+              description: 'مفتاح Ed25519 العام يُولَّد في المتصفح (PEM أو base64 SPKI)'
             }
           }
         },
@@ -111,10 +145,18 @@ const swaggerOptions = {
               type: 'object',
               properties: {
                 userName: { type: 'string', example: 'john_doe' },
-                password: { type: 'string', example: '123456' },
+                key_fingerprint: {
+                  type: 'string',
+                  example: 'a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456',
+                  description: 'SHA-256 fingerprint للمفتاح العام'
+                },
+                organization_department_roles_id: {
+                  type: 'integer',
+                  example: 3
+                },
                 message: {
                   type: 'string',
-                  example: 'تم إنشاء حساب الموظف بنجاح. سلّم بيانات الدخول للموظف.'
+                  example: 'تم إنشاء حساب الموظف بنجاح. private_key يبقى في المتصفح/USB ولا يُخزَّن على السيرفر.'
                 }
               }
             }

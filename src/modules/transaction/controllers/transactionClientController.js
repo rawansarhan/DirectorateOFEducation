@@ -91,12 +91,17 @@ async function updateTransactionDataController(
 
   try {
 
+    const hasWrappedPayload = Object.prototype.hasOwnProperty.call(req.body, 'data')
+    const payload = hasWrappedPayload ? req.body.data : req.body
+    const expectedVersion = hasWrappedPayload
+      ? req.body.expected_version ?? null
+      : null
+
     const result =
       await updateData(
-
         req.params.id,
-
-        req.body
+        payload,
+        expectedVersion
       )
 
     return res.status(200).json({
@@ -111,15 +116,24 @@ async function updateTransactionDataController(
 
   } catch (err) {
 
-    return res.status(400).json({
+    const status = err.code === 'VERSION_CONFLICT' ? 409 : 400
+
+    return res.status(status).json({
 
       success: false,
 
-      message: err.message
+      message: err.message,
+
+      code: err.code,
+
+      current_version: err.currentVersion,
+
+      expected_version: err.expectedVersion
+
     })
+
   }
 }
-
 
 module.exports = {
   updateTransactionDataController,

@@ -1,5 +1,9 @@
 const axios = require('axios')
 
+const BASE_URL =
+  process.env.ORGANIZATION_SERVICE_URL ||
+  `http://localhost:${process.env.PORT || 4000}`
+
 class OrganizationClient {
 
 
@@ -8,7 +12,7 @@ class OrganizationClient {
     try {
 
       const res = await axios.get(
-        `${process.env.ORGANIZATION_SERVICE_URL}/internal/org-dept-roles/${id}`
+        `${BASE_URL}/internal/org-dept-roles/${id}`
       )
 
       return res.data.data
@@ -33,7 +37,7 @@ class OrganizationClient {
 
       const res = await axios.get(
 
-        `${process.env.ORGANIZATION_SERVICE_URL}/internal/org-dept-roles/active`
+        `${BASE_URL}/internal/org-dept-roles/active`
       )
 
       return res.data.data || []
@@ -55,7 +59,7 @@ async findOrgDeptRole(data) {
 
     const res = await axios.post(
 
-      `${process.env.ORGANIZATION_SERVICE_URL}/internal/org-dept-roles/find`,
+      `${BASE_URL}/internal/org-dept-roles/find`,
 
       data
     )
@@ -78,7 +82,7 @@ async findOrgDeptRole(data) {
 
       const res = await axios.post(
 
-        `${process.env.ORGANIZATION_SERVICE_URL}/internal/org-dept-roles/bulk`,
+        `${BASE_URL}/internal/org-dept-roles/bulk`,
 
         data
       )
@@ -104,8 +108,8 @@ async findOrgDeptRole(data) {
 
     try {
 
-      const res = await this.http.get(
-        `/internal/org-dept-roles/citizen`
+      const res = await axios.get(
+        `${BASE_URL}/internal/org-dept-roles/citizen`
       )
 
       return res.data.data || null

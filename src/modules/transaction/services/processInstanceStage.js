@@ -13,7 +13,11 @@ async function createProcessStage({
 
   stageName,
 
-  status
+  status,
+
+  data,
+
+  assigned_to
 
 }) {
 
@@ -25,7 +29,11 @@ async function createProcessStage({
 
     stage_name: stageName,
 
-    status
+    status,
+    
+    data: data ,
+     
+    assigned_to: assigned_to
   })
 }
 

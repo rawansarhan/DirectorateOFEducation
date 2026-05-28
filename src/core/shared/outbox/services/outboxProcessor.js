@@ -39,10 +39,8 @@ async function processOutbox () {
       // PUBLISH EVENT
       // ===============================
 
-      await eventBus.publish(
-
+      await eventBus.dispatch(
         event.event_type,
-
         event.payload
       )
 
