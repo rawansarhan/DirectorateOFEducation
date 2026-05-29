@@ -16,6 +16,8 @@ const {
   employeeVerifyPinUser,
   employeeChallengeUser,
   employeeVerifySignatureUser,
+  refreshTokenUser,
+  logoutUser,
 } = require('../controllers/AuthController')
 
 const { authMiddleware, authorize } = require('../../../core/middleware/authMiddleware')
@@ -363,5 +365,58 @@ router.post('/employee/challenge', employeeChallengeUser)
  *         description: JWT token
  */
 router.post('/employee/verify-signature', authBruteForceLimiter, employeeVerifySignatureUser)
+
+/**
+ * @swagger
+ * /api/auth/refresh:
+ *   post:
+ *     tags: [Auth]
+ *     summary: تجديد الـ access token باستخدام refresh token
+ *     description: |
+ *       يتحقق من الـ refresh token ويُصدر زوجاً جديداً (access + refresh).
+ *       يتم تدوير الـ refresh token: القديم يُبطَل ويُصدَر جديد.
+ *       عند كشف إعادة استخدام توكن مُبطَل تُلغى كل جلسات المستخدم.
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [refreshToken]
+ *             properties:
+ *               refreshToken:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: تم إصدار زوج توكنات جديد
+ *       401:
+ *         description: refresh token غير صالح أو منتهٍ أو مُبطَل
+ */
+router.post('/refresh', authBruteForceLimiter, refreshTokenUser)
+
+/**
+ * @swagger
+ * /api/auth/logout:
+ *   post:
+ *     tags: [Auth]
+ *     summary: تسجيل الخروج (إبطال refresh token)
+ *     description: يُبطل الـ refresh token المرسل بحيث لا يمكن استخدامه للتجديد بعد الآن.
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [refreshToken]
+ *             properties:
+ *               refreshToken:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: تم تسجيل الخروج
+ */
+router.post('/logout', logoutUser)
 
 module.exports = router

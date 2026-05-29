@@ -38,6 +38,10 @@ const {
 
 
 
+const tokenService = require('../services/tokenService')
+
+
+
 const {
 
   validateSetupPin,
@@ -51,6 +55,8 @@ const {
   validateCreateChallenge,
 
   validateVerifySignature,
+
+  validateRefreshToken,
 
 } = require('../validations/authValidations')
 
@@ -402,6 +408,100 @@ const employeeVerifySignatureUser = async (req, res) => {
 
 
 
+const refreshTokenUser = async (req, res) => {
+
+  try {
+
+    const { error } = validateRefreshToken(req.body)
+
+
+
+    if (error) {
+
+      throw new Error(error.details.map(item => item.message).join(', '))
+
+    }
+
+
+
+    const result = await tokenService.rotateRefreshToken(
+
+      req.body.refreshToken,
+
+      getClientMeta(req)
+
+    )
+
+
+
+    return res.status(200).json({
+
+      success: true,
+
+      data: {
+
+        token: result.accessToken,
+
+        refreshToken: result.refreshToken
+
+      }
+
+    })
+
+  } catch (err) {
+
+    return handleControllerError(res, err, err.statusCode || 401)
+
+  }
+
+}
+
+
+
+const logoutUser = async (req, res) => {
+
+  try {
+
+    const { error } = validateRefreshToken(req.body)
+
+
+
+    if (error) {
+
+      throw new Error(error.details.map(item => item.message).join(', '))
+
+    }
+
+
+
+    const result = await tokenService.revokeRefreshToken(req.body.refreshToken)
+
+
+
+    return res.status(200).json({
+
+      success: true,
+
+      data: {
+
+        revoked: result.revoked,
+
+        message: 'تم تسجيل الخروج بنجاح'
+
+      }
+
+    })
+
+  } catch (err) {
+
+    return handleControllerError(res, err, 400)
+
+  }
+
+}
+
+
+
 module.exports = {
 
   registerEmployeeUser,
@@ -427,6 +527,10 @@ module.exports = {
   employeeChallengeUser,
 
   employeeVerifySignatureUser,
+
+  refreshTokenUser,
+
+  logoutUser,
 
 }
 

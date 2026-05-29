@@ -291,6 +291,18 @@ function validateVerifySignature (data) {
   return schema.validate(data, { abortEarly: false })
 }
 
+function validateRefreshToken (data) {
+  const schema = Joi.object({
+    refreshToken: Joi.string().trim().required().messages({
+      'string.base': 'refresh token يجب أن يكون نصاً',
+      'string.empty': 'refresh token مطلوب',
+      'any.required': 'refresh token مطلوب'
+    })
+  })
+
+  return schema.validate(data, { abortEarly: false })
+}
+
 module.exports = {
   validateRegisterEmp,
   validateRegisterCitizen,
@@ -303,5 +315,6 @@ module.exports = {
   validateChangeCitizenPin: validateChangePin,
   validateEmployeeVerifyPin,
   validateCreateChallenge,
-  validateVerifySignature
+  validateVerifySignature,
+  validateRefreshToken
 }

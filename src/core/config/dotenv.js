@@ -11,4 +11,13 @@ module.exports = {
   DB_PASSWORD: process.env.DB_PASSWORD,
   DB_PORT: process.env.DB_PORT,
   JWT_SECRET: process.env.JWT_SECRET,
+
+  // إعدادات access / refresh tokens (مع fallback آمن لـ JWT_SECRET الحالي)
+  JWT_ACCESS_SECRET:
+    process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET,
+  JWT_REFRESH_SECRET:
+    process.env.JWT_REFRESH_SECRET ||
+    (process.env.JWT_SECRET ? process.env.JWT_SECRET + '_refresh' : undefined),
+  JWT_ACCESS_EXPIRES_IN: process.env.JWT_ACCESS_EXPIRES_IN || '1h',
+  JWT_REFRESH_EXPIRES_IN: process.env.JWT_REFRESH_EXPIRES_IN || '30d',
 };

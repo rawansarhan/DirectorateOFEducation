@@ -1,6 +1,5 @@
 'use strict'
 
-const jwt = require('jsonwebtoken')
 const { v4: uuidv4 } = require('uuid')
 
 const userRepository = require('../repositories/userRepository')
@@ -9,6 +8,7 @@ const userKeyRepository = require('../repositories/userKeyRepository')
 const authPinSessionRepository = require('../repositories/authPinSessionRepository')
 const authChallengeRepository = require('../repositories/authChallengeRepository')
 const securityGuardService = require('../../../core/security/securityGuardService')
+const tokenService = require('./tokenService')
 
 const { LoginOutputDTO } = require('../dto/LoginOutputDTO')
 
@@ -24,8 +24,6 @@ const {
   CHALLENGE_TTL_MS,
   PIN_SESSION_TTL_MS
 } = require('./cryptoAuthService')
-
-const JWT_SECRET = process.env.JWT_SECRET || 'your_very_secret_key'
 
 async function handleSecurityFailure ({
   userId,
@@ -78,19 +76,19 @@ async function isEmployeeUser (userId) {
   })
 }
 
-function issueAuthToken (userId) {
-  return jwt.sign({ id: userId }, JWT_SECRET, { expiresIn: '30d' })
-}
-
-async function buildAuthResponse (user) {
+async function buildAuthResponse (user, clientMeta = {}) {
   const roleAssign = await userRoleAssignmentRepository.findActiveRolesByUserId(
     user.id
   )
 
-  const token = issueAuthToken(user.id)
+  const { accessToken, refreshToken } = await tokenService.issueTokens(
+    user.id,
+    clientMeta
+  )
 
   return {
-    token,
+    token: accessToken,
+    refreshToken,
     user: new LoginOutputDTO(user),
     roles: roleAssign.map(item => item.organization_department_roles_id)
   }
@@ -444,7 +442,7 @@ async function verifyEmployeeSignature ({ challenge_id, signature, clientMeta = 
       userAgent: clientMeta.userAgent
     })
 
-    return buildAuthResponse(user)
+    return buildAuthResponse(user, clientMeta)
   } catch (error) {
     if (!transaction.finished) {
       await transaction.rollback()

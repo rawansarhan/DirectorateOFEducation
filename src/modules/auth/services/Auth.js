@@ -3,7 +3,6 @@
 const orgDeptRolesClient = require('../../../core/shared/clients/organization/orgDeptRolesClient')
 
 const bcrypt = require('bcryptjs')
-const jwt = require('jsonwebtoken')
 const crypto = require('crypto')
 
 const { v4: uuidv4 } = require('uuid')
@@ -14,6 +13,7 @@ const userRoleAssignmentRepository = require('../repositories/userRoleAssignment
 const userKeyRepository = require('../repositories/userKeyRepository')
 const userDeviceTokenRepository = require('../repositories/userDeviceTokenRepository')
 const securityGuardService = require('../../../core/security/securityGuardService')
+const tokenService = require('./tokenService')
 
 const {
   validateRegisterEmp,
@@ -36,7 +36,6 @@ const {
   validatePublicKeyPem,
 } = require('./cryptoAuthService')
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your_very_secret_key'
 const OTP_TTL_MINUTES = 5
 
 function generateOtp () {
@@ -444,10 +443,9 @@ async function verifyRegisterOtp (
 
   await otpCodeRepository.destroyInstance(record)
 
-  const token = jwt.sign(
-    { id: user.id },
-    JWT_SECRET,
-    { expiresIn: '30d' }
+  const { accessToken, refreshToken } = await tokenService.issueTokens(
+    user.id,
+    clientMeta
   )
 
   await securityGuardService.recordSuccess({
@@ -460,7 +458,8 @@ async function verifyRegisterOtp (
   })
 
   return {
-    token,
+    token: accessToken,
+    refreshToken,
     user: new RegisterCitizenOutputDTO(user),
     role_code: 'CITIZEN',
     message: 'تم تفعيل الحساب بنجاح',
@@ -534,10 +533,9 @@ async function verifyLoginOtp (
       user.id
     )
 
-  const token = jwt.sign(
-    { id: user.id },
-    JWT_SECRET,
-    { expiresIn: '30d' }
+  const { accessToken, refreshToken } = await tokenService.issueTokens(
+    user.id,
+    clientMeta
   )
 
   await securityGuardService.recordSuccess({
@@ -554,7 +552,8 @@ async function verifyLoginOtp (
     roles: roleAssign.map(
       r => r.organization_department_roles_id
     ),
-    token,
+    token: accessToken,
+    refreshToken,
   }
 }
 
