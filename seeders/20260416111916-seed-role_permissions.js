@@ -54,6 +54,10 @@ module.exports = {
       // ================= TECHNICAL OFFICER =================
       {
         organization_department_roles_id: roleMap.TECHNICAL_OFFICER,
+        permission_id: permMap.admin_register_employee
+      },
+      {
+        organization_department_roles_id: roleMap.TECHNICAL_OFFICER,
         permission_id: permMap.TYPETPROCESS_CREATE
       },
       {
@@ -62,6 +66,10 @@ module.exports = {
       },
       {
         organization_department_roles_id: roleMap.TECHNICAL_OFFICER,
+        permission_id: permMap.TYPETPROCESS_VIEW
+      },
+          {
+        organization_department_roles_id: roleMap.CITIZEN,
         permission_id: permMap.TYPETPROCESS_VIEW
       },
       {
@@ -96,6 +104,14 @@ module.exports = {
         organization_department_roles_id: roleMap.TECHNICAL_OFFICER,
         permission_id: permMap.PROCESS_SETUP
       },
+         {
+        organization_department_roles_id: roleMap.TECHNICAL_OFFICER,
+        permission_id: permMap.PROCESS_APPROVE
+      },
+         {
+        organization_department_roles_id: roleMap.TECHNICAL_OFFICER,
+        permission_id: permMap.PROCESS_VIEW
+      },
       {
         organization_department_roles_id: roleMap.TECHNICAL_OFFICER,
         permission_id: permMap.STAGE_CONFIG_CREATE
@@ -128,7 +144,14 @@ module.exports = {
         organization_department_roles_id: roleMap.TECHNICAL_OFFICER,
         permission_id: permMap.GET_ONE_TEMPLATE
       },
-
+      {
+        organization_department_roles_id: roleMap.CITIZEN,
+        permission_id: permMap.PROCESS_VIEW_COMPLAINT
+      },
+      {
+        organization_department_roles_id: roleMap.EMPLOYEE,
+        permission_id: permMap.PROCESS_VIEW_COMPLAINT
+      },
       // ================= CITIZEN =================
       {
         organization_department_roles_id: roleMap.CITIZEN,
@@ -138,6 +161,8 @@ module.exports = {
         organization_department_roles_id: roleMap.CITIZEN,
         permission_id: permMap.PROCESS_READ_AUTH
       },
+
+
 
       // ================= DIRECTOR =================
       {
@@ -149,6 +174,54 @@ module.exports = {
       {
         organization_department_roles_id: roleMap.EMPLOYEE,
         permission_id: permMap.PROCESS_START
+      },
+      {
+        organization_department_roles_id: roleMap.TECHNICAL_OFFICER,
+        permission_id: permMap.ORGANIZATION_CREATE
+      },
+      {
+        organization_department_roles_id: roleMap.TECHNICAL_OFFICER,
+        permission_id: permMap.ORGANIZATION_UPDATE
+      },
+      {
+        organization_department_roles_id: roleMap.TECHNICAL_OFFICER,
+        permission_id: permMap.ORGANIZATION_DELETE
+      },
+      {
+        organization_department_roles_id: roleMap.TECHNICAL_OFFICER,
+        permission_id: permMap.ORGANIZATION_VIEW
+      },
+      {
+        organization_department_roles_id: roleMap.TECHNICAL_OFFICER,
+        permission_id: permMap.DEPARTMENT_CREATE
+      },
+      {
+        organization_department_roles_id: roleMap.TECHNICAL_OFFICER,
+        permission_id: permMap.DEPARTMENT_UPDATE
+      },
+      {
+        organization_department_roles_id: roleMap.TECHNICAL_OFFICER,
+        permission_id: permMap.DEPARTMENT_DELETE
+      },
+      {
+        organization_department_roles_id: roleMap.TECHNICAL_OFFICER,
+        permission_id: permMap.DEPARTMENT_VIEW
+      },
+      {
+        organization_department_roles_id: roleMap.TECHNICAL_OFFICER,
+        permission_id: permMap.ROLE_CREATE
+      },
+      {
+        organization_department_roles_id: roleMap.TECHNICAL_OFFICER,
+        permission_id: permMap.ROLE_UPDATE
+      },
+      {
+        organization_department_roles_id: roleMap.TECHNICAL_OFFICER,
+        permission_id: permMap.ROLE_DELETE
+      },
+      {
+        organization_department_roles_id: roleMap.TECHNICAL_OFFICER,
+        permission_id: permMap.ROLE_VIEW
       }
     ]
 

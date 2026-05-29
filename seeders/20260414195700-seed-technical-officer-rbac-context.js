@@ -4,7 +4,7 @@ const bcrypt = require('bcrypt')
 const { QueryTypes } = require('sequelize')
 
 const EMAIL = 'sarhrawan@gmail.com'
-const PHONE = '0954862737'
+const PHONE = '0988341827'
 const PASSWORD = 'Test123'
 const ROLE_CODE = 'TECHNICAL_OFFICER'
 

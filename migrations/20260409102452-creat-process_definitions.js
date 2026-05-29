@@ -17,7 +17,8 @@ module.exports = {
 
       code: {
         type: Sequelize.STRING,
-        allowNull: true
+        allowNull: true,
+        unique: true
       },
 
       camunda_process_key: {
@@ -49,7 +50,10 @@ module.exports = {
         type: Sequelize.BOOLEAN,
         defaultValue: true
       },
-
+      approval_status: {
+        type: Sequelize.ENUM('PENDING', 'APPROVED', 'REJECTED'),
+        defaultValue: 'PENDING'
+      },
       organization_id: {
         type: Sequelize.INTEGER,
         allowNull: true,
@@ -77,7 +81,8 @@ module.exports = {
 
       start_date: {
         type: Sequelize.DATE,
-        allowNull: true
+        allowNull: false,
+        defaultValue: Sequelize.NOW
       },
 
       end_date: {
@@ -99,7 +104,7 @@ module.exports = {
     })
   },
 
-  down: async (queryInterface) => {
+  down: async queryInterface => {
     await queryInterface.dropTable('process_definitions')
   }
 }

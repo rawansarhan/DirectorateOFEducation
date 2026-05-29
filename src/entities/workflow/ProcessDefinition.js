@@ -1,0 +1,125 @@
+'use strict'
+
+module.exports = (sequelize, DataTypes) => {
+  class ProcessDefinition extends sequelize.Sequelize.Model {
+    static associate (models) {
+      // organization relation
+      ProcessDefinition.belongsTo(models.Organization, {
+        foreignKey: 'organization_id',
+        as: 'organization',
+        onDelete: 'SET NULL',
+        onUpdate: 'CASCADE'
+      })
+
+      // type_trans relation
+      ProcessDefinition.belongsTo(models.TypeTrans, {
+        foreignKey: 'type_trans_id',
+        as: 'type_trans',
+        onDelete: 'CASCADE',
+        onUpdate: 'CASCADE'
+      })
+
+      // 🔥 stages relation (مهم)
+      ProcessDefinition.hasMany(models.Stage, {
+        foreignKey: 'process_definition_id',
+        as: 'stages',
+        onDelete: 'CASCADE',
+        onUpdate: 'CASCADE'
+      })
+    }
+  }
+
+  ProcessDefinition.init(
+    {
+      name: {
+        type: DataTypes.STRING,
+        allowNull: false
+      },
+
+      code: {
+        type: DataTypes.STRING,
+        allowNull: true,
+        unique: true,
+
+      },
+
+      camunda_process_key: {
+        type: DataTypes.STRING,
+        allowNull: true
+      },
+
+      camunda_deployment_id: {
+        type: DataTypes.STRING,
+        allowNull: true
+      },
+
+      version: {
+        type: DataTypes.INTEGER,
+        defaultValue: 1
+      },
+
+      status: {
+        type: DataTypes.ENUM('draft', 'deployed'),
+        defaultValue: 'draft'
+      },
+      bpmn_xml: {
+        type: DataTypes.TEXT,
+        allowNull: true
+      },
+
+      is_active: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false
+      },
+      approval_status: {
+        type: DataTypes.ENUM('PENDING', 'APPROVED', 'REJECTED'),
+        defaultValue: 'PENDING'
+      },
+      organization_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true
+      },
+      type_trans_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true
+      },
+      priority: {
+        type: DataTypes.INTEGER,
+        defaultValue: 1
+      },
+      start_date: {
+        type: DataTypes.DATE,
+        allowNull: false,
+        defaultValue: DataTypes.NOW
+      },
+
+      end_date: {
+        type: DataTypes.DATE,
+        allowNull: true
+      },
+
+      created_at: {
+        type: DataTypes.DATE,
+        allowNull: false,
+        defaultValue: DataTypes.NOW
+      },
+
+      updated_at: {
+        type: DataTypes.DATE,
+        allowNull: false,
+        defaultValue: DataTypes.NOW
+      }
+    },
+    {
+      sequelize,
+      modelName: 'ProcessDefinition',
+      tableName: 'process_definitions',
+      timestamps: true,
+      underscored: true,
+      createdAt: 'created_at',
+      updatedAt: 'updated_at'
+    }
+  )
+
+  return ProcessDefinition
+}

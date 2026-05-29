@@ -10,17 +10,15 @@ module.exports = {
         type: Sequelize.INTEGER
       },
 
+      code: {
+        type: Sequelize.STRING,
+        allowNull: true 
+      },
+
       user_id: {
         type: Sequelize.INTEGER,
         allowNull: false,
         references: { model: 'users', key: 'id' },
-        onDelete: 'CASCADE'
-      },
-
-      type_trans_id: {
-        type: Sequelize.INTEGER,
-        allowNull: false,
-        references: { model: 'type_trans', key: 'id' },
         onDelete: 'CASCADE'
       },
 
@@ -35,14 +33,21 @@ module.exports = {
       },
 
       status: {
-        type: Sequelize.ENUM('pending','in_progress','completed','rejected','cancelled'),
-        defaultValue: 'pending'
+        type: Sequelize.ENUM(
+          'draft',
+          'submitted',
+          'in_progress',
+          'completed',
+          'rejected',
+          'cancelled'
+        ),
+        defaultValue: 'draft'
       },
 
       data: {
         type: Sequelize.JSON,
         allowNull: true,
-        comment: "يمكن تخزين البيانات الخاصة بالمعاملة هنا"
+        comment: 'يمكن تخزين البيانات الخاصة بالمعاملة هنا'
       },
 
       created_at: {
@@ -59,7 +64,7 @@ module.exports = {
     })
   },
 
-  down: async (queryInterface) => {
+  down: async queryInterface => {
     await queryInterface.dropTable('transactions')
   }
 }

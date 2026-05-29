@@ -18,12 +18,15 @@ module.exports = {
       field_type: {
         type: Sequelize.ENUM(
           'string',
+          'phoneNumber',
           'int',
           'text',
           'date',
           'boolean',
           'float',
-          'list'
+          'choice',
+          'multiChoice',
+          'action'
         ),
         allowNull: false
       },
@@ -35,7 +38,7 @@ module.exports = {
         type: Sequelize.BOOLEAN,
         defaultValue: true
       },
-      
+
       version: {
         type: Sequelize.INTEGER,
         defaultValue: 1

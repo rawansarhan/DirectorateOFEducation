@@ -16,6 +16,11 @@ module.exports = {
         references: { model: 'transactions', key: 'id' },
         onDelete: 'CASCADE'
       },
+      
+      version: {
+        type: Sequelize.INTEGER,
+        defaultValue: 1
+      },
 
       stage_code: {
         type: Sequelize.STRING,

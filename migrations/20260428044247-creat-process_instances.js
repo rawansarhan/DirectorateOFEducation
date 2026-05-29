@@ -22,6 +22,15 @@ module.exports = {
         onDelete: 'CASCADE'
       },
 
+            transaction_id: {
+        type: Sequelize.INTEGER,
+        allowNull: false,
+        references: {
+          model: 'transactions',
+          key: 'id'
+        },
+        onDelete: 'CASCADE'
+      },
       camunda_process_instance_id: {
         type: Sequelize.STRING,
         allowNull: false
