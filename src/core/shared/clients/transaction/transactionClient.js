@@ -1,7 +1,8 @@
 const axios = require('axios')
 
 const BASE_URL =
-  process.env.TRANSACTION_SERVICE_URL
+  process.env.TRANSACTION_SERVICE_URL ||
+  `http://localhost:${process.env.PORT || 4000}`
 
 class TransactionClient {
 
@@ -36,14 +37,18 @@ class TransactionClient {
   // UPDATE DATA
   // =====================================
 
-  async updateData (id, data) {
+  async updateData (id, data, expectedVersion = null) {
+
+    const body = expectedVersion != null
+      ? { data, expected_version: expectedVersion }
+      : data
 
     const res = await axios.patch(
       `${BASE_URL}/internal/transactions/${id}/data`,
-      data
+      body
     )
 
-    return res.data
+    return res.data.data
   }
 }
 

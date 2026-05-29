@@ -42,6 +42,10 @@ class StageRepository {
     })
   }
 
+  async findById (id) {
+    return Stage.findByPk(id)
+  }
+
 
   async findFirstAuthStage(processId) {
 

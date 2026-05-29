@@ -1,36 +1,27 @@
-const Redis = require('ioredis')
 const eventBus = require('../../events/eventBus')
 const OutboxRepository = require('../repositories/OutboxRepository')
 
-const redis = new Redis(process.env.REDIS_URL)
-
-const POLL_INTERVAL = 1000 // 1 sec
+const POLL_INTERVAL = 1000
 
 let isRunning = false
 
-async function processOutbox() {
+async function processOutbox () {
   if (isRunning) return
   isRunning = true
 
   try {
-    // 1. جلب events غير processed
-    const events = await OutboxRepository.findPending(20)
+    const events = await OutboxRepository.findPending()
 
     for (const event of events) {
       try {
-        // 2. publish على eventBus (Redis)
-        await eventBus.publish(event.event_type, event.payload)
-
-        // 3. mark as processed (IMPORTANT)
+        await eventBus.dispatch(event.event_type, event.payload)
         await OutboxRepository.markProcessed(event.id)
-
+        console.log(`✅ Outbox processed: ${event.event_type}`)
       } catch (err) {
         console.error('❌ Outbox event failed:', event.id, err.message)
-
         await OutboxRepository.markFailed(event.id, err.message)
       }
     }
-
   } catch (err) {
     console.error('❌ Outbox worker error:', err.message)
   }
@@ -38,9 +29,8 @@ async function processOutbox() {
   isRunning = false
 }
 
-function startOutboxWorker() {
+function startOutboxWorker () {
   console.log('📦 Outbox Worker Started')
-
   setInterval(processOutbox, POLL_INTERVAL)
 }
 

@@ -1,4 +1,5 @@
 const express = require('express')
+const path = require('path')
 const dotenv = require('dotenv')
 const cors = require('cors')
 const errorHandler = require('./core/middleware/errorMiddleware')
@@ -8,9 +9,14 @@ dotenv.config()
 
 const app = express()
 
+app.set('trust proxy', 1)
+
 app.use(cors())
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
+
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')))
+app.use('/public', express.static(path.join(__dirname, '../public')))
 
 setupSwagger(app)
 
@@ -83,8 +89,8 @@ app.use(
 //==========================================================================
 //======================= workflow services ================================
 
-const processInstancesRoutes = require('./modules/workflow/routes/processInstance')
-app.use('/process-instances', processInstancesRoutes)
+const workflowRoutes = require('./modules/workflow/taskCamunda/routes/workflow')
+app.use('/api/workflow', workflowRoutes)
 
 const complaintsRoutes = require('./modules/workflow/routes/complaint')
 app.use('/api/complaint', complaintsRoutes)
@@ -122,12 +128,5 @@ app.use(
 
 // ====================== ERROR HANDLER ======================
 app.use(errorHandler)
-
-// 👇 هنا مهم جداً
-const { startOutboxWorker } =
-  require('./core/shared/outbox/workers/outboxWorker')
-
-startOutboxWorker()
-
 
 module.exports = app

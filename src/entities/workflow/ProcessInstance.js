@@ -28,6 +28,12 @@ module.exports = (sequelize, DataTypes) => {
         onDelete: 'SET NULL',
         onUpdate: 'CASCADE'
       })
+
+      ProcessInstance.belongsTo(models.User, {
+        foreignKey: 'task_lock_user_id',
+        as: 'task_lock_user',
+        onDelete: 'SET NULL'
+      })
     }
   }
 
@@ -54,6 +60,26 @@ module.exports = (sequelize, DataTypes) => {
       status: {
         type: DataTypes.ENUM('running', 'completed', 'cancelled'),
         defaultValue: 'running'
+      },
+
+      task_lock_user_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true
+      },
+
+      task_lock_task_id: {
+        type: DataTypes.STRING,
+        allowNull: true
+      },
+
+      task_locked_at: {
+        type: DataTypes.DATE,
+        allowNull: true
+      },
+
+      task_lock_expires_at: {
+        type: DataTypes.DATE,
+        allowNull: true
       },
 
       created_at: {

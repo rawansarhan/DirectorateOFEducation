@@ -22,7 +22,7 @@ module.exports = (sequelize, DataTypes) => {
       },
 
       field_type: {
-        type: DataTypes.ENUM('string','phoneNumber','int','text','date','boolean','float','choice','multiChoice'),
+        type: DataTypes.ENUM('string','phoneNumber','int','text','date','boolean','float','choice','multiChoice','action'),
         allowNull: false,
       },
       list_json: {

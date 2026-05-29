@@ -24,6 +24,11 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: 'user_id',
         as: 'keys'
       })
+
+      User.hasMany(models.UserDeviceToken, {
+        foreignKey: 'user_id',
+        as: 'device_tokens'
+      })
     }
   }
 
@@ -56,9 +61,24 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
       },
 
+      pin_hash: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+
       is_active: {
         type: DataTypes.BOOLEAN,
         defaultValue: true,
+      },
+
+      security_failed_attempts: {
+        type: DataTypes.INTEGER,
+        defaultValue: 0,
+      },
+
+      security_locked_until: {
+        type: DataTypes.DATE,
+        allowNull: true,
       },
     },
     {

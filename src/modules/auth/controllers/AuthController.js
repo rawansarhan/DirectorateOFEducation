@@ -1,69 +1,432 @@
 'use strict'
 
-const {
-  registerEmployee,
-  registerCitizen,
-  verifyRegisterOtp,
-  login,
-  verifyLoginOtp
-} = require("../services/Auth")
 
-// ================= REGISTER EMPLOYEE — Step 1 =================
-const registerEmployeeUser = async (req, res) => {
-  try {
-    const result = await registerEmployee(req.body)
-    return res.status(200).json({ success: true, data: result })
-  } catch (err) {
-    return res.status(400).json({ success: false, message: err.message })
+
+const {
+
+  registerEmployee,
+
+  registerCitizen,
+
+  verifyRegisterOtp,
+
+  login,
+
+  verifyLoginOtp,
+
+  registerDeviceToken,
+
+} = require('../services/Auth')
+
+
+
+const {
+
+  setupPin,
+
+  verifyAppPin,
+
+  changePin,
+
+  employeeVerifyPin,
+
+  createEmployeeChallenge,
+
+  verifyEmployeeSignature,
+
+} = require('../services/pinAuthService')
+
+
+
+const {
+
+  validateSetupPin,
+
+  validateVerifyAppPin,
+
+  validateChangePin,
+
+  validateEmployeeVerifyPin,
+
+  validateCreateChallenge,
+
+  validateVerifySignature,
+
+} = require('../validations/authValidations')
+
+
+
+const { getClientMeta } = require('../../../core/security/securityConfig')
+
+const { respondIfSecurityError } = require('../../../core/security/securityResponseHelper')
+
+
+
+function handleControllerError (res, err, defaultStatus = 400) {
+
+  if (respondIfSecurityError(res, err, defaultStatus)) {
+
+    return
+
   }
+
+
+
+  return res.status(defaultStatus).json({ success: false, message: err.message })
+
 }
 
-// ================= REGISTER CITIZEN — Step 1 =================
-const registerCitizenUser = async (req, res) => {
+
+
+const registerEmployeeUser = async (req, res) => {
+
   try {
+
+    const result = await registerEmployee(req.body)
+
+    return res.status(200).json({ success: true, data: result })
+
+  } catch (err) {
+
+    return handleControllerError(res, err, 400)
+
+  }
+
+}
+
+
+
+const registerCitizenUser = async (req, res) => {
+
+  try {
+
     const result = await registerCitizen(req.body)
 
-     
     return res.status(200).json({ success: true, data: result })
+
   } catch (err) {
-    return res.status(400).json({ success: false, message: err.message })
+
+    return handleControllerError(res, err, 400)
+
   }
+
 }
 
-// ================= VERIFY REGISTER OTP — Step 2 =================
+
+
 const verifyRegisterOtpUser = async (req, res) => {
+
   try {
-    const result = await verifyRegisterOtp(req.body)
+
+    const result = await verifyRegisterOtp(req.body, getClientMeta(req))
+
     return res.status(201).json({ success: true, data: result })
+
   } catch (err) {
-    return res.status(400).json({ success: false, message: err.message })
+
+    return handleControllerError(res, err, 400)
+
   }
+
 }
 
-// ================= LOGIN — Step 1 =================
+
+
 const loginUser = async (req, res) => {
+
   try {
-    const result = await login(req.body)
+
+    const result = await login(req.body, getClientMeta(req))
+
     return res.status(200).json({ success: true, data: result })
+
   } catch (err) {
-    return res.status(401).json({ success: false, message: err.message })
+
+    return handleControllerError(res, err, 401)
+
   }
+
 }
 
-// ================= VERIFY LOGIN OTP — Step 2 =================
+
+
 const verifyLoginOtpUser = async (req, res) => {
+
   try {
-    const result = await verifyLoginOtp(req.body)
+
+    const result = await verifyLoginOtp(req.body, getClientMeta(req))
+
     return res.status(200).json({ success: true, data: result })
+
   } catch (err) {
-    return res.status(401).json({ success: false, message: err.message })
+
+    return handleControllerError(res, err, 401)
+
   }
+
 }
-///////////////////////////////////////////////////////////////////////
+
+
+
+const registerDeviceTokenUser = async (req, res) => {
+
+  try {
+
+    const result = await registerDeviceToken(req.user.id, req.body)
+
+    return res.status(200).json({
+
+      success: true,
+
+      data: {
+
+        id: result.id,
+
+        user_id: result.user_id,
+
+        platform: result.platform,
+
+        device_id: result.device_id,
+
+        is_active: result.is_active
+
+      }
+
+    })
+
+  } catch (err) {
+
+    return handleControllerError(res, err, 400)
+
+  }
+
+}
+
+
+
+const setupPinUser = async (req, res) => {
+
+  try {
+
+    const { error } = validateSetupPin(req.body)
+
+
+
+    if (error) {
+
+      throw new Error(error.details.map(item => item.message).join(', '))
+
+    }
+
+
+
+    const result = await setupPin(req.user.id, req.body.pin, getClientMeta(req))
+
+    return res.status(200).json({ success: true, data: result })
+
+  } catch (err) {
+
+    return handleControllerError(res, err, 400)
+
+  }
+
+}
+
+
+
+const verifyAppPinUser = async (req, res) => {
+
+  try {
+
+    const { error } = validateVerifyAppPin(req.body)
+
+
+
+    if (error) {
+
+      throw new Error(error.details.map(item => item.message).join(', '))
+
+    }
+
+
+
+    const result = await verifyAppPin(req.user.id, req.body.pin, getClientMeta(req))
+
+    return res.status(200).json({ success: true, data: result })
+
+  } catch (err) {
+
+    return handleControllerError(res, err, 401)
+
+  }
+
+}
+
+
+
+const changePinUser = async (req, res) => {
+
+  try {
+
+    const { error } = validateChangePin(req.body)
+
+
+
+    if (error) {
+
+      throw new Error(error.details.map(item => item.message).join(', '))
+
+    }
+
+
+
+    const result = await changePin(req.user.id, req.body, getClientMeta(req))
+
+    return res.status(200).json({ success: true, data: result })
+
+  } catch (err) {
+
+    return handleControllerError(res, err, 400)
+
+  }
+
+}
+
+
+
+const employeeVerifyPinUser = async (req, res) => {
+
+  try {
+
+    const { error } = validateEmployeeVerifyPin(req.body)
+
+
+
+    if (error) {
+
+      throw new Error(error.details.map(item => item.message).join(', '))
+
+    }
+
+
+
+    const result = await employeeVerifyPin({
+
+      ...req.body,
+
+      clientMeta: getClientMeta(req)
+
+    })
+
+    return res.status(200).json({ success: true, data: result })
+
+  } catch (err) {
+
+    return handleControllerError(res, err, 401)
+
+  }
+
+}
+
+
+
+const employeeChallengeUser = async (req, res) => {
+
+  try {
+
+    const { error } = validateCreateChallenge(req.body)
+
+
+
+    if (error) {
+
+      throw new Error(error.details.map(item => item.message).join(', '))
+
+    }
+
+
+
+    const result = await createEmployeeChallenge({
+
+      ...req.body,
+
+      clientMeta: getClientMeta(req)
+
+    })
+
+    return res.status(200).json({ success: true, data: result })
+
+  } catch (err) {
+
+    return handleControllerError(res, err, 400)
+
+  }
+
+}
+
+
+
+const employeeVerifySignatureUser = async (req, res) => {
+
+  try {
+
+    const { error } = validateVerifySignature(req.body)
+
+
+
+    if (error) {
+
+      throw new Error(error.details.map(item => item.message).join(', '))
+
+    }
+
+
+
+    const result = await verifyEmployeeSignature({
+
+      ...req.body,
+
+      clientMeta: getClientMeta(req)
+
+    })
+
+    return res.status(200).json({ success: true, data: result })
+
+  } catch (err) {
+
+    return handleControllerError(res, err, 401)
+
+  }
+
+}
+
+
+
 module.exports = {
+
   registerEmployeeUser,
+
   registerCitizenUser,
+
   verifyRegisterOtpUser,
+
   loginUser,
+
   verifyLoginOtpUser,
+
+  registerDeviceTokenUser,
+
+  setupPinUser,
+
+  verifyAppPinUser,
+
+  changePinUser,
+
+  employeeVerifyPinUser,
+
+  employeeChallengeUser,
+
+  employeeVerifySignatureUser,
+
 }
+

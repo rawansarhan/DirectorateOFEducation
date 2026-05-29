@@ -25,7 +25,8 @@ module.exports = {
           'boolean',
           'float',
           'choice',
-          'multiChoice'
+          'multiChoice',
+          'action'
         ),
         allowNull: false
       },
