@@ -28,7 +28,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your_very_secret_key'
 const OTP_TTL_MINUTES = 5
 
 function generateOtp() {
-  return Math.floor(100000 + Math.random() * 900000).toString()
+  return '123456'
 }
 
 async function saveAndSendOtp(userId, phone) {
@@ -46,7 +46,8 @@ async function saveAndSendOtp(userId, phone) {
     expires_at,
   })
 
-  await sendSms(phone, `رمز التحقق : ${otp}\nصالح لمدة ${OTP_TTL_MINUTES} دقائق فقط.`)
+  // إرسال OTP عبر SMS معطّل مؤقتاً — يتم استخدام الرمز الثابت 123456
+  // await sendSms(phone, `رمز التحقق : ${otp}\nصالح لمدة ${OTP_TTL_MINUTES} دقائق فقط.`)
   return session_id
 }
 
