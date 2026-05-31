@@ -31,3 +31,6 @@ Thumbs.db
 # Optional: OS temp files
 *.swp
 *.swo
+
+# Dependencies
+node_modules/
