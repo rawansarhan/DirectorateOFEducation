@@ -24,80 +24,76 @@ const stageRepository =
 const authClient =
   require('../../../core/shared/clients/auth/authClient')
 const orgDeptRolesClient = require('../../../core/shared/clients/organization/orgDeptRolesClient')
+const {
+  buildRoleKey,
+  getOrLoadProcessList,
+  getOrLoadCitizenOdrId,
+  invalidateAllProcessLists
+} = require('../../../core/cache/processCacheService')
 
+const LOG_PREFIX = '[ProcessDefinition]'
 
-async function createProcessDefinitionService(data) {
+/** تحويل is_complaint من multipart/form (string/boolean) */
+function parseBoolean (value) {
+  return value === true || value === 'true' || value === 1 || value === '1'
+}
 
-  // validation
-  const { error } =
-    createProcessDefinitionSchema.validate(data)
+/**
+ * إنشاء ProcessDefinition جديد
+ * - is_complaint=true  → type_trans_id = null (شكوى)
+ * - is_complaint=false → type_trans_id مطلوب (معاملة عادية)
+ * - بعد الإنشاء: مسح كاش قوائم المعاملات
+ */
+async function createProcessDefinitionService (data) {
+  console.log(`${LOG_PREFIX} createProcessDefinition code=${data.code}`)
+
+  const { error } = createProcessDefinitionSchema.validate(data)
 
   if (error) {
     throw new Error(error.details[0].message)
   }
 
-  // parallel execution
-  const [
-    organization,
-    typeProcess
-  ] = await Promise.all([
+  const isComplaint = parseBoolean(data.is_complaint)
+  console.log(
+    `${LOG_PREFIX} is_complaint=${isComplaint} type_trans_id=${isComplaint ? 'null' : data.type_trans_id}`
+  )
 
-    organizationClient.getOrganizationById(
-      data.organization_id
-    ),
+  const organization = await organizationClient.getOrganizationById(
+    data.organization_id
+  )
 
-    typeTransRepository.findById(
-      data.type_trans_id
-    )
-  ])
-
-  // business validation
   if (!organization) {
     throw new Error('المؤسسة المختارة غير موجودة')
   }
 
-  if (!typeProcess) {
-    throw new Error('نوع العملية غير موجود')
+  if (!isComplaint) {
+    const typeProcess = await typeTransRepository.findById(data.type_trans_id)
+
+    if (!typeProcess) {
+      throw new Error('نوع العملية غير موجود')
+    }
   }
 
-  // camunda deploy
-  const deployRes =
-    await camundaClient.deployProcess(
-      data.filePath
-    )
+  console.log(`${LOG_PREFIX} deploying BPMN → Camunda...`)
+  const deployRes = await camundaClient.deployProcess(data.filePath)
 
-  // persistence
-  const process =
-    await processRepository.create({
+  const process = await processRepository.create({
+    name: data.name,
+    code: data.code || deployRes.processKey,
+    camunda_process_key: deployRes.processKey,
+    camunda_deployment_id: deployRes.deploymentId,
+    is_complaint: isComplaint,
+    type_trans_id: isComplaint ? null : data.type_trans_id,
+    organization_id: data.organization_id || null,
+    status: 'deployed',
+    version: 1,
+    priority: data.priority,
+    start_date: data.start_date,
+    end_date: data.end_date
+  })
 
-      name: data.name,
-
-      code:
-        data.code ||
-        deployRes.processKey,
-
-      camunda_process_key:
-        deployRes.processKey,
-
-      camunda_deployment_id:
-        deployRes.deploymentId,
-
-      type_trans_id:
-        data.type_trans_id,
-
-      organization_id:
-        data.organization_id || null,
-
-      status: 'deployed',
-
-      version: 1,
-
-      priority: data.priority,
-
-      start_date: data.start_date,
-
-      end_date: data.end_date
-    })
+  console.log(`${LOG_PREFIX} created process id=${process.id} — invalidating cache...`)
+  await invalidateAllProcessLists()
 
   return process
 }
@@ -151,64 +147,91 @@ async function setupProcessAfterCreation (processId) {
 
 ///// ============================== AUTH processes (bulk optimized) ====================================
 
-async function getAuthProcesses(
-  typeTransID,
-  userId
-) {
+/**
+ * جلب معاملات AUTH حسب نوع المعاملة (type_trans_id)
+ * للموظفين — يفلتر حسب أدوار المستخدم + كاش Redis
+ */
+async function getAuthProcesses (typeTransID, userId) {
+  console.log(`${LOG_PREFIX} getAuthProcesses typeTransID=${typeTransID} userId=${userId}`)
 
-  // validate type transaction
-
-  const typeTrans =
-    await typeTransRepository.findById(
-      typeTransID
-    )
+  const typeTrans = await typeTransRepository.findById(typeTransID)
 
   if (!typeTrans) {
     throw new Error('لا يوجد هذا النوع')
   }
 
-  // get user role ids from auth-service
-
-  const roleIds =
-    await authClient.getUserRoles(
-      userId
-    )
-
-  // no permissions
+  const roleIds = await authClient.getUserRoles(userId)
 
   if (!roleIds || roleIds.length === 0) {
-
+    console.log(`${LOG_PREFIX} no roles for userId=${userId}`)
     return {
       message: 'لا يوجد صلاحيات للمستخدم',
-      data: []
+      data: [],
+      from_cache: false
     }
   }
 
-  // optimized repository query
+  const cacheKey = `type:${typeTrans.id}:roles:${buildRoleKey(roleIds)}`
 
-  const processes =
-    await processRepository.findAuthProcesses(
-      typeTrans.id,
-      roleIds
-    )
+  return getOrLoadProcessList(
+    cacheKey,
+    async () => {
+      const processes = await processRepository.findAuthProcessesByType(
+        typeTrans.id,
+        roleIds
+      )
 
-  // mapping response
-
-
-
-const result = processes.map(
-  toAuthProcessResponse
-)
-
-  // response
-
-  return {
-
-    message: 'تم جلب عمليات AUTH بنجاح',
-
-    data: result
-  }
+      return {
+        message: 'تم جلب المعاملات  بنجاح',
+        data: processes.map(toAuthProcessResponse)
+      }
+    },
+    { label: `AUTH processes — type_trans_id=${typeTrans.id}` }
+  )
 }
+
+/**
+ * resolve organization_department_roles.id لدور CITIZEN
+ * (organization_id=null, department_id=null, role.code=CITIZEN)
+ */
+async function resolveCitizenOrgDeptRoleId () {
+  return getOrLoadCitizenOdrId(() => orgDeptRolesClient.getCitizenRole())
+}
+
+/**
+ * جلب معاملات المواطن حسب النوع
+ * - is_complaint = false
+ * - stage AUTH مربوط بدور CITIZEN
+ */
+async function getCitizenAuthProcessesByType (typeTransID) {
+  console.log(`${LOG_PREFIX} getCitizenAuthProcessesByType typeTransID=${typeTransID}`)
+
+  const typeTrans = await typeTransRepository.findById(typeTransID)
+
+  if (!typeTrans) {
+    throw new Error('لا يوجد هذا النوع')
+  }
+
+  const citizenOdrId = await resolveCitizenOrgDeptRoleId()
+  const cacheKey = `citizen:type:${typeTrans.id}:odr:${citizenOdrId}`
+
+  return getOrLoadProcessList(
+    cacheKey,
+    async () => {
+      const processes = await processRepository.findAuthProcessesByType(
+        typeTrans.id,
+        [citizenOdrId]
+      )
+
+      return {
+        message: 'تم جلب المعاملات  بنجاح',
+        data: processes.map(toAuthProcessResponse)
+      }
+    },
+    { label: `citizen processes — type_trans_id=${typeTrans.id}` }
+  )
+}
+
 //==================================================================================
 //==================================get details for process=========================
 
@@ -334,6 +357,9 @@ async function reviewProcess(
     }
   )
 
+  console.log(`${LOG_PREFIX} review process id=${processId} → ${approvalStatus} — invalidating cache...`)
+  await invalidateAllProcessLists()
+
   return {
     message:
       decision === 'APPROVE'
@@ -349,6 +375,7 @@ module.exports = {
   setupProcessAfterCreation,
   createProcessDefinitionService,
   getAuthProcesses,
+  getCitizenAuthProcessesByType,
   getProcessDetailsWithValidation,
   reviewProcess
 }

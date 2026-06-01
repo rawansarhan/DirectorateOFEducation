@@ -1,6 +1,4 @@
-const {
-  OrgDeptRole
-} = require('../../../../entities')
+const { OrgDeptRole, Role } = require('../../../../entities')
 const Sequelize = require('sequelize')
 const Op = Sequelize.Op
 class OrgDeptRoleRepository {
@@ -81,13 +79,23 @@ async findAllByIds(ids) {
   })
 }
 
-async  findCitizenRole() {
-
+async findCitizenRole () {
   return await OrgDeptRole.findOne({
     where: {
-      camunda_group_key: 'CITIZEN',
+      organization_id: null,
+      department_id: null,
       is_active: true
-    }
+    },
+    include: [
+      {
+        model: Role,
+        as: 'role',
+        where: { code: 'CITIZEN' },
+        required: true,
+        attributes: ['id', 'code', 'name']
+      }
+    ],
+    attributes: ['id', 'role_id', 'organization_id', 'department_id', 'camunda_group_key']
   })
 }
 }

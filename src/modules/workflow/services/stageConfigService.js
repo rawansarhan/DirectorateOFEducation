@@ -1,7 +1,5 @@
 'use strict'
 const orgDeptRolesClient = require('../../../core/shared/clients/organization/orgDeptRolesClient')
-const { re } = require('mathjs')
-;('use strict')
 
 const {
   createStageConfigSchema
@@ -17,6 +15,10 @@ const stageConfigMapper = require('../mappers/stageConfigMapper')
 
 const processRepository =
   require('../repositories/processRepository')
+
+const {
+  invalidateAllProcessLists
+} = require('../../../core/cache/processCacheService')
 // ======================================================
 // CREATE STAGE CONFIG
 // ======================================================
@@ -153,6 +155,7 @@ for (const a of assignments) {
 
   if (assignmentsToCreate.length > 0) {
     await stageAssignmentRepository.bulkCreate(assignmentsToCreate)
+    await invalidateAllProcessLists()
   }
 
   return {

@@ -5,6 +5,9 @@ test-keys/
 # Environment variables
 .env
 
+# Runtime uploads (BPMN, PDF, attachments)
+uploads/
+
 # Firebase service account
 config/**/*.json
 

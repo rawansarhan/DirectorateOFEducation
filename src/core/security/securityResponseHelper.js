@@ -50,8 +50,30 @@ function respondIfSecurityError (res, err, defaultStatus = 401) {
     .json(buildSecurityPayload(err))
 }
 
+function respondIfOperationGuardError (res, err) {
+  if (err.code === 'RATE_LIMIT_EXCEEDED') {
+    return res.status(429).json({
+      success: false,
+      message: err.message,
+      code: err.code,
+      retry_after_ms: err.retryAfterMs ?? undefined
+    })
+  }
+
+  if (err.code === 'DUPLICATE_IN_FLIGHT') {
+    return res.status(409).json({
+      success: false,
+      message: err.message,
+      code: err.code
+    })
+  }
+
+  return false
+}
+
 module.exports = {
   buildSecurityPayload,
   getSecurityStatusCode,
-  respondIfSecurityError
+  respondIfSecurityError,
+  respondIfOperationGuardError
 }

@@ -140,14 +140,14 @@ async function updateTypeProcessService(
 // GET ALL
 // ======================================================
 
-async function getAllTypeProcessesService() {
+async function getAllTypeProcessesService () {
+  console.log('[TypeProcess] getAllTypeProcesses — all types (including complaint type in catalog)')
 
-  const rows =
-    await typeTransRepository.findAllWithoutComplaint()
+  const rows = await typeTransRepository.findAll()
 
-  return rows.map(
-    typeProcessMapper.toDTO
-  )
+  console.log(`[TypeProcess] returned ${rows.length} type(s)`)
+
+  return rows.map(typeProcessMapper.toDTO)
 }
 
 // ======================================================

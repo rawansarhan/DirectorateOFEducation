@@ -51,10 +51,10 @@ function buildStoredFileEntry (file, userId) {
   const storedPath = normalizeStoredFilePath(file.path)
 
   return {
-    name: file.name,
+    key: file.key,
     path: storedPath,
     url: toPublicFileUrl(storedPath),
-    original_name: file.original_name || file.originalName || file.name,
+    original_name: file.original_name || file.originalName || file.key,
     mime_type: file.mime_type || file.mimeType || null,
     uploaded_by: userId,
     uploaded_at: new Date()

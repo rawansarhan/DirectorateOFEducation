@@ -19,6 +19,10 @@ const {
 const {
   authMiddleware
 } = require('../../../core/middleware/authMiddleware')
+
+const {
+  submitTransactionLimiter
+} = require('../../../core/security/rateLimitMiddleware')
 /**
  * =====================================================
  * CREATE  DRAFT
@@ -67,7 +71,10 @@ router.post(
  * @swagger
  * /api/transaction/updateDraft/{transId}:
  *   post:
- *     summary: update existing draft 
+ *     summary: Update transaction draft (fixed submission envelope)
+ *     description: |
+ *       يستخدم لكل أنواع المعاملات بما فيها الشكوى.
+ *       نفس قالب `StageSubmissionPayload` — fields/files/templates/variables.
  *     tags: [Transaction]
  *     security:
  *       - bearerAuth: []
@@ -83,14 +90,12 @@ router.post(
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             example:
- *               full_name: أحمد محمد
- *               phone: 0999999999
- *               note: طلب جديد
+ *             $ref: '#/components/schemas/StageSubmissionPayload'
  *     responses:
  *       200:
- *         description: Draft created or updated
+ *         description: Draft saved
+ *       409:
+ *         description: Version conflict (expected_version)
  *       401:
  *         description: Unauthorized
  */
@@ -181,6 +186,9 @@ router.get(
  * /api/transaction/{transactionId}/submit:
  *   post:
  *     summary: Submit transaction and start workflow
+ *     description: |
+ *       يستخدم لكل أنواع المعاملات بما فيها الشكوى.
+ *       يتحقق من `StageSubmissionPayload` + إعدادات مرحلة AUTH.
  *     tags: [Transaction]
  *     security:
  *       - bearerAuth: []
@@ -192,13 +200,11 @@ router.get(
  *           type: integer
  *         example: 15
  *     requestBody:
- *       required: false
+ *       required: true
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             example:
- *               final_note: تم التأكيد
+ *             $ref: '#/components/schemas/StageSubmissionPayload'
  *     responses:
  *       200:
  *         description: Transaction submitted successfully
@@ -210,6 +216,7 @@ router.get(
 router.post(
   '/:transactionId/submit',
   authMiddleware,
+  submitTransactionLimiter,
   submitTransactionController
 )
 

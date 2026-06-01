@@ -42,6 +42,14 @@ const swaggerOptions = {
       {
         name: 'Location',
         description: 'إدارة المواقع الجغرافية (Locations)'
+      },
+      {
+        name: 'Complaint',
+        description: 'معاملات الشكوى (Complaints)'
+      },
+      {
+        name: 'Transaction',
+        description: 'المعاملات والمسودات (Transactions)'
       }
     ],
     components: {
@@ -971,6 +979,245 @@ const swaggerOptions = {
               type: 'array',
               items: { $ref: '#/components/schemas/Location' }
             }
+          }
+        },
+
+        // ======================== Stage Submission (SDUI) ==========================
+        StageSubmissionFieldItem: {
+          type: 'object',
+          required: ['key', 'value'],
+          properties: {
+            key: {
+              type: 'string',
+              example: 'citizen_full_name',
+              description: 'مطابق لـ widget.key من SDUI'
+            },
+            value: {
+              description: 'قيمة الحقل',
+              example: 'أحمد محمد علي'
+            }
+          }
+        },
+
+        StageSubmissionFileItem: {
+          type: 'object',
+          required: ['key', 'path'],
+          properties: {
+            key: {
+              type: 'string',
+              example: 'national_id_file',
+              description: 'مطابق لـ widget.key من SDUI'
+            },
+            path: {
+              type: 'string',
+              example: '/uploads/1779550000000-id.pdf'
+            },
+            original_name: { type: 'string', example: 'id.pdf' },
+            mime_type: { type: 'string', example: 'application/pdf' }
+          }
+        },
+
+        StageSubmissionTemplateItem: {
+          type: 'object',
+          required: ['template_id', 'values'],
+          properties: {
+            template_id: { type: 'integer', example: 1 },
+            values: {
+              type: 'object',
+              example: { full_name: 'أحمد محمد علي' }
+            }
+          }
+        },
+
+        StageSubmissionActionItem: {
+          type: 'object',
+          required: ['name'],
+          properties: {
+            name: { type: 'string', example: 'SEND_EMAIL' },
+            payload: { type: 'object' }
+          }
+        },
+
+        StageSubmissionSignature: {
+          type: 'object',
+          required: ['signing_id', 'signature'],
+          properties: {
+            signing_id: { type: 'string', format: 'uuid' },
+            signature: {
+              type: 'string',
+              description: 'base64 Ed25519 signature from USB private key'
+            }
+          }
+        },
+
+        StageSubmissionPayload: {
+          type: 'object',
+          description: 'قالب request ثابت لكل المعاملات — الفرونت يرسل نفس الشكل دائماً',
+          properties: {
+            schema_version: {
+              type: 'string',
+              example: '1.0'
+            },
+            expected_version: {
+              type: 'integer',
+              example: 1,
+              description: 'transaction.version — optimistic concurrency'
+            },
+            fields: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/StageSubmissionFieldItem' }
+            },
+            files: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/StageSubmissionFileItem' }
+            },
+            templates: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/StageSubmissionTemplateItem' }
+            },
+            actions: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/StageSubmissionActionItem' }
+            },
+            variables: {
+              type: 'object',
+              example: { action: 'submit' },
+              description: 'مطلوب لمسارات Camunda — مثال approve/reject/submit'
+            },
+            notes: {
+              type: 'string',
+              example: 'ملاحظات اختيارية',
+              maxLength: 10000
+            },
+            signature: {
+              $ref: '#/components/schemas/StageSubmissionSignature'
+            }
+          },
+          example: {
+            schema_version: '1.0',
+            expected_version: 1,
+            fields: [
+              { key: 'citizen_full_name', value: 'أحمد محمد علي' },
+              { key: 'citizen_phone', value: '0912345678' }
+            ],
+            files: [
+              { key: 'national_id_file', path: '/uploads/id.pdf' }
+            ],
+            templates: [
+              { template_id: 1, values: { full_name: 'أحمد محمد علي' } }
+            ],
+            variables: { action: 'submit' }
+          }
+        },
+
+        AuthProcessItem: {
+          type: 'object',
+          properties: {
+            process_id: { type: 'integer', example: 1 },
+            name: { type: 'string', example: 'Leave Request' },
+            code: { type: 'string', example: 'LEAVE_001' },
+            priority: { type: 'integer', example: 1 },
+            auth_stage: {
+              type: 'object',
+              properties: {
+                id: { type: 'integer', example: 10 },
+                name: { type: 'string', example: 'Submit Request' },
+                code: { type: 'string', example: 'SUBMIT_LEAVE' },
+                type: { type: 'string', example: 'USER_TASK' },
+                auth_type: { type: 'string', example: 'AUTH' }
+              }
+            }
+          },
+          example: {
+            process_id: 1,
+            name: 'Leave Request',
+            code: 'LEAVE_001',
+            priority: 1,
+            auth_stage: {
+              id: 10,
+              name: 'Submit Request',
+              code: 'SUBMIT_LEAVE',
+              type: 'USER_TASK',
+              auth_type: 'AUTH'
+            }
+          }
+        },
+
+        AuthProcessListResponse: {
+          type: 'object',
+          properties: {
+            message: {
+              type: 'string',
+              example: 'تم جلب عمليات AUTH بنجاح'
+            },
+            data: {
+              type: 'array',
+              items: {
+                $ref: '#/components/schemas/AuthProcessItem'
+              },
+              example: [
+                {
+                  process_id: 1,
+                  name: 'Leave Request',
+                  code: 'LEAVE_001',
+                  priority: 1,
+                  auth_stage: {
+                    id: 10,
+                    name: 'Submit Request',
+                    code: 'SUBMIT_LEAVE',
+                    type: 'USER_TASK',
+                    auth_type: 'AUTH'
+                  }
+                }
+              ]
+            },
+            from_cache: {
+              type: 'boolean',
+              example: false
+            }
+          },
+          example: {
+            message: 'تم جلب عمليات AUTH بنجاح',
+            data: [
+              {
+                process_id: 1,
+                name: 'Leave Request',
+                code: 'LEAVE_001',
+                priority: 1,
+                auth_stage: {
+                  id: 10,
+                  name: 'Submit Request',
+                  code: 'SUBMIT_LEAVE',
+                  type: 'USER_TASK',
+                  auth_type: 'AUTH'
+                }
+              }
+            ],
+            from_cache: false
+          }
+        },
+
+        ProcessDefinitionCreateForm: {
+          type: 'object',
+          required: ['file', 'name', 'priority', 'start_date'],
+          properties: {
+            file: { type: 'string', format: 'binary' },
+            name: { type: 'string', example: 'Leave Process' },
+            code: { type: 'string', example: 'LEAVE_001' },
+            is_complaint: {
+              type: 'boolean',
+              default: false,
+              description: 'true → type_trans_id = null'
+            },
+            type_trans_id: {
+              type: 'integer',
+              nullable: true,
+              description: 'مطلوب عند is_complaint = false'
+            },
+            organization_id: { type: 'integer', example: 10 },
+            priority: { type: 'integer', example: 1 },
+            start_date: { type: 'string', format: 'date' },
+            end_date: { type: 'string', format: 'date', nullable: true }
           }
         }
       }

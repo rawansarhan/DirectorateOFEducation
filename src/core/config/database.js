@@ -1,18 +1,21 @@
-const { Sequelize } = require('sequelize');
-const dotenv = require('dotenv');
+const path = require('path')
+const { Sequelize } = require('sequelize')
+const dotenv = require('dotenv')
 
-dotenv.config();
+// Always load .env from project root (not cwd-dependent)
+dotenv.config({ path: path.resolve(__dirname, '../../../.env') })
 
-//Initializes Sequelize with local PostgreSQL connection
-const sequelize = new Sequelize(
-  process.env.DB_NAME,
-  process.env.DB_USER,
-  process.env.DB_PASSWORD,
-  {
-    host: process.env.DB_HOST,
-    port: process.env.DB_PORT,
-    dialect: 'postgres'
-  }
-);
+const dbPort = Number.parseInt(process.env.DB_PORT, 10) || 5000
+const dbHost = process.env.DB_HOST || '127.0.0.1'
+const dbName = (process.env.DB_NAME || '').trim()
+const dbUser = process.env.DB_USER || 'postgres'
+const dbPassword = String(process.env.DB_PASSWORD || '').replace(/^"|"$/g, '')
 
-module.exports = sequelize;
+const sequelize = new Sequelize(dbName, dbUser, dbPassword, {
+  host: dbHost,
+  port: dbPort,
+  dialect: 'postgres',
+  logging: false
+})
+
+module.exports = sequelize

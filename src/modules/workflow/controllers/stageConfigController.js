@@ -18,7 +18,7 @@ const createStageConfig = asyncHandler(async (req, res) => {
       message: 'تم إعداد المراحل بنجاح !',
       data: result
     })
-  } catch (err) {
+  } catch (err) {  
     return res.status(400).json({
       success: false,
       message: err.message

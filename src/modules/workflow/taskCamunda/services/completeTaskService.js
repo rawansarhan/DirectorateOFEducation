@@ -28,6 +28,7 @@ const {
   appendSignatureToTransactionData
 } = require('./transactionSigningService')
 const securityGuardService = require('../../../../core/security/securityGuardService')
+const operationGuardService = require('../../../../core/security/operationGuardService')
 const {
   assertTaskLockHolder,
   releaseTaskLock
@@ -139,6 +140,50 @@ async function completeTask ({
 }) {
   await securityGuardService.assertAccountNotLocked(userId)
 
+  let guardContext = null
+
+  if (!isAutoComplete) {
+    const guard = operationGuardService.begin({
+      scope: 'complete_task',
+      userId,
+      resourceId: taskId,
+      idempotencyKey: clientMeta.idempotencyKey || payload?.idempotency_key || null
+    })
+
+    if (guard.replay) {
+      return guard.result
+    }
+
+    guardContext = guard.context
+  }
+
+  try {
+    const result = await completeTaskCore({
+      taskId,
+      userId,
+      payload,
+      clientMeta,
+      isAutoComplete
+    })
+
+    if (guardContext) {
+      return operationGuardService.commit(guardContext, result)
+    }
+
+    return result
+  } catch (error) {
+    operationGuardService.release(guardContext)
+    throw error
+  }
+}
+
+async function completeTaskCore ({
+  taskId,
+  userId,
+  payload,
+  clientMeta = {},
+  isAutoComplete = false
+}) {
   /**
    * ====================================================
    * SUPPORTED PAYLOAD
@@ -302,7 +347,7 @@ async function completeTask ({
    * Example:
    *
    * {
-   *   name: 'citizen_name',
+   *   key: 'citizen_name',
    *   value: 'روان سرحان'
    * }
    */
@@ -310,9 +355,9 @@ async function completeTask ({
   if (Array.isArray(payload.fields)) {
     for (const field of payload.fields) {
       stageSnapshot.fields.push({
-        name: field.name,
+        key: field.key,
 
-        value: field.value 
+        value: field.value
       })
     }
   }
@@ -325,7 +370,7 @@ async function completeTask ({
    * Example:
    *
    * {
-   *   name: 'criminal_record',
+   *   key: 'criminal_record',
    *   path: '/uploads/a.pdf'
    * }
    */

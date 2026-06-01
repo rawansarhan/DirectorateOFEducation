@@ -2,23 +2,42 @@ const repo = require('../repositories/transactionRepository')
 
 const workflowClient = require('../../../core/shared/clients/workflow/workflowClient')
 
-const eventBus = require('../../../core/shared/events/eventBus')
-
 const outboxRepository =
   require('../../../core/shared/outbox/repositories/OutboxRepository')
 
+const {
+  validateSubmissionRequest,
+  validateSubmissionAgainstConfig,
+  buildStoredSubmissionData,
+  loadAuthStageConfigByProcessCode,
+  SUBMISSION_SCHEMA_VERSION
+} = require('../../workflow/services/stageSubmissionService')
+
 const EVENTS = require('../../../core/shared/events/types')
-// ======================================================
-// CREATE OR UPDATE DRAFT
-// ======================================================
+
+const operationGuardService = require('../../../core/security/operationGuardService')
+
+async function assertDraftOwnership (draft, userId) {
+  if (!draft) {
+    throw new Error('لا يوجد مسودة')
+  }
+
+  if (userId && draft.user_id !== userId) {
+    throw new Error('غير مصرح لك بتعديل هذه المعاملة')
+  }
+
+  if (!draft.is_active) {
+    throw new Error('المسودة غير مفعلة')
+  }
+
+  if (draft.status !== 'draft') {
+    throw new Error('يمكن تعديل المسودة فقط عندما تكون المعاملة draft')
+  }
+}
 
 async function createDraft ({ userId, processId }) {
-  // =====================================
-  // GET PROCESS
-  // =====================================
-
   const process = await workflowClient.getProcessById(processId)
-  console.log(process)
+
   if (!process) {
     throw new Error('Process not found')
   }
@@ -27,108 +46,60 @@ async function createDraft ({ userId, processId }) {
     throw new Error('Process is inactive')
   }
 
-  // =====================================
-  // PROCESS CODE
-  // =====================================
-
   const processCode = process.code
-
-  // =====================================
-  // CHECK EXISTING DRAFT
-  // =====================================
 
   let draft = await repo.findDraftByCode(userId, processCode)
 
-  // =====================================
-  // UPDATE EXISTING DRAFT
-  // =====================================
-
   if (draft) {
-
-  return draft
+    return draft
   }
-
-  // =====================================
-  // CREATE NEW DRAFT
-  // =====================================
 
   draft = await repo.create({
     code: processCode,
-
     user_id: userId,
-
     status: 'draft'
   })
 
-
-
   return {
     isNew: true,
-
     draft
   }
 }
 
-// ======================================================
-//  UPDATE DRAFT
-// ======================================================
+async function UpdateDraft ({ transId, userId, data }) {
+  const draft = await repo.findById(transId)
 
-async function UpdateDraft ({ transId, data }) {
-  // =====================================
-  // GET PROCESS
-  // =====================================
+  await assertDraftOwnership(draft, userId)
 
-   const draft = await repo.findDraft(transId)
-  console.log(process)
-  if (!draft) {
-    throw new Error('لا يوجد مسودة')
+  const normalized = validateSubmissionRequest(data, { mode: 'draft' })
+  const storedData = buildStoredSubmissionData(normalized)
+
+  if (normalized.expected_version != null) {
+    await repo.updateDataOptimistic(
+      transId,
+      storedData,
+      normalized.expected_version
+    )
+  } else {
+    await draft.update({ data: storedData })
   }
 
-  if (!draft.is_active) {
-    throw new Error('المسودة غير مفعلة')
+  const updated = await repo.findById(transId)
+
+  return {
+    isNew: false,
+    draft: updated,
+    schema_version: SUBMISSION_SCHEMA_VERSION,
+    submission: normalized
   }
-
-  // =====================================
-  // UPDATE EXISTING DRAFT
-  // =====================================
-
-    await draft.update({
-      data: {
-        ...data
-      }
-    })
-
-    return {
-      isNew: false,
-      draft
-    }
-  }
-
-
-
-
-// ======================================================
-// GET USER DRAFT BY PROCESS
-// ======================================================
+}
 
 async function getUserDraftByProcess (userId, processId) {
-  // =====================================
-  // GET PROCESS
-  // =====================================
-
   const process = await workflowClient.getProcessById(processId)
-  console.log({
-    now: new Date(),
-    start_date: process.start_date,
-    end_date: process.end_date
-  })
+
   if (!process) {
     throw new Error('لا يوجد عملية')
   }
-
-  // =====================================
-  // FIND DRAFT
-  // =====================================
 
   const draft = await repo.findDraftByCode(userId, process.code)
 
@@ -137,12 +108,7 @@ async function getUserDraftByProcess (userId, processId) {
   }
 
   return draft
-  
 }
-
-// ======================================================
-// GET TRANSACTION BY ID
-// ======================================================
 
 async function getTransactionById (transactionId, userId) {
   const transaction = await repo.findById(transactionId)
@@ -151,10 +117,6 @@ async function getTransactionById (transactionId, userId) {
     throw new Error('Transaction not found')
   }
 
-  // =====================================
-  // SECURITY
-  // =====================================
-
   if (userId && transaction.user_id !== userId) {
     throw new Error('Unauthorized access')
   }
@@ -162,71 +124,98 @@ async function getTransactionById (transactionId, userId) {
   return transaction
 }
 
-// ======================================================
-// SUBMIT TRANSACTION
-// ======================================================
-
-async function submitTransaction (transactionId , data  ) {
-
-  // =====================================
-  // GET TRANSACTION
-  // =====================================
+async function submitTransaction (transactionId, data, userId, clientMeta = {}) {
   const transaction = await repo.findById(transactionId)
 
   if (!transaction) {
     throw new Error('Transaction not found')
   }
 
-  // =====================================
-  // VALIDATION
-  // =====================================
+  if (userId && transaction.user_id !== userId) {
+    throw new Error('غير مصرح لك بإرسال هذه المعاملة')
+  }
 
   if (transaction.status !== 'draft') {
-    throw new Error('Only draft can be submitted')
+    const plain = transaction.get
+      ? transaction.get({ plain: true })
+      : transaction
+
+    return {
+      ...plain,
+      idempotent_replay: true
+    }
   }
 
-  // =====================================
-  // UPDATE TRANSACTION
-  // =====================================
+  if (!transaction.code) {
+    throw new Error('المعاملة غير مرتبطة بعملية')
+  }
 
-  await transaction.update({
-      data: {
-        ...data
-      },
-    status: 'submitted'
+  const guard = operationGuardService.begin({
+    scope: 'submit_transaction',
+    userId,
+    resourceId: String(transactionId),
+    idempotencyKey: clientMeta.idempotencyKey || data?.idempotency_key || null
   })
 
-  // =====================================
-  // EVENT
-  // =====================================
-
-await outboxRepository.create({
-
-  event_type: EVENTS.TRANSACTION_SUBMITTED,
-
-  payload: {
-
-    transactionId: transaction.id,
-
-    processCode: transaction.code
+  if (guard.replay) {
+    return guard.result
   }
-})
 
-  return  transaction
-  
+  const guardContext = guard.context
+
+  try {
+    const configJson = await loadAuthStageConfigByProcessCode(transaction.code)
+
+    const normalized = await validateSubmissionAgainstConfig(
+      data,
+      configJson,
+      {
+        mode: 'submit',
+        requireVariables: Boolean(
+          (configJson.ui?.actions || []).length ||
+          data?.variables?.action
+        )
+      }
+    )
+
+    if (!normalized.variables.action) {
+      normalized.variables.action = 'submit'
+    }
+
+    const storedData = buildStoredSubmissionData(normalized)
+
+    await transaction.update({
+      data: storedData,
+      status: 'submitted'
+    })
+
+    await outboxRepository.create({
+      event_type: EVENTS.TRANSACTION_SUBMITTED,
+      payload: {
+        transactionId: transaction.id,
+        processCode: transaction.code
+      }
+    })
+
+    const refreshed = await repo.findById(transactionId)
+    const plain = refreshed.get
+      ? refreshed.get({ plain: true })
+      : refreshed
+
+    return operationGuardService.commit(guardContext, {
+      ...plain,
+      idempotent_replay: false
+    })
+  } catch (error) {
+    operationGuardService.release(guardContext)
+    throw error
+  }
 }
-///////////////////////////////////////////////////////////////
-
-
 
 module.exports = {
   UpdateDraft,
-
   createDraft,
-
   getUserDraftByProcess,
-
   getTransactionById,
-
   submitTransaction
 }

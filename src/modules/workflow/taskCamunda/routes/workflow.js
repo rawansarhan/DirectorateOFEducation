@@ -75,20 +75,7 @@ router.get('/tasks/:taskId', authMiddleware, getTaskDetailsController)
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             properties:
- *               variables:
- *                 type: object
- *                 example:
- *                   action: approve
- *               fields:
- *                 type: array
- *                 items:
- *                   type: object
- *               files:
- *                 type: array
- *                 items:
- *                   type: object
+ *             $ref: '#/components/schemas/StageSubmissionPayload'
  *     responses:
  *       200:
  *         description: Signing challenge created
@@ -125,47 +112,10 @@ router.post(
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             properties:
- *               fields:
- *                 type: array
- *                 items:
- *                   type: object
- *                   properties:
- *                     name:
- *                       type: string
- *                     value:
- *                       type: string
- *               files:
- *                 type: array
- *                 items:
- *                   type: object
- *                   properties:
- *                     name:
- *                       type: string
- *                     path:
- *                       type: string
- *               templates:
- *                 type: array
- *                 items:
- *                   type: object
- *               actions:
- *                 type: array
- *                 items:
- *                   type: object
- *               variables:
- *                 type: object
- *                 example:
- *                   action: approve
- *               signature:
- *                 type: object
- *                 properties:
- *                   signing_id:
- *                     type: string
- *                     format: uuid
- *                   signature:
- *                     type: string
- *                     description: base64 Ed25519 signature from USB private key
+ *             allOf:
+ *               - $ref: '#/components/schemas/StageSubmissionPayload'
+ *               - type: object
+ *                 required: [signature]
  *     responses:
  *       200:
  *         description: Task completed successfully

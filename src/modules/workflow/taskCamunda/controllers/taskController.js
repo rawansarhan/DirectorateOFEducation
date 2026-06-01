@@ -10,7 +10,7 @@ const { createSigningChallenge } = require('../services/transactionSigningServic
 
 const { getClientMeta } = require('../../../../core/security/securityConfig')
 
-const { respondIfSecurityError } = require('../../../../core/security/securityResponseHelper')
+const { respondIfSecurityError, respondIfOperationGuardError } = require('../../../../core/security/securityResponseHelper')
 
 
 
@@ -28,6 +28,10 @@ function handleWorkflowError (res, error, defaultStatus = 400) {
     'TASK_LOCK_EXPIRED',
     'VERSION_CONFLICT'
   ]
+
+  if (respondIfOperationGuardError(res, error)) {
+    return
+  }
 
   if (conflictCodes.includes(error.code)) {
     return res.status(409).json({

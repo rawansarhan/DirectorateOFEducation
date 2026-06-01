@@ -66,7 +66,7 @@ module.exports = {
 
       type_trans_id: {
         type: Sequelize.INTEGER,
-        allowNull: false,
+        allowNull: true,
         references: {
           model: 'type_trans',
           key: 'id'
@@ -78,6 +78,11 @@ module.exports = {
         type: Sequelize.INTEGER,
         defaultValue: 1
       },
+      // ==================== complaint =====================
+       is_complaint:{
+        type: Sequelize.BOOLEAN,
+        defaultValue: false
+       },
 
       start_date: {
         type: Sequelize.DATE,
