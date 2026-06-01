@@ -1,4 +1,5 @@
 const organizationService = require('../../services/internal/OrganizationServices')
+const ApiResponder = require('../../../../core/utils/apiResponder')
 
 async function getOrganizationById(req, res, next) {
 
@@ -8,10 +9,7 @@ async function getOrganizationById(req, res, next) {
       req.params.id
     )
 
-    return res.json({
-      success: true,
-      data: organization
-    })
+    return ApiResponder.okResponse(res, organization, 'تم جلب البيانات بنجاح')
 
   } catch (err) {
     next(err)

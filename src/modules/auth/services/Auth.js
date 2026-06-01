@@ -74,7 +74,7 @@ async function handleSecurityFailure ({
 }
 
 async function saveAndSendOtp (userId, phone) {
-  await otpCodeRepository.deleteByUserId(userId)
+  await otpCodeRepository.destroyByUserId(userId)
 
   const otp = generateOtp()
   const session_id = uuidv4()
@@ -129,11 +129,11 @@ async function registerEmployee (userData) {
   }
 
   const orgDeptRole =
-    await orgDeptRolesClient.findByOrgDeptRole(
-      userData.organization_id,
-      userData.department_id,
-      userData.role_id
-    )
+    await orgDeptRolesClient.findOrgDeptRole({
+      organization_id: userData.organization_id,
+      department_id: userData.department_id,
+      role_id: userData.role_id
+    })
 
   if (!orgDeptRole) {
     throw new Error(
@@ -223,7 +223,7 @@ async function registerCitizen (userData) {
         )
       }
 
-      await otpCodeRepository.deleteByUserId(
+      await otpCodeRepository.destroyByUserId(
         existing.id,
         { transaction }
       )
@@ -235,10 +235,7 @@ async function registerCitizen (userData) {
     }
 
     const orgDeptRole =
-      await orgDeptRolesClient.findByCamundaGroupKey(
-        'CITIZEN',
-        { transaction }
-      )
+      await orgDeptRolesClient.getCitizenRole()
 
     if (!orgDeptRole) {
       throw new Error(
@@ -529,7 +526,7 @@ async function verifyLoginOtp (
   await otpCodeRepository.destroyInstance(record)
 
   const roleAssign =
-    await userRoleAssignmentRepository.findRoleIdsByUserId(
+    await userRoleAssignmentRepository.findActiveRolesByUserId(
       user.id
     )
 

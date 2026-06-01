@@ -1,3 +1,5 @@
+const ApiResponder = require('../../../core/utils/apiResponder')
+
 const {
 
   UpdateDraft,
@@ -38,19 +40,10 @@ async function createDraftController(
         processId
       })
 
-    return res.status(200).json({
-
-      success: true,
-      message:'تمت العملية بنجاح',
-      data: result
-    
-    })
+    return ApiResponder.okResponse(res, result, 'تمت العملية بنجاح')
 
   } catch (err) {
-    return res.status(400).json({
-      success: false,
-      message: err.message
-    })}
+    return ApiResponder.badRequestResponse(res, err.message)}
 }
 
 // ======================================================
@@ -75,19 +68,10 @@ async function UpdateDraftController(
         data: req.body
       })
 
-    return res.status(200).json({
-
-      success: true,
-      message:'تم حفظ المسودة بنجاح',
-      data: result
-    
-    })
+    return ApiResponder.okResponse(res, result, 'تم حفظ المسودة بنجاح')
 
   } catch (err) {
-    return res.status(400).json({
-      success: false,
-      message: err.message
-    })}
+    return ApiResponder.badRequestResponse(res, err.message)}
 }
 // ======================================================
 // GET USER DRAFT BY PROCESS
@@ -116,18 +100,10 @@ async function getUserDraftByProcessController(
         processId
       )
 
-    return res.status(200).json({
-
-       success: true,
-      message:'تم جلب المسودة بنجاح',
-      data: result
-    })
+    return ApiResponder.okResponse(res, result, 'تم جلب المسودة بنجاح')
 
   } catch (err) {
-    return res.status(400).json({
-      success: false,
-      message: err.message
-    })}
+    return ApiResponder.badRequestResponse(res, err.message)}
 }
 
 // ======================================================
@@ -157,18 +133,10 @@ async function getTransactionController(
         userId
       )
 
-    return res.status(200).json({
-
-      success: true,
-      message:'تم العملية بنجاح',
-      data: result
-    })
+    return ApiResponder.okResponse(res, result, 'تم العملية بنجاح')
 
   } catch (err) {
-    return res.status(400).json({
-      success: false,
-      message: err.message
-    })}
+    return ApiResponder.badRequestResponse(res, err.message)}
 }
 
 // ======================================================
@@ -195,18 +163,10 @@ async function submitTransactionController(
         req.body
       )
 
-    return res.status(200).json({
-
-      success: true,
-      message:'تم العملية بنجاح',
-      data: result
-    })
+    return ApiResponder.okResponse(res, result, 'تم العملية بنجاح')
 
   } catch (err) {
-    return res.status(400).json({
-      success: false,
-      message: err.message
-    })}
+    return ApiResponder.badRequestResponse(res, err.message)}
 }
 
 

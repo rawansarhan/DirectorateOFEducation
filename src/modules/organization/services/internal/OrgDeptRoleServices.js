@@ -3,7 +3,7 @@ const repository = require('../../repositories/internal/orgDeptRoleClient')
 
 
 async function getOrgDeptRoleById (id) {
-  const role = await repository.findByPk(id)
+  const role = await repository.findById(id)
 
   if (!role) {
     return null

@@ -1,5 +1,7 @@
+const ApiResponder = require('../../../core/utils/apiResponder')
+
   const{
-  
+
   getById,
 
   updateStatus,
@@ -22,21 +24,11 @@ async function getTransactionByIdController(
         req.params.id
       )
 
-    return res.status(200).json({
-
-      success: true,
-
-      data: result
-    })
+    return ApiResponder.okResponse(res, result)
 
   } catch (err) {
 
-    return res.status(400).json({
-
-      success: false,
-
-      message: err.message
-    })
+    return ApiResponder.badRequestResponse(res, err.message)
   }
 }
 
@@ -59,24 +51,11 @@ async function updateTransactionStatusController(
         req.body.status
       )
 
-    return res.status(200).json({
-
-      success: true,
-
-      message:
-        'Status updated successfully',
-
-      data: result
-    })
+    return ApiResponder.okResponse(res, result, 'Status updated successfully')
 
   } catch (err) {
 
-    return res.status(400).json({
-
-      success: false,
-
-      message: err.message
-    })
+    return ApiResponder.badRequestResponse(res, err.message)
   }
 }
 
@@ -104,32 +83,20 @@ async function updateTransactionDataController(
         expectedVersion
       )
 
-    return res.status(200).json({
-
-      success: true,
-
-      message:
-        'Data updated successfully',
-
-      data: result
-    })
+    return ApiResponder.okResponse(res, result, 'Data updated successfully')
 
   } catch (err) {
 
     const status = err.code === 'VERSION_CONFLICT' ? 409 : 400
 
-    return res.status(status).json({
-
-      success: false,
-
+    return ApiResponder.error(res, {
       message: err.message,
-
-      code: err.code,
-
-      current_version: err.currentVersion,
-
-      expected_version: err.expectedVersion
-
+      statusCode: status,
+      extra: {
+        code: err.code,
+        current_version: err.currentVersion,
+        expected_version: err.expectedVersion
+      }
     })
 
   }

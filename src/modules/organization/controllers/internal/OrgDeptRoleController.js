@@ -1,4 +1,5 @@
 const organizationService = require('../../services/internal/OrgDeptRoleServices')
+const ApiResponder = require('../../../../core/utils/apiResponder')
 
 
 async function getOrgDeptRoleById(req, res, next) {
@@ -9,16 +10,10 @@ async function getOrgDeptRoleById(req, res, next) {
       req.params.id
     )
 
-    return res.json({
-      success: true,
-      data: role
-    })
+    return ApiResponder.okResponse(res, role, 'تم جلب البيانات بنجاح')
 
   } catch (err) {
-    return res.status(err.statusCode || 400).json({
-      success: false,
-      message: err.message
-    })
+    return ApiResponder.error(res, { message: err.message, statusCode: err.statusCode || 400 })
   }
 }
 
@@ -32,16 +27,10 @@ async function getActiveRoles(req, res, next) {
     const result =
       await organizationService.getActiveRoles()
 
-    res.json({
-      success: true,
-      data: result
-    })
+    return ApiResponder.okResponse(res, result, 'تم جلب البيانات بنجاح')
 
   } catch (err) {
-    return res.status(err.statusCode || 400).json({
-      success: false,
-      message: err.message
-    })
+    return ApiResponder.error(res, { message: err.message, statusCode: err.statusCode || 400 })
   }
 }
 
@@ -58,19 +47,11 @@ async function findOneOrgDeptRole(req, res) {
         req.body
       )
 
-    return res.json({
-      success: true,
-      data: result
-    })
+    return ApiResponder.okResponse(res, result, 'تم جلب البيانات بنجاح')
 
   } catch (err) {
 
-    return res.status(
-      err.statusCode || 400
-    ).json({
-      success: false,
-      message: err.message
-    })
+    return ApiResponder.error(res, { message: err.message, statusCode: err.statusCode || 400 })
   }
 }
 
@@ -86,12 +67,7 @@ async function getOrgDeptRolesByIds(req, res, next) {
     const data =
       await organizationService.getOrgDeptRolesByIdsServices(ids)
 
-    return res.status(200).json({
-
-      success: true,
-
-      data
-    })
+    return ApiResponder.okResponse(res, data, 'تم جلب البيانات بنجاح')
 
   } catch (err) {
 
@@ -110,19 +86,11 @@ async function getCitizenRole(req, res, next) {
     const result =
       await organizationService.findCitizenRole()
 
-    return res.json({
-      success: true,
-      data: result
-    })
+    return ApiResponder.okResponse(res, result, 'تم جلب البيانات بنجاح')
 
   } catch (err) {
 
-    return res.status(
-      err.statusCode || 400
-    ).json({
-      success: false,
-      message: err.message
-    })
+    return ApiResponder.error(res, { message: err.message, statusCode: err.statusCode || 400 })
   }
 }
 

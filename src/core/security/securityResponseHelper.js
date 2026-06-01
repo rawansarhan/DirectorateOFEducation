@@ -1,26 +1,25 @@
 'use strict'
 
-function buildSecurityPayload (err) {
-  const payload = {
-    success: false,
-    message: err.message
-  }
+const ApiResponder = require('../utils/apiResponder')
+
+function buildSecurityExtra (err) {
+  const extra = {}
 
   if (err.code === 'ACCOUNT_LOCKED' && err.lockedUntil) {
-    payload.locked_until = err.lockedUntil
+    extra.locked_until = err.lockedUntil
   }
 
   if (typeof err.remainingAttempts === 'number') {
-    payload.remaining_attempts = err.remainingAttempts
+    extra.remaining_attempts = err.remainingAttempts
   }
 
   if (err.security?.locked) {
-    payload.locked_until = err.security.lockedUntil
+    extra.locked_until = err.security.lockedUntil
   } else if (err.security && typeof err.security.remainingAttempts === 'number') {
-    payload.remaining_attempts = err.security.remainingAttempts
+    extra.remaining_attempts = err.security.remainingAttempts
   }
 
-  return payload
+  return extra
 }
 
 function getSecurityStatusCode (err, defaultStatus = 401) {
@@ -45,13 +44,17 @@ function respondIfSecurityError (res, err, defaultStatus = 401) {
     return false
   }
 
-  return res
-    .status(getSecurityStatusCode(err, defaultStatus))
-    .json(buildSecurityPayload(err))
+  ApiResponder.error(res, {
+    message: err.message,
+    statusCode: getSecurityStatusCode(err, defaultStatus),
+    extra: buildSecurityExtra(err)
+  })
+
+  return true
 }
 
 module.exports = {
-  buildSecurityPayload,
+  buildSecurityExtra,
   getSecurityStatusCode,
   respondIfSecurityError
 }

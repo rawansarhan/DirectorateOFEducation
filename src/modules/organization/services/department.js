@@ -203,6 +203,94 @@ async function getLeafDepartmentsByOrganizationService(organizationId) {
   })
 }
 
+// ================= GET OVERVIEW =================
+// Aggregates everything the department card needs in one call:
+// the manager, the employee list, the sub-sections (child departments)
+// and the transaction count.
+//
+// Assumptions (no explicit "manager" column exists):
+//   * manager  = the first active user assigned to the top role of the
+//                department (the OrgDeptRole whose parent_id is null).
+//   * employees = every distinct active user assigned to any role in the dept.
+//   * sections  = the department's direct child departments.
+//   * transactionsCount = transactions owned by those employees.
+async function getDepartmentOverviewService(id) {
+  const departmentId = parseInt(id, 10)
+
+  if (!Number.isInteger(departmentId) || departmentId < 1) {
+    const err = new Error('معرّف القسم غير صالح')
+    err.statusCode = 400
+    throw err
+  }
+
+  const department = await departmentRepository.findByIdWithRelations(departmentId)
+
+  if (!department) {
+    const err = new Error('القسم غير موجود')
+    err.statusCode = 404
+    throw err
+  }
+
+  const orgDeptRoles =
+    await departmentRepository.findRolesWithUsersByDepartmentId(departmentId)
+
+  const employeesById = new Map()
+  let manager = null
+
+  for (const odr of orgDeptRoles) {
+    const roleName = odr.role ? odr.role.name : null
+    const assignments = odr.user_assignments || []
+
+    for (const assignment of assignments) {
+      const user = assignment.user
+      if (!assignment.is_active || !user) continue
+
+      if (!employeesById.has(user.id)) {
+        employeesById.set(user.id, {
+          id: user.id,
+          userName: user.userName,
+          email: user.email,
+          phone_number: user.phone_number,
+          role: roleName
+        })
+      }
+
+      // Top of the role hierarchy (parent_id null) → treat as the manager.
+      if (!manager && odr.parent_id == null) {
+        manager = { id: user.id, userName: user.userName, role: roleName }
+      }
+    }
+  }
+
+  const employees = Array.from(employeesById.values())
+  const userIds = employees.map(e => e.id)
+  const transactionsCount =
+    await departmentRepository.countTransactionsByUserIds(userIds)
+
+  const sections = (department.children || []).map(child => ({
+    id: child.id,
+    name: child.name,
+    is_active: child.is_active
+  }))
+
+  return {
+    id: department.id,
+    name: department.name,
+    organization_id: department.organization_id,
+    parent_id: department.parent_id,
+    is_active: department.is_active,
+    organization: department.organization
+      ? { id: department.organization.id, name: department.organization.name }
+      : null,
+    manager,
+    employees,
+    sections,
+    employeesCount: employees.length,
+    sectionsCount: sections.length,
+    transactionsCount
+  }
+}
+
 // ================= GET BY ID =================
 async function getDepartmentByIdService(id) {
   const departmentId = parseInt(id, 10)
@@ -230,6 +318,7 @@ module.exports = {
   deleteDepartmentService,
   getAllDepartmentsService,
   getDepartmentByIdService,
+  getDepartmentOverviewService,
   getLeafDepartmentsByOrganizationService,
   toggleDepartmentStatusService
 }

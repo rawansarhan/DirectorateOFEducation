@@ -12,6 +12,8 @@ const { getClientMeta } = require('../../../../core/security/securityConfig')
 
 const { respondIfSecurityError } = require('../../../../core/security/securityResponseHelper')
 
+const ApiResponder = require('../../../../core/utils/apiResponder')
+
 
 
 function handleWorkflowError (res, error, defaultStatus = 400) {
@@ -30,14 +32,16 @@ function handleWorkflowError (res, error, defaultStatus = 400) {
   ]
 
   if (conflictCodes.includes(error.code)) {
-    return res.status(409).json({
-      success: false,
+    return ApiResponder.error(res, {
       message: error.message,
-      code: error.code,
-      locked_by: error.lockedBy ?? undefined,
-      locked_until: error.lockedUntil ?? undefined,
-      current_version: error.currentVersion ?? undefined,
-      expected_version: error.expectedVersion ?? undefined
+      statusCode: 409,
+      extra: {
+        code: error.code,
+        locked_by: error.lockedBy ?? undefined,
+        locked_until: error.lockedUntil ?? undefined,
+        current_version: error.currentVersion ?? undefined,
+        expected_version: error.expectedVersion ?? undefined
+      }
     })
   }
 
@@ -51,11 +55,11 @@ function handleWorkflowError (res, error, defaultStatus = 400) {
 
 
 
-  return res.status(status).json({
+  return ApiResponder.error(res, {
 
-    success: false,
+    message: error.message,
 
-    message: error.message
+    statusCode: status
 
   })
 
@@ -73,13 +77,7 @@ async function startWorkflowController (req, res) {
 
     if (!transactionId || !processCode) {
 
-      return res.status(400).json({
-
-        success: false,
-
-        message: 'transactionId and processCode are required'
-
-      })
+      return ApiResponder.badRequestResponse(res, 'transactionId and processCode are required')
 
     }
 
@@ -89,13 +87,7 @@ async function startWorkflowController (req, res) {
 
 
 
-    return res.status(200).json({
-
-      success: true,
-
-      data: result
-
-    })
+    return ApiResponder.okResponse(res, result)
 
   } catch (error) {
 
@@ -125,13 +117,7 @@ async function createSigningChallengeController (req, res) {
 
 
 
-    return res.status(200).json({
-
-      success: true,
-
-      data: result
-
-    })
+    return ApiResponder.okResponse(res, result)
 
   } catch (error) {
 
@@ -161,7 +147,7 @@ async function completeTaskController (req, res) {
 
 
 
-    return res.status(200).json(result)
+    return ApiResponder.okResponse(res, result.data, result.message)
 
   } catch (error) {
 
@@ -185,7 +171,15 @@ async function getAllTasksController (req, res) {
 
 
 
-    return res.status(200).json(result)
+    return ApiResponder.success(res, {
+
+      data: result.data,
+
+      message: result.message,
+
+      statusCode: 200
+
+    })
 
   } catch (error) {
 
@@ -211,7 +205,7 @@ async function getTaskDetailsController (req, res) {
 
 
 
-    return res.status(200).json(result)
+    return ApiResponder.okResponse(res, result.data, result.message)
 
   } catch (error) {
 

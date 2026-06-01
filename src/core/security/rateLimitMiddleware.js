@@ -1,6 +1,7 @@
 'use strict'
 
 const { getClientIp } = require('./securityConfig')
+const ApiResponder = require('../utils/apiResponder')
 
 function createRateLimiter ({
   windowMs = 60 * 1000,
@@ -39,12 +40,15 @@ function createRateLimiter ({
     if (current.count >= max) {
       res.setHeader('X-RateLimit-Limit', String(max))
       res.setHeader('X-RateLimit-Remaining', '0')
-      res.setHeader('Retry-After', String(Math.ceil((current.resetAt - now) / 1000)))
+      const retryAfter = Math.ceil((current.resetAt - now) / 1000)
+      res.setHeader('Retry-After', String(retryAfter))
 
-      return res.status(429).json({
-        success: false,
-        message: 'Too many requests. Please try again later.'
-      })
+      return ApiResponder.tooManyRequestsResponse(
+        res,
+        'Too many requests. Please try again later.',
+        null,
+        { retry_after: retryAfter }
+      )
     }
 
     current.count += 1

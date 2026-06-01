@@ -1,4 +1,5 @@
 const asyncHandler = require('../../../core/middleware/asyncHandler')
+const ApiResponder = require('../../../core/utils/apiResponder')
 const {
   createRoleService,
   updateRoleService,
@@ -13,16 +14,9 @@ const {
 const createRole = asyncHandler(async (req, res) => {
   try {
     const result = await createRoleService(req.body)
-    return res.status(201).json({
-      success: true,
-      message: 'تم إنشاء الدور بنجاح',
-      data: result
-    })
+    return ApiResponder.createdResponse(res, result, 'تم إنشاء الدور بنجاح')
   } catch (err) {
-    return res.status(err.statusCode || 400).json({
-      success: false,
-      message: err.message
-    })
+    return ApiResponder.error(res, { message: err.message, statusCode: err.statusCode || 400 })
   }
 })
 
@@ -30,16 +24,9 @@ const createRole = asyncHandler(async (req, res) => {
 const updateRole = asyncHandler(async (req, res) => {
   try {
     const result = await updateRoleService(req.body, req.params.id)
-    return res.status(200).json({
-      success: true,
-      message: 'تم تعديل الدور بنجاح',
-      data: result
-    })
+    return ApiResponder.okResponse(res, result, 'تم تعديل الدور بنجاح')
   } catch (err) {
-    return res.status(err.statusCode || 400).json({
-      success: false,
-      message: err.message
-    })
+    return ApiResponder.error(res, { message: err.message, statusCode: err.statusCode || 400 })
   }
 })
 
@@ -47,16 +34,9 @@ const updateRole = asyncHandler(async (req, res) => {
 const deleteRole = asyncHandler(async (req, res) => {
   try {
     const result = await deleteRoleService(req.params.id)
-    return res.status(200).json({
-      success: true,
-      message: 'تم حذف الدور بنجاح',
-      data: result
-    })
+    return ApiResponder.okResponse(res, result, 'تم حذف الدور بنجاح')
   } catch (err) {
-    return res.status(err.statusCode || 400).json({
-      success: false,
-      message: err.message
-    })
+    return ApiResponder.error(res, { message: err.message, statusCode: err.statusCode || 400 })
   }
 })
 
@@ -64,18 +44,15 @@ const deleteRole = asyncHandler(async (req, res) => {
 const toggleRoleStatus = asyncHandler(async (req, res) => {
   try {
     const result = await toggleRoleStatusService(req.params.id)
-    return res.status(200).json({
-      success: true,
-      message: result.is_active
+    return ApiResponder.okResponse(
+      res,
+      result,
+      result.is_active
         ? 'تم تفعيل الدور بنجاح'
-        : 'تم تعطيل الدور بنجاح',
-      data: result
-    })
+        : 'تم تعطيل الدور بنجاح'
+    )
   } catch (err) {
-    return res.status(err.statusCode || 400).json({
-      success: false,
-      message: err.message
-    })
+    return ApiResponder.error(res, { message: err.message, statusCode: err.statusCode || 400 })
   }
 })
 
@@ -83,16 +60,9 @@ const toggleRoleStatus = asyncHandler(async (req, res) => {
 const getAllRoles = asyncHandler(async (req, res) => {
   try {
     const result = await getAllRolesService()
-    return res.status(200).json({
-      success: true,
-      message: 'تم جلب البيانات بنجاح',
-      data: result
-    })
+    return ApiResponder.okResponse(res, result, 'تم جلب البيانات بنجاح')
   } catch (err) {
-    return res.status(err.statusCode || 400).json({
-      success: false,
-      message: err.message
-    })
+    return ApiResponder.error(res, { message: err.message, statusCode: err.statusCode || 400 })
   }
 })
 
@@ -100,16 +70,9 @@ const getAllRoles = asyncHandler(async (req, res) => {
 const getRoleById = asyncHandler(async (req, res) => {
   try {
     const result = await getRoleByIdService(req.params.id)
-    return res.status(200).json({
-      success: true,
-      message: 'تم جلب البيانات بنجاح',
-      data: result
-    })
+    return ApiResponder.okResponse(res, result, 'تم جلب البيانات بنجاح')
   } catch (err) {
-    return res.status(err.statusCode || 400).json({
-      success: false,
-      message: err.message
-    })
+    return ApiResponder.error(res, { message: err.message, statusCode: err.statusCode || 400 })
   }
 })
 
@@ -117,16 +80,9 @@ const getRoleById = asyncHandler(async (req, res) => {
 const getRolesByDepartment = asyncHandler(async (req, res) => {
   try {
     const result = await getRolesByDepartmentService(req.params.departmentId)
-    return res.status(200).json({
-      success: true,
-      message: 'تم جلب البيانات بنجاح',
-      data: result
-    })
+    return ApiResponder.okResponse(res, result, 'تم جلب البيانات بنجاح')
   } catch (err) {
-    return res.status(err.statusCode || 400).json({
-      success: false,
-      message: err.message
-    })
+    return ApiResponder.error(res, { message: err.message, statusCode: err.statusCode || 400 })
   }
 })
 

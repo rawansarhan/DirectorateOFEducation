@@ -1,20 +1,14 @@
 const asyncHandler = require('../../../core/middleware/asyncHandler')
+const ApiResponder = require('../../../core/utils/apiResponder')
 const { getAllLocationsService } = require('../services/location')
 
 // ================= GET ALL =================
 const getAllLocations = asyncHandler(async (req, res) => {
   try {
     const result = await getAllLocationsService()
-    return res.status(200).json({
-      success: true,
-      message: 'تم جلب البيانات بنجاح',
-      data: result
-    })
+    return ApiResponder.okResponse(res, result, 'تم جلب البيانات بنجاح')
   } catch (err) {
-    return res.status(err.statusCode || 400).json({
-      success: false,
-      message: err.message
-    })
+    return ApiResponder.error(res, { message: err.message, statusCode: err.statusCode || 400 })
   }
 })
 

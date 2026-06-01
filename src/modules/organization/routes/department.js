@@ -7,6 +7,7 @@ const {
   deleteDepartment,
   getAllDepartments,
   getDepartmentById,
+  getDepartmentOverview,
   getLeafDepartmentsByOrganization,
   toggleDepartmentStatus
 } = require('../controllers/DepartmentController')
@@ -188,6 +189,34 @@ router.patch(
   authMiddleware,
   authorize('DEPARTMENT_TOGGLE_STATUS'),
   toggleDepartmentStatus
+)
+
+/**
+ * @swagger
+ * /api/department/{id}/overview:
+ *   get:
+ *     summary: نظرة عامة على القسم (المدير، الموظفون، الشعب، عدد المعاملات)
+ *     description: |
+ *       يجمع في طلب واحد كل ما تحتاجه بطاقة القسم: المدير (أعلى دور في القسم)،
+ *       قائمة الموظفين المعيّنين، الشعب التابعة (الأقسام الأبناء)، وعدد المعاملات.
+ *     tags: [Department]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: department overview
+ */
+router.get(
+  '/:id/overview',
+  authMiddleware,
+  authorize('DEPARTMENT_VIEW'),
+  getDepartmentOverview
 )
 
 /**

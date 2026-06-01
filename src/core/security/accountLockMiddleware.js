@@ -1,6 +1,7 @@
 'use strict'
 
 const securityGuardService = require('./securityGuardService')
+const ApiResponder = require('../utils/apiResponder')
 
 async function accountLockMiddleware (req, res, next) {
   if (!req.user?.id) {
@@ -12,9 +13,7 @@ async function accountLockMiddleware (req, res, next) {
     return next()
   } catch (err) {
     if (err.code === 'ACCOUNT_LOCKED') {
-      return res.status(423).json({
-        success: false,
-        message: err.message,
+      return ApiResponder.lockedResponse(res, err.message, null, {
         locked_until: err.lockedUntil
       })
     }

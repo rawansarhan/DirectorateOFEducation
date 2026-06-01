@@ -1,5 +1,6 @@
 const authClientService =
   require('../../services/internal/authClientService')
+const ApiResponder = require('../../../../core/utils/apiResponder')
 
 async function getUserRoleIds(req, res, next) {
 
@@ -12,10 +13,7 @@ async function getUserRoleIds(req, res, next) {
         userId
       )
 
-    res.status(200).json({
-      message: 'success',
-      data
-    })
+    ApiResponder.okResponse(res, data, 'success')
 
   } catch (err) {
     next(err)
