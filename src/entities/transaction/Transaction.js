@@ -18,6 +18,11 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: 'transaction_id',
         as: 'documents'
       })
+
+      Transaction.hasMany(models.TransactionSignatureLink, {
+        foreignKey: 'transaction_id',
+        as: 'signature_links'
+      })
     }
   }
 
@@ -57,6 +62,11 @@ module.exports = (sequelize, DataTypes) => {
 
       data: {
         type: DataTypes.JSON,
+        allowNull: true
+      },
+
+      genesis_hash: {
+        type: DataTypes.STRING(64),
         allowNull: true
       },
 

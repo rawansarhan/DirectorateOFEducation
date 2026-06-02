@@ -20,14 +20,18 @@ const {
   normalizeActionPayload,
   resolveActionsFromStageConfig
 } = require('../../actions/actionHelpers')
-const { buildStoredFileEntry } = require('../../../../core/utils/filePath')
+const { buildStoredFileEntry, normalizeStoredFilePath } = require('../../../../core/utils/filePath')
+const documentTemplateRepository =
+  require('../../../requirements/repositories/documentTemplateRepository')
 const {
   requiresDigitalSignature,
   verifyAndPersistSignature,
   buildTransactionSignatureLedger,
   appendSignatureToTransactionData
 } = require('./transactionSigningService')
+const { createIntegrityLink } = require('../../../transaction/services/integrityChainService')
 const securityGuardService = require('../../../../core/security/securityGuardService')
+const operationGuardService = require('../../../../core/security/operationGuardService')
 const {
   assertTaskLockHolder,
   releaseTaskLock
@@ -139,6 +143,123 @@ async function completeTask ({
 }) {
   await securityGuardService.assertAccountNotLocked(userId)
 
+  const idempotencyKey =
+    clientMeta.idempotencyKey || payload?.idempotency_key || null
+
+  let guardContext = null
+
+  if (!isAutoComplete && idempotencyKey) {
+    const replay = operationGuardService.getReplay({
+      scope: 'complete_task',
+      userId,
+      idempotencyKey
+    })
+
+    if (replay) {
+      return replay
+    }
+  }
+
+  try {
+    const result = await completeTaskCore({
+      taskId,
+      userId,
+      payload,
+      clientMeta,
+      isAutoComplete,
+      idempotencyKey,
+      async acquireOperationGuard () {
+        if (isAutoComplete) {
+          return null
+        }
+
+        const guard = operationGuardService.begin({
+          scope: 'complete_task',
+          userId,
+          resourceId: taskId,
+          idempotencyKey
+        })
+
+        if (guard.replay) {
+          const error = new Error('Idempotent replay')
+          error.code = 'IDEMPOTENT_REPLAY'
+          error.result = guard.result
+          throw error
+        }
+
+        guardContext = guard.context
+        return guardContext
+      }
+    })
+
+    if (guardContext) {
+      return operationGuardService.commit(guardContext, result)
+    }
+
+    return {
+      ...result,
+      idempotent_replay: false
+    }
+  } catch (error) {
+    if (error.code === 'IDEMPOTENT_REPLAY') {
+      return error.result
+    }
+
+    operationGuardService.release(guardContext)
+    throw error
+  }
+}
+
+function toPublicSignatureRecord (record) {
+  if (!record) {
+    return null
+  }
+
+  const {
+    challenge,
+    digitalSignature,
+    userKey,
+    signed_message: signedMessage,
+    ...publicRecord
+  } = record
+
+  return publicRecord
+}
+
+function buildCompleteTaskResponseData ({
+  stageName,
+  stageSnapshot,
+  payload,
+  idempotencyKey
+}) {
+  const response = {
+    stage_name: stageName,
+    fields: stageSnapshot.fields,
+    files: stageSnapshot.files,
+    templates: stageSnapshot.templates,
+    variables: payload.variables || {},
+    idempotency_key: idempotencyKey || payload.idempotency_key || null
+  }
+
+  if (payload.signature) {
+    response.signature = {
+      challenge_id: payload.signature.challenge_id,
+      signature: payload.signature.signature
+    }
+  }
+
+  return response
+}
+
+async function completeTaskCore ({
+  taskId,
+  userId,
+  payload,
+  clientMeta = {},
+  isAutoComplete = false,
+  idempotencyKey = null,
+  acquireOperationGuard = null
+}) {
   /**
    * ====================================================
    * SUPPORTED PAYLOAD
@@ -241,25 +362,34 @@ async function completeTask ({
     throw new Error('Stage not found')
   }
 
+  if (payload.stage_name && payload.stage_name !== stage.name) {
+    throw new Error('stage_name does not match current task stage')
+  }
+
   const stageConfig = await stageConfigRepository.findByStageId(stage.id)
   let digitalSignatureRecord = null
 
   if (requiresDigitalSignature(stage, payload, stageConfig, { isAutoComplete })) {
-    const signingId = payload.signature?.signing_id
+    const challengeId = payload.signature?.challenge_id
     const signature = payload.signature?.signature
 
-    if (!signingId || !signature) {
+    if (!challengeId || !signature) {
       throw new Error(
         'Digital signature is required. Call POST /tasks/:taskId/signing-challenge first.'
       )
     }
 
     digitalSignatureRecord = await verifyAndPersistSignature({
-      signingId,
+      challengeId,
       signature,
       userId,
+      variables: payload.variables || {},
       clientMeta
     })
+  }
+
+  if (acquireOperationGuard) {
+    await acquireOperationGuard()
   }
 
   // ====================================================
@@ -284,6 +414,7 @@ async function completeTask ({
    */
 
   const stageSnapshot = {
+    stage_name: stage.name,
     fields: [],
     files: [],
     templates: [],
@@ -291,7 +422,7 @@ async function completeTask ({
   }
 
   if (digitalSignatureRecord) {
-    stageSnapshot.digital_signature = digitalSignatureRecord
+    stageSnapshot.digital_signature = toPublicSignatureRecord(digitalSignatureRecord)
   }
 
   // ====================================================
@@ -302,7 +433,7 @@ async function completeTask ({
    * Example:
    *
    * {
-   *   name: 'citizen_name',
+   *   key: 'citizen_name',
    *   value: 'روان سرحان'
    * }
    */
@@ -310,9 +441,9 @@ async function completeTask ({
   if (Array.isArray(payload.fields)) {
     for (const field of payload.fields) {
       stageSnapshot.fields.push({
-        name: field.name,
+        key: field.key,
 
-        value: field.value 
+        value: field.value
       })
     }
   }
@@ -325,7 +456,7 @@ async function completeTask ({
    * Example:
    *
    * {
-   *   name: 'criminal_record',
+   *   key: 'criminal_record',
    *   path: '/uploads/a.pdf'
    * }
    */
@@ -353,12 +484,19 @@ async function completeTask ({
 
   if (Array.isArray(payload.templates)) {
     for (const template of payload.templates) {
+      const templateRecord = await documentTemplateRepository.findById(template.template_id)
+      const templatePath = normalizeStoredFilePath(templateRecord?.file_path)
+
       stageSnapshot.templates.push({
         template_id: template.template_id,
-
-        values: template.values || {}
+        values: template.values || {},
+        path: templatePath
       })
     }
+  }
+
+  if (payload.variables && Object.keys(payload.variables).length) {
+    stageSnapshot.variables = payload.variables
   }
 
   // ====================================================
@@ -394,7 +532,12 @@ async function completeTask ({
    */
 
   if (Array.isArray(payload.actions) && payload.actions.length) {
-    const actionResults = await executeActions(payload.actions, {
+    const actionsToRun = payload.actions.map(action => ({
+      name: action.name,
+      payload: action.payload || {}
+    }))
+
+    const actionResults = await executeActions(actionsToRun, {
       task,
       transaction,
       processInstance,
@@ -448,7 +591,24 @@ async function completeTask ({
   }
 
   if (digitalSignatureRecord) {
-    appendSignatureToTransactionData(transactionData, digitalSignatureRecord)
+    appendSignatureToTransactionData(
+      transactionData,
+      toPublicSignatureRecord(digitalSignatureRecord)
+    )
+  }
+
+  if (digitalSignatureRecord?.challenge) {
+    await createIntegrityLink({
+      transactionLike: transaction,
+      processDefinitionId: processInstance.process_definition_id,
+      stage,
+      stageSnapshot: transactionData[stage.code],
+      mergedTransactionData: transactionData,
+      challenge: digitalSignatureRecord.challenge,
+      digitalSignature: digitalSignatureRecord.digitalSignature,
+      userKey: digitalSignatureRecord.userKey,
+      signedMessage: digitalSignatureRecord.signed_message
+    })
   }
 
   // ====================================================
@@ -618,19 +778,14 @@ async function completeTask ({
   }
 
   return {
-    message: 'Task completed successfully',
+    message: 'تم إكمال المهمة بنجاح',
 
-    data: {
-      taskId: task.id,
-
-      currentStage: stage.name,
-
-      nextTask: nextTask?.name || null,
-
-      workflowStatus: nextTask ? 'running' : 'completed',
-
-      transactionData
-    }
+    data: buildCompleteTaskResponseData({
+      stageName: stage.name,
+      stageSnapshot,
+      payload,
+      idempotencyKey
+    })
   }
 }
 ////////////////////////////////////////////////////////////////////////////////

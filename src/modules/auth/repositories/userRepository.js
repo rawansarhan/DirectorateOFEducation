@@ -1,5 +1,6 @@
 'use strict'
 
+const { Op } = require('sequelize')
 const { User } = require('../../../entities')
 
 class UserRepository {
@@ -30,6 +31,21 @@ class UserRepository {
     })
   }
 
+  /**
+   * حسابات بنفس email أو userName (لتسجيل المواطن)
+   */
+  async findConflictingByEmailOrUserName (email, userName, options = {}) {
+    return User.findAll({
+      where: {
+        [Op.or]: [
+          { email },
+          { userName }
+        ]
+      },
+      ...options
+    })
+  }
+
   async findById (id, options = {}) {
     return User.findByPk(id, options)
   }
@@ -40,6 +56,20 @@ class UserRepository {
 
   async update (user, data, options = {}) {
     return user.update(data, options)
+  }
+
+  async updateById (id, data, options = {}) {
+    const user = await this.findById(id, options)
+
+    if (!user) {
+      return null
+    }
+
+    return user.update(data, options)
+  }
+
+  async destroyInstance (user, options = {}) {
+    return user.destroy(options)
   }
 
   async activate (user, options = {}) {

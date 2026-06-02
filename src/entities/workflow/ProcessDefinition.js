@@ -87,6 +87,10 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.INTEGER,
         defaultValue: 1
       },
+      is_complaint:{
+        type: DataTypes.BOOLEAN,
+        defaultValue: false
+       },
       start_date: {
         type: DataTypes.DATE,
         allowNull: false,

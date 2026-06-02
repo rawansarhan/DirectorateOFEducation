@@ -1,5 +1,7 @@
 'use strict'
 
+const { HTTP_STATUS } = require('../../../core/middleware/httpStatusCodes')
+
 const { ValidateCreateFile, ValidateUpdateFile } = require('../validations/filesValidations')
 const fileRepository = require('../repositories/fileRepository')
 const { FileInputDTO } = require('../dto/FileInputDTO')
@@ -57,7 +59,7 @@ async function updateFileService(FileData, FileId) {
 
   if (!oldFile) {
     const err = new Error('الملف غير موجودة')
-    err.statusCode = 404
+    err.statusCode = HTTP_STATUS.NOT_FOUND
     throw err
   }
 

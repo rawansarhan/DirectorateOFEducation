@@ -6,7 +6,8 @@ const {
   Permission
 } = require('../../entities')
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your_very_secret_key'
+const { JWT_SECRET } = require('../config/env')
+const ApiResponder = require('../utils/apiResponder')
 
 /* ================= AUTH MIDDLEWARE ================= */
 const authMiddleware = async (req, res, next) => {
@@ -14,7 +15,7 @@ const authMiddleware = async (req, res, next) => {
     const authHeader = req.header('Authorization')
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ message: 'No token provided' })
+      return ApiResponder.unauthorizedResponse(res, 'No token provided', 'NO_TOKEN')
     }
 
     const token = authHeader.split(' ')[1]
@@ -30,7 +31,7 @@ const authMiddleware = async (req, res, next) => {
     })
 
     if (!userAssignments.length) {
-      return res.status(403).json({ message: 'User has no roles' })
+      return ApiResponder.forbiddenResponse(res, 'User has no roles', 'NO_ROLES')
     }
 
     const roleIds = userAssignments.map(
@@ -45,10 +46,10 @@ const authMiddleware = async (req, res, next) => {
     next()
   } catch (err) {
     if (err.name === 'TokenExpiredError') {
-      return res.status(401).json({ message: 'Token expired' })
+      return ApiResponder.unauthorizedResponse(res, 'Token expired', 'TOKEN_EXPIRED')
     }
 
-    return res.status(401).json({ message: 'Invalid token' })
+    return ApiResponder.unauthorizedResponse(res, 'Invalid token', 'INVALID_TOKEN')
   }
 }
 
@@ -61,8 +62,7 @@ function authorize(requiredPermission) {
       console.log("STEP 1 - USER:", user)
 
       if (!user?.id) {
-        console.log("❌ No user found")
-        return res.status(401).json({ message: 'Unauthorized' })
+        return ApiResponder.unauthorizedResponse(res, 'Unauthorized', 'UNAUTHORIZED')
       }
 
       // ================= STEP 2 =================
@@ -73,7 +73,7 @@ function authorize(requiredPermission) {
       console.log("STEP 2 - userAssignments:", userAssignments)
 
       if (!userAssignments.length) {
-        return res.status(403).json({ message: 'User has no roles' })
+        return ApiResponder.forbiddenResponse(res, 'User has no roles', 'NO_ROLES')
       }
 
       // ================= STEP 3 =================
@@ -84,7 +84,7 @@ function authorize(requiredPermission) {
       console.log("STEP 3 - roleIds:", roleIds)
 
       if (!roleIds.length) {
-        return res.status(403).json({ message: 'No role IDs found' })
+        return ApiResponder.forbiddenResponse(res, 'No role IDs found', 'NO_ROLE_IDS')
       }
  
       // ================= STEP 4 =================
@@ -106,7 +106,7 @@ function authorize(requiredPermission) {
       console.log("STEP 4 - rolePermissions:", JSON.stringify(rolePermissions, null, 2))
 
       if (!rolePermissions.length) {
-        return res.status(403).json({ message: 'No permissions found' })
+        return ApiResponder.forbiddenResponse(res, 'No permissions found', 'NO_PERMISSIONS')
       }
 
       // ================= STEP 5 =================
@@ -117,9 +117,11 @@ function authorize(requiredPermission) {
       console.log("STEP 5 - permissionNames:", permissionNames)
 
       if (!permissionNames.includes(requiredPermission)) {
-        return res.status(403).json({
-          message: 'Forbidden - missing permission'
-        })
+        return ApiResponder.forbiddenResponse(
+          res,
+          'Forbidden - missing permission',
+          'FORBIDDEN'
+        )
       }
 
       console.log("✅ AUTH SUCCESS")
@@ -129,10 +131,12 @@ function authorize(requiredPermission) {
       console.error("🔥 AUTH ERROR:")
       console.error(err)
 
-      return res.status(500).json({
-        message: 'Authorization error',
-        error: err.message
-      })
+      return ApiResponder.errorResponse(
+        res,
+        'Authorization error',
+        500,
+        err.message
+      )
     }
   }
 }

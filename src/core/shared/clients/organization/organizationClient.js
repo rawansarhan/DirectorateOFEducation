@@ -1,4 +1,5 @@
 const axios = require('axios')
+const { ORGANIZATION_SERVICE_URL } = require('../../../config/env')
 
 class OrganizationClient {
 
@@ -7,7 +8,7 @@ class OrganizationClient {
     try {
 
       const res = await axios.get(
-        `${process.env.ORGANIZATION_SERVICE_URL}/organizations/${id}`
+        `${ORGANIZATION_SERVICE_URL}/organizations/${id}`
       )
 
       return res.data.data

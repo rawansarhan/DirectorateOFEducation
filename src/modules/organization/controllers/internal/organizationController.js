@@ -1,23 +1,15 @@
 const organizationService = require('../../services/internal/OrganizationServices')
+const { sendOk, sendControllerError } = require('../../../../core/utils/controllerResponse')
 
-async function getOrganizationById(req, res, next) {
-
+async function getOrganizationById (req, res) {
   try {
-
-    const organization = await organizationService.getOrganizationById(
-      req.params.id
-    )
-
-    return res.json({
-      success: true,
-      data: organization
-    })
-
+    const organization = await organizationService.getOrganizationById(req.params.id)
+    return sendOk(res, organization, 'تم جلب المؤسسة بنجاح')
   } catch (err) {
-    next(err)
+    return sendControllerError(res, err)
   }
 }
 
 module.exports = {
-  getOrganizationById,
+  getOrganizationById
 }

@@ -1,18 +1,19 @@
-const { Sequelize } = require('sequelize');
-const dotenv = require('dotenv');
+'use strict'
 
-dotenv.config();
+const { Sequelize } = require('sequelize')
+const {
+  DB_HOST,
+  DB_PORT,
+  DB_NAME,
+  DB_USER,
+  DB_PASSWORD
+} = require('./env')
 
-//Initializes Sequelize with local PostgreSQL connection
-const sequelize = new Sequelize(
-  process.env.DB_NAME,
-  process.env.DB_USER,
-  process.env.DB_PASSWORD,
-  {
-    host: process.env.DB_HOST,
-    port: process.env.DB_PORT,
-    dialect: 'postgres'
-  }
-);
+const sequelize = new Sequelize(DB_NAME, DB_USER, DB_PASSWORD, {
+  host: DB_HOST,
+  port: DB_PORT,
+  dialect: 'postgres',
+  logging: false
+})
 
-module.exports = sequelize;
+module.exports = sequelize

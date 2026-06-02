@@ -1,5 +1,7 @@
 'use strict'
 
+const { HTTP_STATUS } = require('../../../core/middleware/httpStatusCodes')
+
 const {
   ValidateCreateRole,
   ValidateUpdateRole
@@ -11,6 +13,11 @@ const organizationRepository = require('../repositories/organizationRepository')
 const departmentRepository = require('../repositories/departmentRepository')
 const roleRepository = require('../repositories/roleRepository')
 const orgDeptRoleRepository = require('../repositories/orgDeptRoleRepository')
+const {
+  getOrLoad,
+  KEYS,
+  invalidateRolesByDepartment
+} = require('../../../core/cache/apiCacheService')
 
 function buildCamundaGroupKey(roleCode, organizationId, departmentId) {
   return `${roleCode}__ORG${organizationId}__DEPT${departmentId}`
@@ -23,27 +30,27 @@ async function createRoleService(data) {
   if (error) {
     const msg = error.details.map(d => d.message).join(' | ')
     const err = new Error(msg)
-    err.statusCode = 400
+    err.statusCode = HTTP_STATUS.BAD_REQUEST
     throw err
   }
 
   const organization = await organizationRepository.findById(data.organization_id)
   if (!organization) {
     const err = new Error('المؤسسة غير موجودة')
-    err.statusCode = 404
+    err.statusCode = HTTP_STATUS.NOT_FOUND
     throw err
   }
 
   const department = await departmentRepository.findById(data.department_id)
   if (!department) {
     const err = new Error('القسم غير موجود')
-    err.statusCode = 404
+    err.statusCode = HTTP_STATUS.NOT_FOUND
     throw err
   }
 
   if (department.organization_id !== organization.id) {
     const err = new Error('القسم لا ينتمي إلى المؤسسة المحددة')
-    err.statusCode = 400
+    err.statusCode = HTTP_STATUS.BAD_REQUEST
     throw err
   }
 
@@ -51,7 +58,7 @@ async function createRoleService(data) {
     const parent = await orgDeptRoleRepository.findById(data.parent_id)
     if (!parent) {
       const err = new Error('الدور الأب غير موجود')
-      err.statusCode = 404
+      err.statusCode = HTTP_STATUS.NOT_FOUND
       throw err
     }
   }
@@ -78,7 +85,7 @@ async function createRoleService(data) {
 
     if (duplicate) {
       const err = new Error('هذا الدور مرتبط مسبقاً بهذه المؤسسة والقسم')
-      err.statusCode = 409
+      err.statusCode = HTTP_STATUS.CONFLICT
       throw err
     }
 
@@ -101,6 +108,8 @@ async function createRoleService(data) {
     return { role, orgDeptRole }
   })
 
+  await invalidateRolesByDepartment(data.department_id)
+
   return orgDeptRoleRepository.findByIdWithRelations(result.orgDeptRole.id)
 }
 
@@ -110,7 +119,7 @@ async function updateRoleService(data, id) {
 
   if (!Number.isInteger(orgDeptRoleId) || orgDeptRoleId < 1) {
     const err = new Error('المعرّف غير صالح')
-    err.statusCode = 400
+    err.statusCode = HTTP_STATUS.BAD_REQUEST
     throw err
   }
 
@@ -119,7 +128,7 @@ async function updateRoleService(data, id) {
   if (error) {
     const msg = error.details.map(d => d.message).join(' | ')
     const err = new Error(msg)
-    err.statusCode = 400
+    err.statusCode = HTTP_STATUS.BAD_REQUEST
     throw err
   }
 
@@ -127,7 +136,7 @@ async function updateRoleService(data, id) {
 
   if (!orgDeptRole) {
     const err = new Error('السجل غير موجود')
-    err.statusCode = 404
+    err.statusCode = HTTP_STATUS.NOT_FOUND
     throw err
   }
 
@@ -138,7 +147,7 @@ async function updateRoleService(data, id) {
     const organization = await organizationRepository.findById(data.organization_id)
     if (!organization) {
       const err = new Error('المؤسسة غير موجودة')
-      err.statusCode = 404
+      err.statusCode = HTTP_STATUS.NOT_FOUND
       throw err
     }
   }
@@ -147,7 +156,7 @@ async function updateRoleService(data, id) {
     const department = await departmentRepository.findById(data.department_id)
     if (!department) {
       const err = new Error('القسم غير موجود')
-      err.statusCode = 404
+      err.statusCode = HTTP_STATUS.NOT_FOUND
       throw err
     }
   }
@@ -156,7 +165,7 @@ async function updateRoleService(data, id) {
     const dept = await departmentRepository.findById(newDeptId)
     if (dept && dept.organization_id !== newOrgId) {
       const err = new Error('القسم لا ينتمي إلى المؤسسة المحددة')
-      err.statusCode = 400
+      err.statusCode = HTTP_STATUS.BAD_REQUEST
       throw err
     }
   }
@@ -164,14 +173,14 @@ async function updateRoleService(data, id) {
   if (data.parent_id !== undefined && data.parent_id !== null) {
     if (data.parent_id === orgDeptRoleId) {
       const err = new Error('لا يمكن أن يكون السجل أب لنفسه')
-      err.statusCode = 400
+      err.statusCode = HTTP_STATUS.BAD_REQUEST
       throw err
     }
 
     const parent = await orgDeptRoleRepository.findById(data.parent_id)
     if (!parent) {
       const err = new Error('الدور الأب غير موجود')
-      err.statusCode = 404
+      err.statusCode = HTTP_STATUS.NOT_FOUND
       throw err
     }
   }
@@ -185,7 +194,7 @@ async function updateRoleService(data, id) {
 
     if (duplicate && duplicate.id !== orgDeptRoleId) {
       const err = new Error('هذا الدور مرتبط مسبقاً بهذه المؤسسة والقسم')
-      err.statusCode = 409
+      err.statusCode = HTTP_STATUS.CONFLICT
       throw err
     }
   }
@@ -205,6 +214,12 @@ async function updateRoleService(data, id) {
 
   await orgDeptRoleRepository.updateInstance(orgDeptRole, payload)
 
+  await invalidateRolesByDepartment(orgDeptRole.department_id)
+
+  if (data.department_id !== undefined && data.department_id !== orgDeptRole.department_id) {
+    await invalidateRolesByDepartment(data.department_id)
+  }
+
   return orgDeptRoleRepository.findByIdWithRelations(orgDeptRoleId)
 }
 
@@ -214,7 +229,7 @@ async function toggleRoleStatusService(id) {
 
   if (!Number.isInteger(orgDeptRoleId) || orgDeptRoleId < 1) {
     const err = new Error('المعرّف غير صالح')
-    err.statusCode = 400
+    err.statusCode = HTTP_STATUS.BAD_REQUEST
     throw err
   }
 
@@ -222,11 +237,15 @@ async function toggleRoleStatusService(id) {
 
   if (!orgDeptRole) {
     const err = new Error('السجل غير موجود')
-    err.statusCode = 404
+    err.statusCode = HTTP_STATUS.NOT_FOUND
     throw err
   }
 
+  const departmentId = orgDeptRole.department_id
+
   await orgDeptRoleRepository.updateInstance(orgDeptRole, { is_active: !orgDeptRole.is_active })
+
+  await invalidateRolesByDepartment(departmentId)
 
   return orgDeptRoleRepository.findByIdWithRelations(orgDeptRoleId)
 }
@@ -237,7 +256,7 @@ async function deleteRoleService(id) {
 
   if (!Number.isInteger(orgDeptRoleId) || orgDeptRoleId < 1) {
     const err = new Error('المعرّف غير صالح')
-    err.statusCode = 400
+    err.statusCode = HTTP_STATUS.BAD_REQUEST
     throw err
   }
 
@@ -245,11 +264,15 @@ async function deleteRoleService(id) {
 
   if (!orgDeptRole) {
     const err = new Error('السجل غير موجود')
-    err.statusCode = 404
+    err.statusCode = HTTP_STATUS.NOT_FOUND
     throw err
   }
 
+  const departmentId = orgDeptRole.department_id
+
   await orgDeptRoleRepository.destroyInstance(orgDeptRole)
+
+  await invalidateRolesByDepartment(departmentId)
 
   return { id: orgDeptRoleId }
 }
@@ -265,7 +288,7 @@ async function getRoleByIdService(id) {
 
   if (!Number.isInteger(orgDeptRoleId) || orgDeptRoleId < 1) {
     const err = new Error('المعرّف غير صالح')
-    err.statusCode = 400
+    err.statusCode = HTTP_STATUS.BAD_REQUEST
     throw err
   }
 
@@ -273,7 +296,7 @@ async function getRoleByIdService(id) {
 
   if (!orgDeptRole) {
     const err = new Error('السجل غير موجود')
-    err.statusCode = 404
+    err.statusCode = HTTP_STATUS.NOT_FOUND
     throw err
   }
 
@@ -288,26 +311,32 @@ async function getRolesByDepartmentService(departmentId) {
 
   if (!Number.isInteger(deptId) || deptId < 1) {
     const err = new Error('معرّف القسم غير صالح')
-    err.statusCode = 400
+    err.statusCode = HTTP_STATUS.BAD_REQUEST
     throw err
   }
 
-  const department = await departmentRepository.findById(deptId)
-  if (!department) {
-    const err = new Error('القسم غير موجود')
-    err.statusCode = 404
-    throw err
-  }
+  return getOrLoad(
+    KEYS.rolesByDepartment(deptId),
+    async () => {
+      const department = await departmentRepository.findById(deptId)
+      if (!department) {
+        const err = new Error('القسم غير موجود')
+        err.statusCode = HTTP_STATUS.NOT_FOUND
+        throw err
+      }
 
-  const rows = await orgDeptRoleRepository.findActiveByDepartmentIdWithRole(deptId)
+      const rows = await orgDeptRoleRepository.findActiveByDepartmentIdWithRole(deptId)
 
-  return rows
-    .filter(r => r.role)
-    .map(r => ({
-      id: r.role.id,
-      name: r.role.name,
-      code: r.role.code
-    }))
+      return rows
+        .filter(r => r.role)
+        .map(r => ({
+          id: r.role.id,
+          name: r.role.name,
+          code: r.role.code
+        }))
+    },
+    { label: `GET /api/role/by-department/${deptId}` }
+  )
 }
 
 module.exports = {

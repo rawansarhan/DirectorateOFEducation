@@ -1,229 +1,86 @@
 const {
-
   UpdateDraft,
-
   createDraft,
-
   getUserDraftByProcess,
-
   getTransactionById,
-
   submitTransaction
-
 } = require('../services/transactionService')
+const { getClientMeta } = require('../../../core/security/securityConfig')
+const { sendOk, sendControllerError } = require('../../../core/utils/controllerResponse')
 
-// ======================================================
-// CREATE E DRAFT
-// ======================================================
-
-async function createDraftController(
-  req,
-  res,
-  next
-) {
-
+async function createDraftController (req, res) {
   try {
-
-    const userId =
-      req.user.id
-
-    const {
-      processId
-    } = req.params
-
-    const result =
-      await createDraft({
-        userId,
-
-        processId
-      })
-
-    return res.status(200).json({
-
-      success: true,
-      message:'تمت العملية بنجاح',
-      data: result
-    
+    const result = await createDraft({
+      userId: req.user.id,
+      processId: req.params.processId
     })
 
+    return sendOk(res, result, 'تمت العملية بنجاح')
   } catch (err) {
-    return res.status(400).json({
-      success: false,
-      message: err.message
-    })}
+    return sendControllerError(res, err)
+  }
 }
 
-// ======================================================
-// CREATE OR UPDATE DRAFT
-// ======================================================
-
-async function UpdateDraftController(
-  req,
-  res,
-  next
-) {
-
+async function UpdateDraftController (req, res) {
   try {
-    const {
-      transId
-    } = req.params
-
-    const result =
-      await UpdateDraft({
-        transId,
-
-        data: req.body
-      })
-
-    return res.status(200).json({
-
-      success: true,
-      message:'تم حفظ المسودة بنجاح',
-      data: result
-    
+    const result = await UpdateDraft({
+      transId: req.params.transId,
+      userId: req.user.id,
+      data: req.body
     })
 
+    return sendOk(res, result, 'تم حفظ المسودة بنجاح')
   } catch (err) {
-    return res.status(400).json({
-      success: false,
-      message: err.message
-    })}
+    return sendControllerError(res, err)
+  }
 }
-// ======================================================
-// GET USER DRAFT BY PROCESS
-// ======================================================
 
-async function getUserDraftByProcessController(
-  req,
-  res,
-  next
-) {
-
+async function getUserDraftByProcessController (req, res) {
   try {
-
-    const userId =
-      req.user.id
-
-    const {
-      processId
-    } = req.params
-
-    const result =
-      await getUserDraftByProcess(
-
-        userId,
-
-        processId
-      )
-
-    return res.status(200).json({
-
-       success: true,
-      message:'تم جلب المسودة بنجاح',
-      data: result
-    })
-
+    const result = await getUserDraftByProcess(req.user.id, req.params.processId)
+    return sendOk(res, result, 'تم جلب المسودة بنجاح')
   } catch (err) {
-    return res.status(400).json({
-      success: false,
-      message: err.message
-    })}
+    return sendControllerError(res, err)
+  }
 }
 
-// ======================================================
-// GET TRANSACTION BY ID
-// ======================================================
-
-async function getTransactionController(
-  req,
-  res,
-  next
-) {
-
+async function getTransactionController (req, res) {
   try {
-
-    const userId =
-      req.user.id
-
-    const {
-      transactionId
-    } = req.params
-
-    const result =
-      await getTransactionById(
-
-        transactionId,
-
-        userId
-      )
-
-    return res.status(200).json({
-
-      success: true,
-      message:'تم العملية بنجاح',
-      data: result
-    })
-
+    const result = await getTransactionById(req.params.transactionId, req.user.id)
+    return sendOk(res, result, 'تم العملية بنجاح')
   } catch (err) {
-    return res.status(400).json({
-      success: false,
-      message: err.message
-    })}
+    return sendControllerError(res, err)
+  }
 }
 
-// ======================================================
-// SUBMIT TRANSACTION
-// ======================================================
-
-async function submitTransactionController(
-  req,
-  res,
-  next
-) {
-
+async function submitTransactionController (req, res) {
   try {
+    const result = await submitTransaction(
+      req.params.transactionId,
+      req.body,
+      req.user.id,
+      getClientMeta(req)
+    )
 
-    const {
-      transactionId
-    } = req.params
-
-    const result =
-      await submitTransaction(
-
-        transactionId,
-
-        req.body
-      )
-
-    return res.status(200).json({
-
-      success: true,
-      message:'تم العملية بنجاح',
-      data: result
-    })
-
+    return sendOk(
+      res,
+      {
+        ...result,
+        idempotent_replay: Boolean(result.idempotent_replay)
+      },
+      result.idempotent_replay
+        ? 'تم إرسال المعاملة مسبقاً'
+        : 'تم العملية بنجاح'
+    )
   } catch (err) {
-    return res.status(400).json({
-      success: false,
-      message: err.message
-    })}
+    return sendControllerError(res, err)
+  }
 }
 
-
-
-
-
-    module.exports = {
-
+module.exports = {
   createDraftController,
-
   UpdateDraftController,
-
   getUserDraftByProcessController,
-
   getTransactionController,
-
-  submitTransactionController,
-
-
+  submitTransactionController
 }

@@ -1,128 +1,48 @@
 const organizationService = require('../../services/internal/OrgDeptRoleServices')
+const { sendOk, sendControllerError } = require('../../../../core/utils/controllerResponse')
 
-
-async function getOrgDeptRoleById(req, res, next) {
-
+async function getOrgDeptRoleById (req, res) {
   try {
-
-    const role = await organizationService.getOrgDeptRoleById(
-      req.params.id
-    )
-
-    return res.json({
-      success: true,
-      data: role
-    })
-
+    const role = await organizationService.getOrgDeptRoleById(req.params.id)
+    return sendOk(res, role, 'تم جلب الدور بنجاح')
   } catch (err) {
-    return res.status(err.statusCode || 400).json({
-      success: false,
-      message: err.message
-    })
+    return sendControllerError(res, err)
   }
 }
 
-
-
-
-async function getActiveRoles(req, res, next) {
-
+async function getActiveRoles (req, res) {
   try {
-
-    const result =
-      await organizationService.getActiveRoles()
-
-    res.json({
-      success: true,
-      data: result
-    })
-
+    const result = await organizationService.getActiveRoles()
+    return sendOk(res, result, 'تم جلب الأدوار بنجاح')
   } catch (err) {
-    return res.status(err.statusCode || 400).json({
-      success: false,
-      message: err.message
-    })
+    return sendControllerError(res, err)
   }
 }
 
-
-///////////////////////////////////////////////////////////////////////////////////
-// ==============================   find OrgDeptRole ==============================
-
-async function findOneOrgDeptRole(req, res) {
-
+async function findOneOrgDeptRole (req, res) {
   try {
-
-    const result =
-      await organizationService.findOrgDeptRole(
-        req.body
-      )
-
-    return res.json({
-      success: true,
-      data: result
-    })
-
+    const result = await organizationService.findOrgDeptRole(req.body)
+    return sendOk(res, result, 'تم جلب الدور بنجاح')
   } catch (err) {
-
-    return res.status(
-      err.statusCode || 400
-    ).json({
-      success: false,
-      message: err.message
-    })
+    return sendControllerError(res, err)
   }
 }
 
-/////////////////////////////////////////////////////////////////////////////////////
-//============================= find OrgDeptRoles By Ids ============================
-
-async function getOrgDeptRolesByIds(req, res, next) {
-
+async function getOrgDeptRolesByIds (req, res) {
   try {
-
-    const { ids } = req.body
-
-    const data =
-      await organizationService.getOrgDeptRolesByIdsServices(ids)
-
-    return res.status(200).json({
-
-      success: true,
-
-      data
-    })
-
+    const data = await organizationService.getOrgDeptRolesByIdsServices(req.body.ids)
+    return sendOk(res, data, 'تم جلب الأدوار بنجاح')
   } catch (err) {
-
-    next(err)
+    return sendControllerError(res, err)
   }
 }
 
-/////////////////////////////////////////////////////////////////////////////////////
-// ============================== GET CITIZEN ROLE ================================
-/////////////////////////////////////////////////////////////////////////////////////
-
-async function getCitizenRole(req, res, next) {
-
+async function getCitizenRole (req, res) {
   try {
-
-    const result =
-      await organizationService.findCitizenRole()
-
-    return res.json({
-      success: true,
-      data: result
-    })
-
+    const result = await organizationService.findCitizenRole()
+    return sendOk(res, result, 'تم جلب دور المواطن بنجاح')
   } catch (err) {
-
-    return res.status(
-      err.statusCode || 400
-    ).json({
-      success: false,
-      message: err.message
-    })
+    return sendControllerError(res, err)
   }
 }
 

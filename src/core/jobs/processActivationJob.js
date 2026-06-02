@@ -1,8 +1,8 @@
 const cron = require('node-cron')
 const { updateProcessActivationStatus } = require('../../modules/workflow/services/processScheduleService')
+const { PROCESS_ACTIVATION_CRON } = require('../config/env')
 
-// كل دقيقة (تقدر تغيرها)
-cron.schedule('* * * * *', async () => {
+cron.schedule(PROCESS_ACTIVATION_CRON, async () => {
   console.log('⏳ Checking process activation...')
 
   try {

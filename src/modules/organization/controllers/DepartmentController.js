@@ -1,4 +1,5 @@
 const asyncHandler = require('../../../core/middleware/asyncHandler')
+const { sendOk, sendCreated, sendControllerError } = require('../../../core/utils/controllerResponse')
 
 const {
   createDepartmentService,
@@ -10,126 +11,72 @@ const {
   toggleDepartmentStatusService
 } = require('../services/department')
 
-// ================= CREATE =================
 const createDepartment = asyncHandler(async (req, res) => {
   try {
     const result = await createDepartmentService(req.body)
-    return res.status(201).json({
-      success: true,
-      message: 'تم إنشاء القسم بنجاح',
-      data: result
-    })
+    return sendCreated(res, result, 'تم إنشاء القسم بنجاح')
   } catch (err) {
-    return res.status(err.statusCode || 400).json({
-      success: false,
-      message: err.message
-    })
+    return sendControllerError(res, err)
   }
 })
 
-// ================= UPDATE =================
 const updateDepartment = asyncHandler(async (req, res) => {
   try {
     const result = await updateDepartmentService(req.body, req.params.id)
-    return res.status(200).json({
-      success: true,
-      message: 'تم تعديل القسم بنجاح',
-      data: result
-    })
+    return sendOk(res, result, 'تم تعديل القسم بنجاح')
   } catch (err) {
-    return res.status(err.statusCode || 400).json({
-      success: false,
-      message: err.message
-    })
+    return sendControllerError(res, err)
   }
 })
 
-// ================= DELETE =================
 const deleteDepartment = asyncHandler(async (req, res) => {
   try {
     const result = await deleteDepartmentService(req.params.id)
-    return res.status(200).json({
-      success: true,
-      message: 'تم حذف القسم بنجاح',
-      data: result
-    })
+    return sendOk(res, result, 'تم حذف القسم بنجاح')
   } catch (err) {
-    return res.status(err.statusCode || 400).json({
-      success: false,
-      message: err.message
-    })
+    return sendControllerError(res, err)
   }
 })
 
-// ================= GET ALL =================
 const getAllDepartments = asyncHandler(async (req, res) => {
   try {
     const result = await getAllDepartmentsService()
-    return res.status(200).json({
-      success: true,
-      message: 'تم جلب البيانات بنجاح',
-      data: result
-    })
+    return sendOk(res, result, 'تم جلب البيانات بنجاح')
   } catch (err) {
-    return res.status(err.statusCode || 400).json({
-      success: false,
-      message: err.message
-    })
+    return sendControllerError(res, err)
   }
 })
 
-// ================= GET BY ID =================
 const getDepartmentById = asyncHandler(async (req, res) => {
   try {
     const result = await getDepartmentByIdService(req.params.id)
-    return res.status(200).json({
-      success: true,
-      message: 'تم جلب البيانات بنجاح',
-      data: result
-    })
+    return sendOk(res, result, 'تم جلب البيانات بنجاح')
   } catch (err) {
-    return res.status(err.statusCode || 400).json({
-      success: false,
-      message: err.message
-    })
+    return sendControllerError(res, err)
   }
 })
 
-// ================= TOGGLE STATUS =================
 const toggleDepartmentStatus = asyncHandler(async (req, res) => {
   try {
     const result = await toggleDepartmentStatusService(req.params.id)
-    return res.status(200).json({
-      success: true,
-      message: result.is_active
-        ? 'تم تفعيل القسم بنجاح'
-        : 'تم تعطيل القسم بنجاح',
-      data: result
-    })
+    return sendOk(
+      res,
+      result,
+      result.is_active ? 'تم تفعيل القسم بنجاح' : 'تم تعطيل القسم بنجاح'
+    )
   } catch (err) {
-    return res.status(err.statusCode || 400).json({
-      success: false,
-      message: err.message
-    })
+    return sendControllerError(res, err)
   }
 })
 
-// ================= GET LEAVES BY ORGANIZATION =================
 const getLeafDepartmentsByOrganization = asyncHandler(async (req, res) => {
   try {
     const result = await getLeafDepartmentsByOrganizationService(
       req.params.organizationId
     )
-    return res.status(200).json({
-      success: true,
-      message: 'تم جلب البيانات بنجاح',
-      data: result
-    })
+    return sendOk(res, result, 'تم جلب البيانات بنجاح')
   } catch (err) {
-    return res.status(err.statusCode || 400).json({
-      success: false,
-      message: err.message
-    })
+    return sendControllerError(res, err)
   }
 })
 

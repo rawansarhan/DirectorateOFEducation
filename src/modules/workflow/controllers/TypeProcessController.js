@@ -1,5 +1,5 @@
 const asyncHandler = require('../../../core/middleware/asyncHandler')
-
+const { sendOk, sendCreated, sendControllerError } = require('../../../core/utils/controllerResponse')
 
 const {
   createTypeProcessService,
@@ -7,57 +7,30 @@ const {
   getAllTypeProcessesService
 } = require('../services/typeProcess')
 
-// ================= CREATE =================
 const createTypeProcess = asyncHandler(async (req, res) => {
   try {
     const result = await createTypeProcessService(req.body)
-
-    return res.status(201).json({
-      success: true,
-      message: 'تم انشاء نوع العملية بنجاح',
-      data: result
-    })
+    return sendCreated(res, result, 'تم انشاء نوع العملية بنجاح')
   } catch (err) {
-    return res.status(400).json({
-      success: false,
-      message: err.message
-    })
+    return sendControllerError(res, err)
   }
 })
 
-// ================= UPDATE =================
 const updateTypeProcess = asyncHandler(async (req, res) => {
   try {
     const result = await updateTypeProcessService(req.body, req.params.id)
-
-    return res.status(200).json({
-      success: true,
-      message: 'تم تعديل نوع العملية بنجاح',
-      data: result
-    })
+    return sendOk(res, result, 'تم تعديل نوع العملية بنجاح')
   } catch (err) {
-    return res.status(400).json({
-      success: false,
-      message: err.message
-    })
+    return sendControllerError(res, err)
   }
 })
 
-// ================= GET ALL =================
 const getAlltype = asyncHandler(async (req, res) => {
   try {
     const result = await getAllTypeProcessesService()
-
-    return res.status(200).json({
-      success: true,
-      message: 'تم جلب البيانات بنجاح',
-      data: result
-    })
+    return sendOk(res, result, 'تم جلب البيانات بنجاح')
   } catch (err) {
-    return res.status(400).json({
-      success: false,
-      message: err.message
-    })
+    return sendControllerError(res, err)
   }
 })
 

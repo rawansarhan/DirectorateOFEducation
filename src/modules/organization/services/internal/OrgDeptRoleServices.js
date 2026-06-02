@@ -1,4 +1,5 @@
 ////////////////////////////////////////////////////////////////////
+const { HTTP_STATUS } = require('../../../../core/middleware/httpStatusCodes')
 const repository = require('../../repositories/internal/orgDeptRoleClient')
 
 
@@ -63,7 +64,7 @@ async function findCitizenRole() {
 
   if (!role) {
     const error = new Error('CITIZEN role not found')
-    error.statusCode = 404
+    error.statusCode = HTTP_STATUS.NOT_FOUND
     throw error
   }
 

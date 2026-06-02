@@ -1,5 +1,7 @@
 'use strict'
+
 const asyncHandler = require('../../../core/middleware/asyncHandler')
+const { sendOk, sendCreated, sendControllerError } = require('../../../core/utils/controllerResponse')
 
 const {
   createFieldService,
@@ -8,77 +10,45 @@ const {
   getOneActiveFieldService
 } = require('../services/field')
 
-///// ============================== create new Field  ====================================
-
 const createField = asyncHandler(async (req, res) => {
-  try{
-  const fieldData = req.body
-  const newField = await createFieldService(fieldData)
-  return res.status(200).json({
-    message: 'تم انشاء الحقل بنجاح !',
-    data: newField
-  })}
-  catch (err) {
-    return res.status(400).json({
-      success: false,
-      message: err.message
-    })
-
-}})
-
-/// =============================  update field ==========================================
+  try {
+    const newField = await createFieldService(req.body)
+    return sendOk(res, newField, 'تم انشاء الحقل بنجاح !')
+  } catch (err) {
+    return sendControllerError(res, err)
+  }
+})
 
 const updateField = asyncHandler(async (req, res) => {
- try{ const FieldData = req.body
-  const FieldId = req.params.id
-  const updated = await updateFieldService(FieldData, FieldId)
-  return res.status(200).json({
-    message: 'تم تعديل الحقل بنجاح !',
-    data: updated
-  })}
-  catch (err) {
-    return res.status(400).json({
-      success: false,
-      message: err.message
-    })}
+  try {
+    const updated = await updateFieldService(req.body, req.params.id)
+    return sendOk(res, updated, 'تم تعديل الحقل بنجاح !')
+  } catch (err) {
+    return sendControllerError(res, err)
+  }
 })
-
-////============================ get all field =====================================
 
 const getAllField = asyncHandler(async (req, res) => {
-  try{const fields = await getAllFieldsService()
-  return res.status(200).json({
-    message: 'عرض كل الحقول بنجاح !',
-    data: fields
-  })}
-  catch (err) {
-    return res.status(400).json({
-      success: false,
-      message: err.message
-    })}
-})
- //=========================================
-// GET ONE ACTIVE
-// =========================================
-const getOneActiveField = asyncHandler(
-  async (req, res) => {
-
- try{   const result =
-      await getOneActiveFieldService(
-        req.params.id
-      )
-
-    return res.status(200).json(result)}
-    catch (err) {
-    return res.status(400).json({
-      success: false,
-      message: err.message
-    })}
+  try {
+    const fields = await getAllFieldsService()
+    return sendOk(res, fields, 'عرض كل الحقول بنجاح !')
+  } catch (err) {
+    return sendControllerError(res, err)
   }
-)
+})
+
+const getOneActiveField = asyncHandler(async (req, res) => {
+  try {
+    const result = await getOneActiveFieldService(req.params.id)
+    return sendOk(res, result, 'تم جلب الحقل بنجاح')
+  } catch (err) {
+    return sendControllerError(res, err)
+  }
+})
+
 module.exports = {
- createField,
- updateField,
- getAllField,
- getOneActiveField
+  createField,
+  updateField,
+  getAllField,
+  getOneActiveField
 }

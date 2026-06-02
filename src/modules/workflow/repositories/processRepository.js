@@ -18,49 +18,146 @@ class ProcessRepository {
     return await ProcessDefinition.findByPk(id)
   }
 
-  //================ AUTH optimized query ===
-  async findAuthProcesses(typeTransId, roleIds) {
-
+  //================ AUTH by type (non-complaint) — index: idx_process_type_trans_active ===
+  /**
+   * معاملات عادية: is_complaint=false + type_trans_id محدد
+   * + مرحلة AUTH + assignment ضمن roleIds
+   */
+  async findAuthProcessesByType (typeTransId, roleIds) {
     return await ProcessDefinition.findAll({
+      where: {
+        is_active: true,
+        is_complaint: false,
+        type_trans_id: typeTransId,
+        status: 'deployed',
+        approval_status: 'APPROVED'
+      },
 
-  where: {
-    is_active: true,
-    type_trans_id: typeTransId,
-    status: 'deployed',
-    approval_status: 'APPROVED'
-  },
-
-  attributes: ['id', 'name', 'code', 'priority'],
-
-  include: [
-    {
-      model: Stage,
-      as: 'stages',
-      attributes: ['id', 'name', 'code', 'type', 'auth_type'],
-      where: { auth_type: 'AUTH' },
-      required: true,
+      attributes: ['id', 'name', 'code', 'priority', 'is_complaint', 'type_trans_id'],
 
       include: [
         {
-          model: StageAssignment,
-          as: 'stage_assignments',
-          attributes: ['organization_department_roles_id'],
-          where: {
-            organization_department_roles_id: {
-              [Op.in]: roleIds
+          model: Stage,
+          as: 'stages',
+          attributes: ['id', 'name', 'code', 'type', 'auth_type'],
+          where: { auth_type: 'AUTH' },
+          required: true,
+
+          include: [
+            {
+              model: StageAssignment,
+              as: 'stage_assignments',
+              attributes: ['organization_department_roles_id'],
+              where: {
+                organization_department_roles_id: {
+                  [Op.in]: roleIds
+                }
+              },
+              required: true
             }
-          },
-          required: true
+          ]
         }
-      ]
-    }
-  ],
+      ],
 
-  subQuery: false,
+      subQuery: false,
+      distinct: true
+    })
+  }
 
-  distinct: true,   // 🔥 مهم جدًا
-})
-}
+  //================ شكاوى المواطن (CITIZEN) — index: idx_process_citizen_complaint ===
+  /**
+   * is_complaint=true + type_trans_id=null
+   * + مرحلة AUTH مربوطة بدور CITIZEN (organization_department_roles.id)
+   */
+  async findCitizenComplaintProcesses (citizenOdrId) {
+    return await ProcessDefinition.findAll({
+      where: {
+        is_active: true,
+        is_complaint: true,
+        type_trans_id: null,
+        status: 'deployed',
+        approval_status: 'APPROVED'
+      },
+
+      attributes: ['id', 'name', 'code', 'priority', 'is_complaint', 'type_trans_id'],
+
+      include: [
+        {
+          model: Stage,
+          as: 'stages',
+          attributes: ['id', 'name', 'code', 'type', 'auth_type'],
+          where: { auth_type: 'AUTH' },
+          required: true,
+
+          include: [
+            {
+              model: StageAssignment,
+              as: 'stage_assignments',
+              attributes: ['organization_department_roles_id'],
+              where: {
+                organization_department_roles_id: citizenOdrId
+              },
+              required: true
+            }
+          ]
+        }
+      ],
+
+      subQuery: false,
+      distinct: true,
+      order: [['priority', 'ASC']]
+    })
+  }
+
+  //================ AUTH complaint (موظف / أدوار متعددة) — index: idx_process_complaint_active ===
+  /**
+   * شكاوى فقط: is_complaint=true (type_trans_id = null)
+   * + مرحلة AUTH + assignment ضمن roleIds
+   */
+  async findAuthComplaintProcesses (roleIds) {
+    return await ProcessDefinition.findAll({
+      where: {
+        is_active: true,
+        is_complaint: true,
+        status: 'deployed',
+        approval_status: 'APPROVED'
+      },
+
+      attributes: ['id', 'name', 'code', 'priority', 'is_complaint', 'type_trans_id'],
+
+      include: [
+        {
+          model: Stage,
+          as: 'stages',
+          attributes: ['id', 'name', 'code', 'type', 'auth_type'],
+          where: { auth_type: 'AUTH' },
+          required: true,
+
+          include: [
+            {
+              model: StageAssignment,
+              as: 'stage_assignments',
+              attributes: ['organization_department_roles_id'],
+              where: {
+                organization_department_roles_id: {
+                  [Op.in]: roleIds
+                }
+              },
+              required: true
+            }
+          ]
+        }
+      ],
+
+      subQuery: false,
+      distinct: true
+    })
+  }
+
+  //================ AUTH optimized query (legacy alias) ===
+  async findAuthProcesses (typeTransId, roleIds) {
+    return this.findAuthProcessesByType(typeTransId, roleIds)
+  }
 
 ///////////////////////////////////////////////////////////////
 //====================== find process details =================

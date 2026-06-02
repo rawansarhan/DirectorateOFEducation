@@ -1,41 +1,16 @@
 'use strict'
 
-function buildSecurityPayload (err) {
-  const payload = {
-    success: false,
-    message: err.message
-  }
+const ApiResponder = require('../utils/apiResponder')
+const {
+  HTTP_STATUS,
+  resolveHttpStatusFromError
+} = require('../middleware/httpStatusCodes')
 
-  if (err.code === 'ACCOUNT_LOCKED' && err.lockedUntil) {
-    payload.locked_until = err.lockedUntil
-  }
-
-  if (typeof err.remainingAttempts === 'number') {
-    payload.remaining_attempts = err.remainingAttempts
-  }
-
-  if (err.security?.locked) {
-    payload.locked_until = err.security.lockedUntil
-  } else if (err.security && typeof err.security.remainingAttempts === 'number') {
-    payload.remaining_attempts = err.security.remainingAttempts
-  }
-
-  return payload
+function getSecurityStatusCode (err, defaultStatus = HTTP_STATUS.UNAUTHORIZED) {
+  return resolveHttpStatusFromError(err, defaultStatus)
 }
 
-function getSecurityStatusCode (err, defaultStatus = 401) {
-  if (err.code === 'ACCOUNT_LOCKED') {
-    return 423
-  }
-
-  if (err.security?.locked) {
-    return 423
-  }
-
-  return defaultStatus
-}
-
-function respondIfSecurityError (res, err, defaultStatus = 401) {
+function respondIfSecurityError (res, err, defaultStatus = HTTP_STATUS.UNAUTHORIZED) {
   const isSecurityError =
     err.code === 'ACCOUNT_LOCKED' ||
     typeof err.remainingAttempts === 'number' ||
@@ -45,13 +20,34 @@ function respondIfSecurityError (res, err, defaultStatus = 401) {
     return false
   }
 
-  return res
-    .status(getSecurityStatusCode(err, defaultStatus))
-    .json(buildSecurityPayload(err))
+  const statusCode = getSecurityStatusCode(err, defaultStatus)
+
+  ApiResponder.errorResponse(
+    res,
+    err.message,
+    statusCode,
+    err.code || err.message
+  )
+
+  return true
+}
+
+function respondIfOperationGuardError (res, err) {
+  if (err.code === 'RATE_LIMIT_EXCEEDED') {
+    ApiResponder.tooManyRequestsResponse(res, err.message, err.code)
+    return true
+  }
+
+  if (err.code === 'DUPLICATE_IN_FLIGHT') {
+    ApiResponder.conflictResponse(res, err.message, err.code)
+    return true
+  }
+
+  return false
 }
 
 module.exports = {
-  buildSecurityPayload,
   getSecurityStatusCode,
-  respondIfSecurityError
+  respondIfSecurityError,
+  respondIfOperationGuardError
 }

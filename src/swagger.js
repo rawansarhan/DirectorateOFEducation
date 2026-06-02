@@ -1,6 +1,7 @@
 const swaggerJsDoc = require('swagger-jsdoc')
 const swaggerUi = require('swagger-ui-express')
 const path = require('path')
+const { API_PUBLIC_URL } = require('./core/config/env')
 
 const swaggerOptions = {
   definition: {
@@ -12,8 +13,8 @@ const swaggerOptions = {
     },
     servers: [
       {
-        url: process.env.API_PUBLIC_URL || `http://localhost:${process.env.PORT || 4000}`,
-        description: process.env.API_PUBLIC_URL ? 'Public server' : 'Local server'
+        url: API_PUBLIC_URL,
+        description: 'API server'
       }
     ],
     tags: [
@@ -42,6 +43,14 @@ const swaggerOptions = {
       {
         name: 'Location',
         description: 'إدارة المواقع الجغرافية (Locations)'
+      },
+      {
+        name: 'Complaint',
+        description: 'معاملات الشكوى (Complaints)'
+      },
+      {
+        name: 'Transaction',
+        description: 'المعاملات والمسودات (Transactions)'
       }
     ],
     components: {
@@ -971,6 +980,535 @@ const swaggerOptions = {
               type: 'array',
               items: { $ref: '#/components/schemas/Location' }
             }
+          }
+        },
+
+        // ======================== Stage Submission (SDUI) ==========================
+        StageSubmissionFieldItem: {
+          type: 'object',
+          required: ['key', 'value'],
+          properties: {
+            key: {
+              type: 'string',
+              example: 'citizen_full_name',
+              description: 'مطابق لـ widget.key من SDUI'
+            },
+            value: {
+              description: 'قيمة الحقل',
+              example: 'أحمد محمد علي'
+            }
+          }
+        },
+
+        StageSubmissionFileItem: {
+          type: 'object',
+          required: ['key', 'path'],
+          properties: {
+            key: {
+              type: 'string',
+              example: 'national_id_file',
+              description: 'مطابق لـ widget.key من SDUI'
+            },
+            path: {
+              type: 'string',
+              example: '/uploads/1779550000000-id.pdf'
+            },
+            original_name: { type: 'string', example: 'id.pdf' },
+            mime_type: { type: 'string', example: 'application/pdf' }
+          }
+        },
+
+        StageSubmissionTemplateItem: {
+          type: 'object',
+          required: ['template_id', 'values'],
+          properties: {
+            template_id: { type: 'integer', example: 1 },
+            values: {
+              type: 'object',
+              example: { full_name: 'أحمد محمد علي' }
+            }
+          }
+        },
+
+        StageSubmissionActionItem: {
+          type: 'object',
+          required: ['name'],
+          properties: {
+            name: { type: 'string', example: 'SEND_EMAIL' },
+            payload: { type: 'object' }
+          }
+        },
+
+        ApiSuccessResponse: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            status_code: { type: 'integer', example: 200 },
+            message: { type: 'string', example: 'Operation completed successfully' },
+            data: { type: 'object', nullable: true }
+          }
+        },
+
+        ApiErrorResponse: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            status_code: { type: 'integer', example: 400 },
+            message: { type: 'string', example: 'Validation error' },
+            error: { type: 'string', example: 'Validation error' },
+            data: { type: 'null', nullable: true }
+          }
+        },
+
+        StageSubmissionSignature: {
+          type: 'object',
+          required: ['challenge_id', 'signature'],
+          description: 'توقيع USB لإكمال مهمة workflow — challenge_id من POST /tasks/{taskId}/signing-challenge',
+          properties: {
+            challenge_id: {
+              type: 'string',
+              format: 'uuid',
+              description: 'من signing-challenge بعد التحقق من PIN'
+            },
+            signature: {
+              type: 'string',
+              description: 'base64 Ed25519 signature — وقّع حقل message من signing-challenge'
+            }
+          }
+        },
+
+        StageSubmissionPayload: {
+          type: 'object',
+          description: 'قالب request ثابت لكل المعاملات — الفرونت يرسل نفس الشكل دائماً',
+          properties: {
+            schema_version: {
+              type: 'string',
+              example: '1.0'
+            },
+            expected_version: {
+              type: 'integer',
+              example: 1,
+              description: 'transaction.version — optimistic concurrency'
+            },
+            fields: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/StageSubmissionFieldItem' }
+            },
+            files: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/StageSubmissionFileItem' }
+            },
+            templates: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/StageSubmissionTemplateItem' }
+            },
+            actions: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/StageSubmissionActionItem' }
+            },
+            variables: {
+              type: 'object',
+              example: { action: 'submit' },
+              description: 'مطلوب لمسارات Camunda — مثال approve/reject/submit'
+            },
+            notes: {
+              type: 'string',
+              example: 'ملاحظات اختيارية',
+              maxLength: 10000
+            },
+            signature: {
+              $ref: '#/components/schemas/StageSubmissionSignature'
+            }
+          },
+          example: {
+            schema_version: '1.0',
+            expected_version: 1,
+            fields: [
+              { key: 'citizen_full_name', value: 'أحمد محمد علي' },
+              { key: 'citizen_phone', value: '0912345678' }
+            ],
+            files: [
+              { key: 'national_id_file', path: '/uploads/id.pdf' }
+            ],
+            templates: [
+              { template_id: 1, values: { full_name: 'أحمد محمد علي' } }
+            ],
+            variables: { action: 'submit' }
+          }
+        },
+
+        CompleteTaskPayload: {
+          type: 'object',
+          required: ['variables'],
+          description: 'Payload لإكمال مهمة workflow',
+          properties: {
+            stage_name: {
+              type: 'string',
+              example: 'مرحلة الموافقة',
+              description: 'اسم المرحلة الحالية — اختياري، يُتحقق منه إذا أُرسل'
+            },
+            fields: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/StageSubmissionFieldItem' }
+            },
+            files: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/StageSubmissionFileItem' }
+            },
+            templates: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/StageSubmissionTemplateItem' }
+            },
+            actions: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/CompleteTaskActionItem' }
+            },
+            variables: {
+              type: 'object',
+              required: ['action'],
+              properties: {
+                action: {
+                  type: 'string',
+                  example: 'اذا كان العمر اقل من خمسين',
+                  description: 'مسار Camunda gateway'
+                }
+              },
+              additionalProperties: false
+            },
+            signature: {
+              $ref: '#/components/schemas/StageSubmissionSignature'
+            },
+            expected_version: {
+              type: 'integer',
+              example: 1,
+              description: 'transaction.version — optimistic concurrency (اختياري)'
+            },
+            idempotency_key: {
+              type: 'string',
+              format: 'uuid',
+              example: '0dbc8ad0-2618-4be2-8080-07e13c862d9b',
+              description: 'اختياري — مفتاح منع تكرار الطلب (يُسجَّل بعد نجاح التوقيع). نفس المفتاح + نفس المستخدم + نفس task = نفس النتيجة'
+            },
+            notes: {
+              type: 'string',
+              example: 'ملاحظات اختيارية',
+              maxLength: 10000
+            }
+          },
+          example: {
+            stage_name: 'مرحلة الموافقة',
+            fields: [
+              { key: 'citizen_name', value: 'روان سرحان' }
+            ],
+            files: [
+              { key: 'criminal_record', path: '/uploads/a.pdf' }
+            ],
+            templates: [
+              { template_id: 1, values: { full_name: 'روان' } }
+            ],
+            variables: {
+              action: 'اذا كان العمر اقل من خمسين'
+            },
+            signature: {
+              challenge_id: '592d2a9d-fb20-4c69-bac4-8b3001313991',
+              signature: 'Zki6/aI4DlyawrBtQ5fMipuAmE+plNa4o955RmwoOdjGBesSRK3DufMyyiG3VApD3rf5AtJSDaBrFs6MW7ZYBw=='
+            },
+            idempotency_key: '0dbc8ad0-2618-4be2-8080-07e13c862d9b'
+          }
+        },
+
+        CompleteTaskActionItem: {
+          type: 'object',
+          required: ['name'],
+          properties: {
+            name: { type: 'string', example: 'SEND_EMAIL' },
+            payload: { type: 'object' },
+            result: {
+              type: 'object',
+              example: { status: 'queued' },
+              description: 'اختياري — نتيجة متوقعة أو placeholder قبل التنفيذ'
+            }
+          }
+        },
+
+        CompleteTaskTemplateResponseItem: {
+          type: 'object',
+          required: ['template_id', 'values', 'path'],
+          properties: {
+            template_id: { type: 'integer', example: 1 },
+            values: {
+              type: 'object',
+              example: { full_name: 'روان' }
+            },
+            path: {
+              type: 'string',
+              nullable: true,
+              example: '/uploads/templates/form.pdf',
+              description: 'مسار ملف القالب من document_templates'
+            }
+          }
+        },
+
+        CompleteTaskData: {
+          type: 'object',
+          description: 'بيانات استجابة إكمال المهمة — بدون actions',
+          properties: {
+            stage_name: { type: 'string', example: 'مرحلة الموافقة' },
+            fields: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/StageSubmissionFieldItem' }
+            },
+            files: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/StageSubmissionFileItem' }
+            },
+            templates: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/CompleteTaskTemplateResponseItem' }
+            },
+            variables: {
+              type: 'object',
+              required: ['action'],
+              properties: {
+                action: { type: 'string', example: 'اذا كان العمر اقل من خمسين' }
+              },
+              additionalProperties: false
+            },
+            signature: {
+              $ref: '#/components/schemas/StageSubmissionSignature'
+            },
+            idempotency_key: {
+              type: 'string',
+              format: 'uuid',
+              example: '0dbc8ad0-2618-4be2-8080-07e13c862d9b'
+            },
+            idempotent_replay: {
+              type: 'boolean',
+              example: false
+            }
+          },
+          example: {
+            stage_name: 'مرحلة الموافقة',
+            fields: [
+              { key: 'citizen_name', value: 'روان سرحان' }
+            ],
+            files: [
+              { key: 'criminal_record', path: '/uploads/a.pdf' }
+            ],
+            templates: [
+              {
+                template_id: 1,
+                values: { full_name: 'روان' },
+                path: '/uploads/templates/form.pdf'
+              }
+            ],
+            variables: {
+              action: 'اذا كان العمر اقل من خمسين'
+            },
+            signature: {
+              challenge_id: '592d2a9d-fb20-4c69-bac4-8b3001313991',
+              signature: 'Zki6/aI4DlyawrBtQ5fMipuAmE+plNa4o955RmwoOdjGBesSRK3DufMyyiG3VApD3rf5AtJSDaBrFs6MW7ZYBw=='
+            },
+            idempotency_key: '0dbc8ad0-2618-4be2-8080-07e13c862d9b',
+            idempotent_replay: false
+          }
+        },
+
+        CompleteTaskResponse: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            status_code: { type: 'integer', example: 200 },
+            message: { type: 'string', example: 'تم إكمال المهمة بنجاح' },
+            data: { $ref: '#/components/schemas/CompleteTaskData' }
+          },
+          example: {
+            success: true,
+            status_code: 200,
+            message: 'تم إكمال المهمة بنجاح',
+            data: {
+              stage_name: 'مرحلة الموافقة',
+              fields: [
+                { key: 'citizen_name', value: 'روان سرحان' }
+              ],
+              files: [
+                { key: 'criminal_record', path: '/uploads/a.pdf' }
+              ],
+              templates: [
+                {
+                  template_id: 1,
+                  values: { full_name: 'روان' },
+                  path: '/uploads/templates/form.pdf'
+                }
+              ],
+              variables: {
+                action: 'اذا كان العمر اقل من خمسين'
+              },
+              signature: {
+                challenge_id: '592d2a9d-fb20-4c69-bac4-8b3001313991',
+                signature: 'Zki6/aI4DlyawrBtQ5fMipuAmE+plNa4o955RmwoOdjGBesSRK3DufMyyiG3VApD3rf5AtJSDaBrFs6MW7ZYBw=='
+              },
+              idempotency_key: '0dbc8ad0-2618-4be2-8080-07e13c862d9b',
+              idempotent_replay: false
+            }
+          }
+        },
+
+        SigningChallengePayload: {
+          type: 'object',
+          required: ['pin', 'variables'],
+          additionalProperties: false,
+          properties: {
+            pin: {
+              type: 'string',
+              example: '123456',
+              description: 'رمز PIN للموظف'
+            },
+            variables: {
+              type: 'object',
+              required: ['action'],
+              additionalProperties: false,
+              properties: {
+                action: {
+                  type: 'string',
+                  example: 'approve'
+                }
+              }
+            }
+          },
+          example: {
+            pin: '123456',
+            variables: { action: 'approve' }
+          }
+        },
+
+        SigningChallengeResponse: {
+          allOf: [
+            { $ref: '#/components/schemas/ApiSuccessResponse' },
+            {
+              type: 'object',
+              properties: {
+                data: {
+                  type: 'object',
+                  properties: {
+                    challenge_id: { type: 'string', format: 'uuid' },
+                    task_id: { type: 'string' },
+                    key_fingerprint: { type: 'string' },
+                    message: {
+                      type: 'string',
+                      description: 'النص الذي يُوقَّع بـ USB private key'
+                    },
+                    expires_at: { type: 'string', format: 'date-time' },
+                    expires_in_seconds: { type: 'integer', example: 300 }
+                  }
+                }
+              }
+            }
+          ]
+        },
+
+        AuthProcessItem: {
+          type: 'object',
+          properties: {
+            process_id: { type: 'integer', example: 1 },
+            name: { type: 'string', example: 'Leave Request' },
+            code: { type: 'string', example: 'LEAVE_001' },
+            priority: { type: 'integer', example: 1 },
+            auth_stage: {
+              type: 'object',
+              properties: {
+                id: { type: 'integer', example: 10 },
+                name: { type: 'string', example: 'Submit Request' },
+                code: { type: 'string', example: 'SUBMIT_LEAVE' },
+                type: { type: 'string', example: 'USER_TASK' },
+                auth_type: { type: 'string', example: 'AUTH' }
+              }
+            }
+          },
+          example: {
+            process_id: 1,
+            name: 'Leave Request',
+            code: 'LEAVE_001',
+            priority: 1,
+            auth_stage: {
+              id: 10,
+              name: 'Submit Request',
+              code: 'SUBMIT_LEAVE',
+              type: 'USER_TASK',
+              auth_type: 'AUTH'
+            }
+          }
+        },
+
+        AuthProcessListResponse: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            status_code: { type: 'integer', example: 200 },
+            message: {
+              type: 'string',
+              example: 'تم جلب عمليات AUTH بنجاح'
+            },
+            data: {
+              type: 'object',
+              properties: {
+                items: {
+                  type: 'array',
+                  items: { $ref: '#/components/schemas/AuthProcessItem' }
+                },
+                from_cache: {
+                  type: 'boolean',
+                  example: false
+                }
+              }
+            }
+          },
+          example: {
+            success: true,
+            status_code: 200,
+            message: 'تم جلب عمليات AUTH بنجاح',
+            data: {
+              items: [
+                {
+                  process_id: 1,
+                  name: 'Leave Request',
+                  code: 'LEAVE_001',
+                  priority: 1,
+                  auth_stage: {
+                    id: 10,
+                    name: 'Submit Request',
+                    code: 'SUBMIT_LEAVE',
+                    type: 'USER_TASK',
+                    auth_type: 'AUTH'
+                  }
+                }
+              ],
+              from_cache: false
+            }
+          }
+        },
+
+        ProcessDefinitionCreateForm: {
+          type: 'object',
+          required: ['file', 'name', 'priority', 'start_date'],
+          properties: {
+            file: { type: 'string', format: 'binary' },
+            name: { type: 'string', example: 'Leave Process' },
+            code: { type: 'string', example: 'LEAVE_001' },
+            is_complaint: {
+              type: 'boolean',
+              default: false,
+              description: 'true → type_trans_id = null'
+            },
+            type_trans_id: {
+              type: 'integer',
+              nullable: true,
+              description: 'مطلوب عند is_complaint = false'
+            },
+            organization_id: { type: 'integer', example: 10 },
+            priority: { type: 'integer', example: 1 },
+            start_date: { type: 'string', format: 'date' },
+            end_date: { type: 'string', format: 'date', nullable: true }
           }
         }
       }

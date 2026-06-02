@@ -1,5 +1,6 @@
 'use strict'
 
+const ApiResponder = require('../utils/apiResponder')
 const { getClientIp } = require('./securityConfig')
 
 function createRateLimiter ({
@@ -41,10 +42,11 @@ function createRateLimiter ({
       res.setHeader('X-RateLimit-Remaining', '0')
       res.setHeader('Retry-After', String(Math.ceil((current.resetAt - now) / 1000)))
 
-      return res.status(429).json({
-        success: false,
-        message: 'Too many requests. Please try again later.'
-      })
+      return ApiResponder.tooManyRequestsResponse(
+        res,
+        'Too many requests. Please try again later.',
+        'RATE_LIMIT_EXCEEDED'
+      )
     }
 
     current.count += 1
@@ -68,31 +70,51 @@ function ipOnlyKey (req) {
   return getClientIp(req) || 'unknown'
 }
 
+const {
+  RATE_LIMIT_AUTH_WINDOW_MS,
+  RATE_LIMIT_AUTH_MAX,
+  RATE_LIMIT_AUTH_BRUTE_WINDOW_MS,
+  RATE_LIMIT_AUTH_BRUTE_MAX,
+  RATE_LIMIT_SIGN_WINDOW_MS,
+  RATE_LIMIT_SIGN_MAX,
+  RATE_LIMIT_COMPLETE_WINDOW_MS,
+  RATE_LIMIT_COMPLETE_MAX,
+  RATE_LIMIT_SUBMIT_WINDOW_MS,
+  RATE_LIMIT_SUBMIT_MAX
+} = require('../config/env')
+
 const authSensitiveLimiter = createRateLimiter({
-  windowMs: Number(process.env.RATE_LIMIT_AUTH_WINDOW_MS || 60 * 1000),
-  max: Number(process.env.RATE_LIMIT_AUTH_MAX || 20),
+  windowMs: RATE_LIMIT_AUTH_WINDOW_MS,
+  max: RATE_LIMIT_AUTH_MAX,
   keyPrefix: 'auth',
   keyGenerator: userAwareKey
 })
 
 const authBruteForceLimiter = createRateLimiter({
-  windowMs: Number(process.env.RATE_LIMIT_AUTH_BRUTE_WINDOW_MS || 15 * 60 * 1000),
-  max: Number(process.env.RATE_LIMIT_AUTH_BRUTE_MAX || 10),
+  windowMs: RATE_LIMIT_AUTH_BRUTE_WINDOW_MS,
+  max: RATE_LIMIT_AUTH_BRUTE_MAX,
   keyPrefix: 'auth-brute',
   keyGenerator: ipOnlyKey
 })
 
 const signingChallengeLimiter = createRateLimiter({
-  windowMs: Number(process.env.RATE_LIMIT_SIGN_WINDOW_MS || 60 * 1000),
-  max: Number(process.env.RATE_LIMIT_SIGN_MAX || 10),
+  windowMs: RATE_LIMIT_SIGN_WINDOW_MS,
+  max: RATE_LIMIT_SIGN_MAX,
   keyPrefix: 'sign-challenge',
   keyGenerator: userAwareKey
 })
 
 const completeTaskLimiter = createRateLimiter({
-  windowMs: Number(process.env.RATE_LIMIT_COMPLETE_WINDOW_MS || 60 * 1000),
-  max: Number(process.env.RATE_LIMIT_COMPLETE_MAX || 15),
+  windowMs: RATE_LIMIT_COMPLETE_WINDOW_MS,
+  max: RATE_LIMIT_COMPLETE_MAX,
   keyPrefix: 'complete-task',
+  keyGenerator: userAwareKey
+})
+
+const submitTransactionLimiter = createRateLimiter({
+  windowMs: RATE_LIMIT_SUBMIT_WINDOW_MS,
+  max: RATE_LIMIT_SUBMIT_MAX,
+  keyPrefix: 'submit-transaction',
   keyGenerator: userAwareKey
 })
 
@@ -101,5 +123,6 @@ module.exports = {
   authSensitiveLimiter,
   authBruteForceLimiter,
   signingChallengeLimiter,
-  completeTaskLimiter
+  completeTaskLimiter,
+  submitTransactionLimiter
 }

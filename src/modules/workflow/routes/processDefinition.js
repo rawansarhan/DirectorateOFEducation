@@ -6,9 +6,9 @@ const router = express.Router()
 const {
   createProcessDefinition,
   getAuthProcessesController,
+  getCitizenAuthProcessesController,
   reviewProcessController,
-  getProcessDetails,
-  processById
+  getProcessDetails
 } = require('../controllers/processDefController')
 
 const {uploadBPMN,
@@ -33,7 +33,6 @@ const { authMiddleware ,authorize } = require('../../../core/middleware/authMidd
  *             required:
  *               - file
  *               - name
- *               - type_trans_id
  *               - priority
  *               - start_date
  *             properties:
@@ -47,9 +46,16 @@ const { authMiddleware ,authorize } = require('../../../core/middleware/authMidd
  *               code:
  *                 type: string
  *                 example: LEAVE_001
+ *               is_complaint:
+ *                 type: boolean
+ *                 default: false
+ *                 description: |
+ *                   إذا true → type_trans_id يجب أن يكون null (معاملة شكوى)
  *               type_trans_id:
  *                 type: integer
- *                 example: 1
+ *                 nullable: true
+ *                 example: 2
+ *                 description: مطلوب فقط عندما is_complaint = false
  *               organization_id:
  *                 type: integer
  *                 example: 10
@@ -100,31 +106,69 @@ router.post(
  *         content:
  *           application/json:
  *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: تم جلب عمليات AUTH بنجاح
- *                 data:
- *                   type: array
- *                   items:
- *                     type: object
- *                     properties:
- *                       process_id:
- *                         type: integer
- *                       name:
- *                         type: string
- *                       code:
- *                         type: string
- *                       priority:
- *                         type: integer
- *                       auth_stage:
- *                         type: object
+ *               $ref: '#/components/schemas/AuthProcessListResponse'
+ *             example:
+ *               message: تم جلب عمليات AUTH بنجاح
+ *               data:
+ *                 - process_id: 1
+ *                   name: Leave Request
+ *                   code: LEAVE_001
+ *                   priority: 1
+ *                   auth_stage:
+ *                     id: 10
+ *                     name: Submit Request
+ *                     code: SUBMIT_LEAVE
+ *                     type: USER_TASK
+ *                     auth_type: AUTH
+ *               from_cache: false
  */
 router.get(
   '/auth/:id',
   authMiddleware,
   getAuthProcessesController
+)
+
+/**
+ * @swagger
+ * /api/process_definitions/citizen/type/{typeTransId}:
+ *   get:
+ *     summary: Get citizen processes by type (cached)
+ *     tags: [Process Definition]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: typeTransId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         example: 2
+ *     responses:
+ *       200:
+ *         description: تم جلب عمليات AUTH بنجاح.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AuthProcessListResponse'
+ *             example:
+ *               message: تم جلب عمليات AUTH بنجاح
+ *               data:
+ *                 - process_id: 3
+ *                   name: Certificate Request
+ *                   code: CERT_001
+ *                   priority: 2
+ *                   auth_stage:
+ *                     id: 12
+ *                     name: Citizen Submit
+ *                     code: CITIZEN_SUBMIT
+ *                     type: USER_TASK
+ *                     auth_type: AUTH
+ *               from_cache: true
+ */
+router.get(
+  '/citizen/type/:typeTransId',
+  authMiddleware,
+  getCitizenAuthProcessesController
 )
 
 // =========================================

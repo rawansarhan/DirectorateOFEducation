@@ -1,62 +1,44 @@
-const { authMiddleware, authorize } = require('../../../core/middleware/authMiddleware')
+const { authMiddleware } = require('../../../core/middleware/authMiddleware')
 const express = require('express')
 const router = express.Router()
 const {
-getComplaintProcesses
+  getComplaintProcesses,
+  getCitizenComplaintProcessesHandler
 } = require('../controllers/compalintController')
- /**
+
+/**
  * @swagger
  * /api/complaint/complaints:
  *   get:
- *     summary: Get all complaint processes
+ *     summary: Get complaint process definitions (AUTH stage)
  *     tags: [Complaint]
  *     security:
  *       - bearerAuth: []
- *     description: Retrieve all process definitions where type is "شكوى"
  *     responses:
  *       200:
- *         description: تم جلب معاملات الشكوى بنجاح
+ *         description: تم جلب عمليات AUTH بنجاح.
  *         content:
  *           application/json:
  *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 message:
- *                   type: string
- *                   example: تم جلب معاملات الشكوى بنجاح
- *                 data:
- *                   type: array
- *                   items:
- *                     type: object
- *                     properties:
- *                       id:
- *                         type: integer
- *                         example: 1
- *                       name:
- *                         type: string
- *                         example: شكوى مدرسة
- *                       code:
- *                         type: string
- *                         example: COMPLAINT_001
- *                       status:
- *                         type: string
- *                         example: deployed
- *                       is_active:
- *                         type: boolean
- *                         example: true
- *                       approval_status:
- *                         type: string
- *                         example: PENDING
- *                       type_trans_id:
- *                         type: integer
- *                         example: 2
+ *               $ref: '#/components/schemas/AuthProcessListResponse'
+ *             example:
+ *               message: تم جلب عمليات AUTH بنجاح
+ *               data:
+ *                 - process_id: 1
+ *                   name: School Complaint
+ *                   code: COMPLAINT_001
+ *                   priority: 1
+ *                   auth_stage:
+ *                     id: 10
+ *                     name: Submit Complaint
+ *                     code: SUBMIT_COMPLAINT
+ *                     type: USER_TASK
+ *                     auth_type: AUTH
+ *               from_cache: false
  *       401:
- *         description: Unauthorized - تحتاج تسجيل دخول
- *       403:
- *         description: Forbidden - لا تملك صلاحية PROCESS_VIEW_COMPLAINT
+ *         description: Unauthorized
+ *       400:
+ *         description: Validation error
  */
 router.get(
   '/complaints',
@@ -64,5 +46,44 @@ router.get(
   getComplaintProcesses
 )
 
+/**
+ * @swagger
+ * /api/complaint/citizen/complaints:
+ *   get:
+ *     summary: Get citizen complaint processes (is_complaint=true)
+ *     tags: [Complaint]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: تم جلب عمليات AUTH بنجاح.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AuthProcessListResponse'
+ *             example:
+ *               message: تم جلب عمليات AUTH بنجاح
+ *               data:
+ *                 - process_id: 2
+ *                   name: Citizen Complaint
+ *                   code: CITIZEN_COMPLAINT_001
+ *                   priority: 1
+ *                   auth_stage:
+ *                     id: 11
+ *                     name: Submit Complaint
+ *                     code: CITIZEN_SUBMIT
+ *                     type: USER_TASK
+ *                     auth_type: AUTH
+ *               from_cache: true
+ *       401:
+ *         description: Unauthorized
+ *       400:
+ *         description: Validation error
+ */
+router.get(
+  '/citizen/complaints',
+  authMiddleware,
+  getCitizenComplaintProcessesHandler
+)
 
 module.exports = router

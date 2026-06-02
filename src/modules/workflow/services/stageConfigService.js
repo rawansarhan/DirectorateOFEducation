@@ -1,7 +1,5 @@
 'use strict'
 const orgDeptRolesClient = require('../../../core/shared/clients/organization/orgDeptRolesClient')
-const { re } = require('mathjs')
-;('use strict')
 
 const {
   createStageConfigSchema
@@ -17,6 +15,16 @@ const stageConfigMapper = require('../mappers/stageConfigMapper')
 
 const processRepository =
   require('../repositories/processRepository')
+
+const {
+  invalidateAllProcessLists
+} = require('../../../core/cache/processCacheService')
+
+const {
+  getOrLoad,
+  KEYS,
+  invalidateStageConfig
+} = require('../../../core/cache/apiCacheService')
 // ======================================================
 // CREATE STAGE CONFIG
 // ======================================================
@@ -145,6 +153,16 @@ for (const a of assignments) {
 
   if (configsToCreate.length > 0) {
     await stageConfigRepository.bulkCreate(configsToCreate)
+
+    const processIds = new Set(
+      stages
+        .map(s => s.process_definition_id)
+        .filter(Boolean)
+    )
+
+    for (const processId of processIds) {
+      await invalidateStageConfig(processId)
+    }
   }
 
   // =====================================
@@ -153,6 +171,7 @@ for (const a of assignments) {
 
   if (assignmentsToCreate.length > 0) {
     await stageAssignmentRepository.bulkCreate(assignmentsToCreate)
+    await invalidateAllProcessLists()
   }
 
   return {
@@ -167,13 +186,9 @@ for (const a of assignments) {
 // ======================================================
 
 async function getConfig_json (processID) {
-  // =====================================
-  // PROCESS
-  // =====================================
+  const processId = parseInt(processID, 10)
 
-  const process = await processRepository.findById(processID)
-
-  if (!process) {
+  if (!Number.isInteger(processId) || processId < 1) {
     return {
       message: 'لم يتم ايجاد العملية',
 
@@ -184,49 +199,60 @@ async function getConfig_json (processID) {
     }
   }
 
-  // =====================================
-  // AUTH STAGE
-  // =====================================
+  return getOrLoad(
+    KEYS.stageConfig(processId),
+    async () => {
+      const process = await processRepository.findById(processId)
 
-  const stage = await stageRepository.findFirstAuthStage(processID)
+      if (!process) {
+        return {
+          message: 'لم يتم ايجاد العملية',
 
-  if (!stage) {
-    return {
-      message: 'لا توجد مرحلة لهذه العملية',
-
-      data: {
-        success: false,
-        config_json: []
+          data: {
+            success: false,
+            config_json: []
+          }
+        }
       }
-    }
-  }
 
-  // =====================================
-  // CONFIG
-  // =====================================
+      const stage = await stageRepository.findFirstAuthStage(processId)
 
-  const stageConfig = await stageConfigRepository.findByStageId(stage.id)
+      if (!stage) {
+        return {
+          message: 'لا توجد مرحلة لهذه العملية',
 
-  if (!stageConfig) {
-    return {
-      message: 'لم نجد إعدادات للمرحلة',
-
-      data: {
-        success: false,
-        config_json: []
+          data: {
+            success: false,
+            config_json: []
+          }
+        }
       }
-    }
-  }
 
-  return {
-    message: 'تم جلب إعدادات العملية بنجاح',
+      const stageConfig = await stageConfigRepository.findByStageId(stage.id)
 
-    data: {
-      success: true,
+      if (!stageConfig) {
+        return {
+          message: 'لم نجد إعدادات للمرحلة',
 
-      config_json: stageConfig.config_json
-    }
-  }
+          data: {
+            success: false,
+            config_json: []
+          }
+        }
+      }
+
+      return {
+        message: 'تم جلب إعدادات العملية بنجاح',
+
+        data: {
+          success: true,
+
+          config_json: stageConfig.config_json
+        }
+      }
+    },
+    { label: `GET /api/stage_config/config/${processId}` }
+  )
 }
 
 module.exports = {

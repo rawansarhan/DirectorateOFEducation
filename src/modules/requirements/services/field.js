@@ -1,5 +1,7 @@
 'use strict'
 
+const { HTTP_STATUS } = require('../../../core/middleware/httpStatusCodes')
+
 const { ValidateCreateField, ValidateUpdateField } = require('../validations/fieldValidations')
 const fieldRepository = require('../repositories/fieldRepository')
 const { FieldInputDTO } = require('../dto/FieldInputDTO')
@@ -116,7 +118,7 @@ async function updateFieldService(FieldData, FieldId) {
 
   if (!oldField) {
     const err = new Error('الحقل غير موجودة')
-    err.statusCode = 404
+    err.statusCode = HTTP_STATUS.NOT_FOUND
     throw err
   }
 

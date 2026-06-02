@@ -1,54 +1,51 @@
 const axios = require('axios')
+const { TRANSACTION_SERVICE_URL } = require('../../../config/env')
+const { throwIfAxiosError } = require('../../../utils/httpClientError')
 
-const BASE_URL =
-  process.env.TRANSACTION_SERVICE_URL ||
-  `http://localhost:${process.env.PORT || 4000}`
+const BASE_URL = TRANSACTION_SERVICE_URL
 
 class TransactionClient {
 
-  // =====================================
-  // GET TRANSACTION
-  // =====================================
-
   async getTransactionById (id) {
+    try {
+      const res = await axios.get(
+        `${BASE_URL}/internal/transactions/${id}`
+      )
 
-    const res = await axios.get(
-      `${BASE_URL}/internal/transactions/${id}`
-    )
-
-    return res.data.data
+      return res.data.data
+    } catch (err) {
+      throwIfAxiosError(err, 'Failed to fetch transaction')
+    }
   }
-
-  // =====================================
-  // UPDATE STATUS
-  // =====================================
 
   async updateStatus (id, status) {
+    try {
+      const res = await axios.patch(
+        `${BASE_URL}/internal/transactions/${id}/status`,
+        { status }
+      )
 
-    const res = await axios.patch(
-      `${BASE_URL}/internal/transactions/${id}/status`,
-      { status }
-    )
-
-    return res.data
+      return res.data
+    } catch (err) {
+      throwIfAxiosError(err, 'Failed to update transaction status')
+    }
   }
 
-  // =====================================
-  // UPDATE DATA
-  // =====================================
-
   async updateData (id, data, expectedVersion = null) {
+    try {
+      const body = expectedVersion != null
+        ? { data, expected_version: expectedVersion }
+        : data
 
-    const body = expectedVersion != null
-      ? { data, expected_version: expectedVersion }
-      : data
+      const res = await axios.patch(
+        `${BASE_URL}/internal/transactions/${id}/data`,
+        body
+      )
 
-    const res = await axios.patch(
-      `${BASE_URL}/internal/transactions/${id}/data`,
-      body
-    )
-
-    return res.data.data
+      return res.data.data
+    } catch (err) {
+      throwIfAxiosError(err, 'Failed to update transaction data')
+    }
   }
 }
 

@@ -20,5 +20,6 @@ module.exports = {
   findBySessionId,
   create,
   destroyByUserId,
+  deleteByUserId: destroyByUserId,
   destroyInstance
 }

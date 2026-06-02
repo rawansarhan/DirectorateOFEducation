@@ -1,10 +1,7 @@
-const dotenv = require('dotenv')
-dotenv.config()
+'use strict'
 
-if (!process.env.CAMUNDA_URL) {
-  throw new Error('CAMUNDA_URL is not defined in .env')
-}
+const { CAMUNDA_URL } = require('./env')
 
 module.exports = {
-  CAMUNDA_URL: process.env.CAMUNDA_URL
+  CAMUNDA_URL
 }

@@ -1,8 +1,7 @@
 const axios = require('axios')
+const { ORGANIZATION_SERVICE_URL } = require('../../../config/env')
 
-const BASE_URL =
-  process.env.ORGANIZATION_SERVICE_URL ||
-  `http://localhost:${process.env.PORT || 4000}`
+const BASE_URL = ORGANIZATION_SERVICE_URL
 
 class OrganizationClient {
 

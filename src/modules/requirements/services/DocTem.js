@@ -1,6 +1,12 @@
 const documentTemplateRepository = require('../repositories/documentTemplateRepository')
 
 const {
+  getOrLoad,
+  KEYS,
+  invalidateDocumentTemplates
+} = require('../../../core/cache/apiCacheService')
+
+const {
   createDocumentTemplateValidation,
   updateDocumentTemplateValidation
 } = require('../validations/DocTemValidations')
@@ -34,6 +40,8 @@ const createDocumentTemplateService = async data => {
       is_active: true,
       is_latest: true
     })
+
+  await invalidateDocumentTemplates()
 
   return {
     message: 'تم إنشاء القالب بنجاح',
@@ -102,6 +110,8 @@ const updateDocumentTemplateService = async (
         data.is_active ?? true
     })
 
+  await invalidateDocumentTemplates()
+
   return {
     message: 'تم تعديل القالب بنجاح',
     data: {
@@ -115,16 +125,21 @@ const updateDocumentTemplateService = async (
 // GET ACTIVE ONLY
 // =========================================
 const getAllActiveDocumentTemplatesService = async () => {
+  return getOrLoad(
+    KEYS.documentTemplates(),
+    async () => {
+      const templates = await documentTemplateRepository.findAllActive()
 
-  const templates = await documentTemplateRepository.findAllActive()
-
-  return {
-    message: 'تم جلب القوالب بنجاح',
-    data: {
-      success: true,
-      templates
-    }
-  }
+      return {
+        message: 'تم جلب القوالب بنجاح',
+        data: {
+          success: true,
+          templates
+        }
+      }
+    },
+    { label: 'GET /api/document-templates' }
+  )
 }
 
 // ======================================

@@ -87,7 +87,18 @@ function validateRegisterEmp (data) {
       .integer()
       .positive()
       .required()
-      .messages(idMessages('معرّف الدور'))
+      .messages(idMessages('معرّف الدور')),
+
+    public_key: Joi.string()
+      .trim()
+      .min(40)
+      .required()
+      .messages({
+        'string.base': 'المفتاح العام يجب أن يكون نصاً',
+        'string.empty': 'المفتاح العام مطلوب',
+        'string.min': 'صيغة المفتاح العام غير صحيحة',
+        'any.required': 'المفتاح العام مطلوب'
+      })
   }).messages({
     'object.unknown': 'الحقل {#label} غير مسموح به'
   })
