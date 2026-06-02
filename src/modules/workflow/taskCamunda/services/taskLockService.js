@@ -2,8 +2,7 @@
 
 const camundaClient = require('../../../../core/shared/clients/camunda/camundaClient')
 const processInstanceRepository = require('../repositories/processInstanceRepository')
-
-const TASK_LOCK_TTL_MS = Number(process.env.TASK_LOCK_TTL_MS || 30 * 60 * 1000)
+const { TASK_LOCK_TTL_MS } = require('../../../../core/config/env')
 
 function buildTaskLockError ({
   message,

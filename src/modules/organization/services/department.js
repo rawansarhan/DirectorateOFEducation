@@ -1,5 +1,7 @@
 'use strict'
 
+const { HTTP_STATUS } = require('../../../core/middleware/httpStatusCodes')
+
 const {
   ValidateCreateDepartment,
   ValidateUpdateDepartment
@@ -7,6 +9,11 @@ const {
 
 const departmentRepository = require('../repositories/departmentRepository')
 const organizationRepository = require('../repositories/organizationRepository')
+const {
+  getOrLoad,
+  KEYS,
+  invalidateDepartmentLeaves
+} = require('../../../core/cache/apiCacheService')
 
 // ================= CREATE =================
 async function createDepartmentService(data) {
@@ -15,14 +22,14 @@ async function createDepartmentService(data) {
   if (error) {
     const msg = error.details.map(d => d.message).join(' | ')
     const err = new Error(msg)
-    err.statusCode = 400
+    err.statusCode = HTTP_STATUS.BAD_REQUEST
     throw err
   }
 
   const organization = await organizationRepository.findById(data.organization_id)
   if (!organization) {
     const err = new Error('المؤسسة غير موجودة')
-    err.statusCode = 404
+    err.statusCode = HTTP_STATUS.NOT_FOUND
     throw err
   }
 
@@ -30,7 +37,7 @@ async function createDepartmentService(data) {
     const parent = await departmentRepository.findById(data.parent_id)
     if (!parent) {
       const err = new Error('القسم الأب غير موجود')
-      err.statusCode = 404
+      err.statusCode = HTTP_STATUS.NOT_FOUND
       throw err
     }
   }
@@ -42,6 +49,8 @@ async function createDepartmentService(data) {
     is_active: true
   })
 
+  await invalidateDepartmentLeaves(data.organization_id)
+
   return department
 }
 
@@ -51,7 +60,7 @@ async function updateDepartmentService(data, id) {
 
   if (!Number.isInteger(departmentId) || departmentId < 1) {
     const err = new Error('معرّف القسم غير صالح')
-    err.statusCode = 400
+    err.statusCode = HTTP_STATUS.BAD_REQUEST
     throw err
   }
 
@@ -60,7 +69,7 @@ async function updateDepartmentService(data, id) {
   if (error) {
     const msg = error.details.map(d => d.message).join(' | ')
     const err = new Error(msg)
-    err.statusCode = 400
+    err.statusCode = HTTP_STATUS.BAD_REQUEST
     throw err
   }
 
@@ -68,7 +77,7 @@ async function updateDepartmentService(data, id) {
 
   if (!department) {
     const err = new Error('القسم غير موجود')
-    err.statusCode = 404
+    err.statusCode = HTTP_STATUS.NOT_FOUND
     throw err
   }
 
@@ -76,7 +85,7 @@ async function updateDepartmentService(data, id) {
     const organization = await organizationRepository.findById(data.organization_id)
     if (!organization) {
       const err = new Error('المؤسسة غير موجودة')
-      err.statusCode = 404
+      err.statusCode = HTTP_STATUS.NOT_FOUND
       throw err
     }
   }
@@ -84,14 +93,14 @@ async function updateDepartmentService(data, id) {
   if (data.parent_id !== undefined && data.parent_id !== null) {
     if (data.parent_id === departmentId) {
       const err = new Error('لا يمكن أن يكون القسم أب لنفسه')
-      err.statusCode = 400
+      err.statusCode = HTTP_STATUS.BAD_REQUEST
       throw err
     }
 
     const parent = await departmentRepository.findById(data.parent_id)
     if (!parent) {
       const err = new Error('القسم الأب غير موجود')
-      err.statusCode = 404
+      err.statusCode = HTTP_STATUS.NOT_FOUND
       throw err
     }
   }
@@ -101,7 +110,15 @@ async function updateDepartmentService(data, id) {
   if (data.organization_id !== undefined) payload.organization_id = data.organization_id
   if (data.parent_id !== undefined) payload.parent_id = data.parent_id
 
-  return departmentRepository.updateInstance(department, payload)
+  const updated = await departmentRepository.updateInstance(department, payload)
+
+  await invalidateDepartmentLeaves(updated.organization_id)
+
+  if (data.organization_id !== undefined && data.organization_id !== department.organization_id) {
+    await invalidateDepartmentLeaves(department.organization_id)
+  }
+
+  return updated
 }
 
 // ================= TOGGLE STATUS =================
@@ -110,7 +127,7 @@ async function toggleDepartmentStatusService(id) {
 
   if (!Number.isInteger(departmentId) || departmentId < 1) {
     const err = new Error('معرّف القسم غير صالح')
-    err.statusCode = 400
+    err.statusCode = HTTP_STATUS.BAD_REQUEST
     throw err
   }
 
@@ -118,11 +135,15 @@ async function toggleDepartmentStatusService(id) {
 
   if (!department) {
     const err = new Error('القسم غير موجود')
-    err.statusCode = 404
+    err.statusCode = HTTP_STATUS.NOT_FOUND
     throw err
   }
 
-  return departmentRepository.updateInstance(department, { is_active: !department.is_active })
+  const updated = await departmentRepository.updateInstance(department, { is_active: !department.is_active })
+
+  await invalidateDepartmentLeaves(department.organization_id)
+
+  return updated
 }
 
 // ================= DELETE =================
@@ -131,7 +152,7 @@ async function deleteDepartmentService(id) {
 
   if (!Number.isInteger(departmentId) || departmentId < 1) {
     const err = new Error('معرّف القسم غير صالح')
-    err.statusCode = 400
+    err.statusCode = HTTP_STATUS.BAD_REQUEST
     throw err
   }
 
@@ -139,11 +160,15 @@ async function deleteDepartmentService(id) {
 
   if (!department) {
     const err = new Error('القسم غير موجود')
-    err.statusCode = 404
+    err.statusCode = HTTP_STATUS.NOT_FOUND
     throw err
   }
 
+  const organizationId = department.organization_id
+
   await departmentRepository.destroyInstance(department)
+
+  await invalidateDepartmentLeaves(organizationId)
 
   return { id: departmentId }
 }
@@ -161,46 +186,52 @@ async function getLeafDepartmentsByOrganizationService(organizationId) {
 
   if (!Number.isInteger(orgId) || orgId < 1) {
     const err = new Error('معرّف المؤسسة غير صالح')
-    err.statusCode = 400
+    err.statusCode = HTTP_STATUS.BAD_REQUEST
     throw err
   }
 
-  const organization = await organizationRepository.findById(orgId)
-  if (!organization) {
-    const err = new Error('المؤسسة غير موجودة')
-    err.statusCode = 404
-    throw err
-  }
+  return getOrLoad(
+    KEYS.departmentLeaves(orgId),
+    async () => {
+      const organization = await organizationRepository.findById(orgId)
+      if (!organization) {
+        const err = new Error('المؤسسة غير موجودة')
+        err.statusCode = HTTP_STATUS.NOT_FOUND
+        throw err
+      }
 
-  const departments = await departmentRepository.findAllByOrganizationId(orgId)
+      const departments = await departmentRepository.findAllByOrganizationId(orgId)
 
-  if (departments.length === 0) return []
+      if (departments.length === 0) return []
 
-  const byId = new Map(departments.map(d => [d.id, d]))
-  const parentIds = new Set(
-    departments
-      .map(d => d.parent_id)
-      .filter(pid => pid !== null && pid !== undefined)
+      const byId = new Map(departments.map(d => [d.id, d]))
+      const parentIds = new Set(
+        departments
+          .map(d => d.parent_id)
+          .filter(pid => pid !== null && pid !== undefined)
+      )
+
+      const leaves = departments.filter(d => !parentIds.has(d.id))
+
+      return leaves.map(leaf => {
+        const path = []
+        let current = leaf
+        const visited = new Set()
+
+        while (current && !visited.has(current.id)) {
+          visited.add(current.id)
+          path.unshift(current.name)
+          current = current.parent_id ? byId.get(current.parent_id) : null
+        }
+
+        return {
+          id: leaf.id,
+          name: path.join('\\')
+        }
+      })
+    },
+    { label: `GET /api/department/by-organization/${orgId}/leaves/` }
   )
-
-  const leaves = departments.filter(d => !parentIds.has(d.id))
-
-  return leaves.map(leaf => {
-    const path = []
-    let current = leaf
-    const visited = new Set()
-
-    while (current && !visited.has(current.id)) {
-      visited.add(current.id)
-      path.unshift(current.name)
-      current = current.parent_id ? byId.get(current.parent_id) : null
-    }
-
-    return {
-      id: leaf.id,
-      name: path.join('\\')
-    }
-  })
 }
 
 // ================= GET BY ID =================
@@ -209,7 +240,7 @@ async function getDepartmentByIdService(id) {
 
   if (!Number.isInteger(departmentId) || departmentId < 1) {
     const err = new Error('معرّف القسم غير صالح')
-    err.statusCode = 400
+    err.statusCode = HTTP_STATUS.BAD_REQUEST
     throw err
   }
 
@@ -217,7 +248,7 @@ async function getDepartmentByIdService(id) {
 
   if (!department) {
     const err = new Error('القسم غير موجود')
-    err.statusCode = 404
+    err.statusCode = HTTP_STATUS.NOT_FOUND
     throw err
   }
 

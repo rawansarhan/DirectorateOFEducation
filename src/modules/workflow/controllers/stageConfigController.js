@@ -1,50 +1,30 @@
 'use strict'
 
 const asyncHandler = require('../../../core/middleware/asyncHandler')
+const { sendOk, sendControllerError } = require('../../../core/utils/controllerResponse')
 const {
   createStageConfigService,
   getConfig_json
 } = require('../services/stageConfigService')
 
-///// ============================== create stage configs (bulk) ====================================
-
 const createStageConfig = asyncHandler(async (req, res) => {
   try {
-    const data = req.body
-
-    const result = await createStageConfigService(data)
-
-    return res.status(200).json({
-      message: 'تم إعداد المراحل بنجاح !',
-      data: result
-    })
-  } catch (err) {  
-    return res.status(400).json({
-      success: false,
-      message: err.message
-    })
+    const result = await createStageConfigService(req.body)
+    return sendOk(res, result, 'تم إعداد المراحل بنجاح !')
+  } catch (err) {
+    return sendControllerError(res, err)
   }
 })
-
-// ======================= get all config_json for process =========================
 
 const getJsonProcess = asyncHandler(async (req, res) => {
   try {
-    const processID = req.params.id // ✅ التصحيح
-
-    const result = await getConfig_json(processID)
-
-    return res.status(200).json({
-      message: result.message,
-      data: result.data
-    })
+    const result = await getConfig_json(req.params.id)
+    return sendOk(res, result.data, result.message || 'تم جلب الإعدادات بنجاح')
   } catch (err) {
-    return res.status(400).json({
-      success: false,
-      message: err.message
-    })
+    return sendControllerError(res, err)
   }
 })
+
 module.exports = {
   createStageConfig,
   getJsonProcess

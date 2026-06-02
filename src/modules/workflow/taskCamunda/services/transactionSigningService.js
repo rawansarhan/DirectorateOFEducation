@@ -18,15 +18,23 @@ const digitalSignatureRepository =
   require('../repositories/digitalSignatureRepository')
 
 const {
-  buildTransactionSignMessage,
+  buildTransactionChainSignMessage,
   buildCanonicalPayloadHash,
   hashValue,
   verifyChallengeSignature,
   getTransactionSignExpiresAt,
   TX_SIGN_TTL_MS
 } = require('../../../auth/services/cryptoAuthService')
+const {
+  ensureGenesisHash,
+  getPreviousLinkHash
+} = require('../../../transaction/services/integrityChainService')
+const {
+  computePreSignCumulativeHash
+} = require('../../../transaction/services/integrityChainUtils')
+const { verifyAppPin } = require('../../../auth/services/pinAuthService')
+const { validateSigningChallengePayload } = require('../../schemas/signingChallengeSchema')
 const { assertTaskLockHolder } = require('./taskLockService')
-/////////////////////////////////////////////////////////////
 async function loadTaskContext (taskId) {
   const task = await camundaClient.getTaskById(taskId)
 
@@ -99,16 +107,14 @@ function buildSigningPayload ({
   task,
   transaction,
   stage,
-  payload
+  variables = {}
 }) {
   return {
     taskId: task.id,
     transactionId: transaction.id,
     stageCode: stage.code,
     stageId: stage.id,
-    variables: payload.variables || {},
-    fields: payload.fields || [],
-    files: payload.files || []
+    variables
   }
 }
 
@@ -118,7 +124,17 @@ async function createSigningChallenge ({
   payload = {},
   clientMeta = {}
 }) {
+  const { value: validatedPayload, error: validationError } =
+    validateSigningChallengePayload(payload)
+
+  if (validationError) {
+    const error = new Error(validationError)
+    error.code = 'VALIDATION_ERROR'
+    throw error
+  }
+
   await securityGuardService.assertAccountNotLocked(userId)
+  await verifyAppPin(userId, validatedPayload.pin, clientMeta)
 
   const context = await loadTaskContext(taskId)
 
@@ -128,7 +144,7 @@ async function createSigningChallenge ({
     userId
   })
 
-  if (!requiresDigitalSignature(context.stage, payload, context.stageConfig)) {
+  if (!requiresDigitalSignature(context.stage, validatedPayload, context.stageConfig)) {
     throw new Error('Digital signature is not required for this task')
   }
 
@@ -142,23 +158,40 @@ async function createSigningChallenge ({
     task: context.task,
     transaction: context.transaction,
     stage: context.stage,
-    payload
+    variables: validatedPayload.variables
   })
 
   const payloadHash = buildCanonicalPayloadHash(signingPayload)
+  const genesisHash = await ensureGenesisHash(context.transaction)
+  const previousLinkHash = await getPreviousLinkHash(context.transaction.id)
+  const preCumulativeHash = computePreSignCumulativeHash(
+    context.transaction.data || {},
+    context.stage.code,
+    validatedPayload.variables
+  )
+
+  const stages = await stageRepository.findByProcessId(
+    context.processInstance.process_definition_id
+  )
+  const stageOrderIndex = stages.findIndex(item => item.id === context.stage.id)
+  const stageOrder = stageOrderIndex >= 0 ? stageOrderIndex + 1 : 0
 
   await transactionSigningChallengeRepository.invalidateActiveByTaskAndUser(
     taskId,
     userId
   )
 
-  const signingId = uuidv4()
+  const challengeId = uuidv4()
   const expiresAt = getTransactionSignExpiresAt()
-  const message = buildTransactionSignMessage({
-    signingId,
+  const message = buildTransactionChainSignMessage({
+    challengeId,
     taskId: context.task.id,
     transactionId: context.transaction.id,
     stageCode: context.stage.code,
+    stageOrder,
+    preCumulativeHash,
+    previousLinkHash,
+    genesisHash,
     payloadHash,
     expiresAt,
     userId,
@@ -166,7 +199,7 @@ async function createSigningChallenge ({
   })
 
   const challenge = await transactionSigningChallengeRepository.create({
-    id: signingId,
+    id: challengeId,
     user_id: userId,
     user_key_id: userKey.id,
     task_id: context.task.id,
@@ -186,29 +219,28 @@ async function createSigningChallenge ({
     ipAddress: clientMeta.ip,
     userAgent: clientMeta.userAgent,
     details: {
-      signingId: challenge.id,
+      challengeId: challenge.id,
       transactionId: context.transaction.id,
-      stageCode: context.stage.code
+      stageCode: context.stage.code,
+      action: validatedPayload.variables.action
     }
   })
 
   return {
-    signing_id: challenge.id,
+    challenge_id: challenge.id,
     task_id: context.task.id,
-    transaction_id: context.transaction.id,
-    stage_code: context.stage.code,
     key_fingerprint: userKey.key_fingerprint,
     message: challenge.message,
-    payload_hash: payloadHash,
     expires_at: challenge.expires_at,
     expires_in_seconds: Math.floor(TX_SIGN_TTL_MS / 1000)
   }
 }
 ////////////////////////////////////////////////////////////
 async function verifyAndPersistSignature ({
-  signingId,
+  challengeId,
   signature,
   userId,
+  variables = null,
   clientMeta = {}
 }) {
   await securityGuardService.assertAccountNotLocked(userId)
@@ -218,7 +250,7 @@ async function verifyAndPersistSignature ({
 
   try {
     const challenge = await transactionSigningChallengeRepository.findByIdWithLock(
-      signingId,
+      challengeId,
       transaction
     )
 
@@ -236,6 +268,21 @@ async function verifyAndPersistSignature ({
 
     if (new Date() > challenge.expires_at) {
       throw new Error('Signing challenge expired')
+    }
+
+    if (variables) {
+      const stage = await stageRepository.findById(challenge.stage_id)
+      const signedPayload = buildSigningPayload({
+        task: { id: challenge.task_id },
+        transaction: { id: challenge.transaction_id },
+        stage: { code: stage?.code, id: challenge.stage_id },
+        variables
+      })
+      const requestPayloadHash = buildCanonicalPayloadHash(signedPayload)
+
+      if (requestPayloadHash !== challenge.payload_hash) {
+        throw new Error('variables do not match the signed signing challenge')
+      }
     }
 
     const userKey = await userKeyRepository.findById(challenge.user_key_id, {
@@ -262,7 +309,7 @@ async function verifyAndPersistSignature ({
         resourceId: challenge.task_id,
         ipAddress: clientMeta.ip,
         userAgent: clientMeta.userAgent,
-        details: { signingId }
+        details: { challengeId }
       })
 
       if (failure.locked) {
@@ -316,7 +363,7 @@ async function verifyAndPersistSignature ({
       ipAddress: clientMeta.ip,
       userAgent: clientMeta.userAgent,
       details: {
-        signingId,
+        challengeId,
         digitalSignatureId: digitalSignature.id,
         documentId: document.id,
         stageCode: stage?.code
@@ -335,7 +382,11 @@ async function verifyAndPersistSignature ({
       task_id: challenge.task_id,
       user_id: userId,
       key_fingerprint: userKey.key_fingerprint,
-      payload_hash: challenge.payload_hash
+      payload_hash: challenge.payload_hash,
+      challenge,
+      digitalSignature,
+      userKey,
+      signed_message: challenge.message
     }
   } catch (error) {
     if (!transaction.finished) {

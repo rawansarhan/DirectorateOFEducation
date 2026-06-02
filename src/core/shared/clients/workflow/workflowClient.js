@@ -1,16 +1,7 @@
 const axios = require('axios')
+const { WORKFLOW_SERVICE_URL } = require('../../../config/env')
 
-// ======================================================
-// BASE URL
-// ======================================================
-
-const WORKFLOW_URL =
-  process.env.WORKFLOW_SERVICE_URL ||
-  'http://localhost:4000/api/workflow'
-
-// ======================================================
-// GET PROCESS BY ID
-// ======================================================
+const WORKFLOW_URL = WORKFLOW_SERVICE_URL
 
 async function getProcessById(
   processId

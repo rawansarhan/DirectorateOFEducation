@@ -42,8 +42,12 @@ const {
   validatePublicKeyPem,
 } = require('./cryptoAuthService')
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your_very_secret_key'
-const OTP_TTL_MINUTES = 5
+const {
+  JWT_SECRET,
+  JWT_EXPIRES_IN,
+  OTP_TTL_MINUTES,
+  BCRYPT_ROUNDS
+} = require('../../../core/config/env')
 
 function generateOtp () {
   return '123456'
@@ -150,7 +154,7 @@ async function registerEmployee (userData) {
 
   const hashedPassword = await bcrypt.hash(
     crypto.randomBytes(32).toString('hex'),
-    10
+    BCRYPT_ROUNDS
   )
 
   const pinHash = await hashPin(userData.pin)
@@ -301,7 +305,7 @@ async function registerCitizen(userData) {
       throw new Error('CITIZEN role not found')
     }
 
-    const hashedPassword = await bcrypt.hash(userData.password, 10)
+    const hashedPassword = await bcrypt.hash(userData.password, BCRYPT_ROUNDS)
 
     const inputUserDTO = new RegisterCitizenInputDTO({
       ...userData,
@@ -321,7 +325,7 @@ async function registerCitizen(userData) {
     const token = jwt.sign(
       { id: user.id },
       JWT_SECRET,
-      { expiresIn: '30d' }
+      { expiresIn: JWT_EXPIRES_IN }
     )
 
     await transaction.commit()
@@ -397,7 +401,7 @@ async function login(userData) {
   const token = jwt.sign(
     { id: user.id },
     JWT_SECRET,
-    { expiresIn: '30d' }
+    { expiresIn: JWT_EXPIRES_IN }
   )
 
   return {
@@ -473,7 +477,7 @@ async function verifyRegisterOtp (
   const token = jwt.sign(
     { id: user.id },
     JWT_SECRET,
-    { expiresIn: '30d' }
+    { expiresIn: JWT_EXPIRES_IN }
   )
 
   await securityGuardService.recordSuccess({
@@ -563,7 +567,7 @@ async function verifyLoginOtp (
   const token = jwt.sign(
     { id: user.id },
     JWT_SECRET,
-    { expiresIn: '30d' }
+    { expiresIn: JWT_EXPIRES_IN }
   )
 
   await securityGuardService.recordSuccess({

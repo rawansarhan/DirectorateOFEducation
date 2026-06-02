@@ -26,7 +26,7 @@ const actionItemSchema = Joi.object({
 }).unknown(true)
 
 const signatureSchema = Joi.object({
-  signing_id: Joi.string().uuid().required(),
+  challenge_id: Joi.string().uuid().required(),
   signature: Joi.string().min(16).required()
 })
 
@@ -72,7 +72,7 @@ function validateStageSubmissionPayload (payload = {}, options = {}) {
   if (requireSignature && !value.signature) {
     return {
       value: null,
-      error: 'signature مطلوب (signing_id + signature)'
+      error: 'signature مطلوب (challenge_id + signature)'
     }
   }
 

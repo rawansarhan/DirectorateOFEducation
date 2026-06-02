@@ -25,7 +25,7 @@ const {
   PIN_SESSION_TTL_MS
 } = require('./cryptoAuthService')
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your_very_secret_key'
+const { JWT_SECRET, JWT_EXPIRES_IN } = require('../../../core/config/env')
 
 async function handleSecurityFailure ({
   userId,
@@ -79,7 +79,7 @@ async function isEmployeeUser (userId) {
 }
 
 function issueAuthToken (userId) {
-  return jwt.sign({ id: userId }, JWT_SECRET, { expiresIn: '30d' })
+  return jwt.sign({ id: userId }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN })
 }
 
 async function buildAuthResponse (user) {

@@ -9,4 +9,8 @@ module.exports = () => {
   require(
     '../../../modules/transaction/listeners/processInstanceStage'
   )
+
+  require(
+    '../../../modules/workflow/listeners/workflowCompleted.listener'
+  )
 }

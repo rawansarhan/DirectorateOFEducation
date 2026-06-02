@@ -1,4 +1,5 @@
 const axios = require('axios')
+const { AUTH_SERVICE_URL } = require('../../../config/env')
 
 class AuthClient {
 
@@ -7,7 +8,7 @@ class AuthClient {
     try {
 
      const res = await axios.get(
-        `${process.env.AUTH_SERVICE_URL}/internal/users/${userId}/role-ids`
+        `${AUTH_SERVICE_URL}/internal/users/${userId}/role-ids`
       )
 
       return res.data.data

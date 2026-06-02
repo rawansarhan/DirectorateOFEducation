@@ -23,6 +23,15 @@ const {
 const {
   submitTransactionLimiter
 } = require('../../../core/security/rateLimitMiddleware')
+
+const {
+  getIntegrityChainController,
+  verifyIntegrityChainController
+} = require('../controllers/integrityChainController')
+
+const {
+  getTransactionFullController
+} = require('../controllers/transactionFullController')
 /**
  * =====================================================
  * CREATE  DRAFT
@@ -72,9 +81,6 @@ router.post(
  * /api/transaction/updateDraft/{transId}:
  *   post:
  *     summary: Update transaction draft (fixed submission envelope)
- *     description: |
- *       يستخدم لكل أنواع المعاملات بما فيها الشكوى.
- *       نفس قالب `StageSubmissionPayload` — fields/files/templates/variables.
  *     tags: [Transaction]
  *     security:
  *       - bearerAuth: []
@@ -186,9 +192,6 @@ router.get(
  * /api/transaction/{transactionId}/submit:
  *   post:
  *     summary: Submit transaction and start workflow
- *     description: |
- *       يستخدم لكل أنواع المعاملات بما فيها الشكوى.
- *       يتحقق من `StageSubmissionPayload` + إعدادات مرحلة AUTH.
  *     tags: [Transaction]
  *     security:
  *       - bearerAuth: []
@@ -218,6 +221,87 @@ router.post(
   authMiddleware,
   submitTransactionLimiter,
   submitTransactionController
+)
+
+/**
+ * @swagger
+ * /api/transaction/{id}/integrity-chain:
+ *   get:
+ *     summary: Get transaction integrity chain (signature ledger)
+ *     tags: [Transaction]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Integrity chain fetched
+ */
+router.get(
+  '/:id/integrity-chain',
+  authMiddleware,
+  getIntegrityChainController
+)
+
+/**
+ * @swagger
+ * /api/transaction/{id}/full:
+ *   get:
+ *     summary: Get full transaction view with stages, data, and QR payload (PDF on frontend)
+ *     tags: [Transaction]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Full transaction fetched
+ */
+router.get(
+  '/:id/full',
+  authMiddleware,
+  getTransactionFullController
+)
+
+/**
+ * @swagger
+ * /api/transaction/{id}/integrity-chain/verify:
+ *   get:
+ *     summary: Verify transaction integrity chain (public — for QR scan)
+ *     tags: [Transaction]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: head
+ *         schema:
+ *           type: string
+ *         description: Optional head_hash from QR payload
+ *     responses:
+ *       200:
+ *         description: Chain is valid
+ *       422:
+ *         description: Forged or tampered transaction
+ */
+router.get(
+  '/:id/integrity-chain/verify',
+  verifyIntegrityChainController
+)
+
+router.post(
+  '/:id/integrity-chain/verify',
+  verifyIntegrityChainController
 )
 
 

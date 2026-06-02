@@ -1,10 +1,9 @@
 class GenPDFStrategy {
-
-  async execute({ payload, context }) {
-
+  async execute ({ payload, context }) {
     return {
-      type: 'email',
-      status: 'queued',
+      type: 'GENERATE_PDF',
+      status: 'delegated_to_frontend',
+      message: 'PDF generation is handled by the frontend',
       payload
     }
   }

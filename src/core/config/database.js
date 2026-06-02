@@ -1,19 +1,17 @@
-const path = require('path')
+'use strict'
+
 const { Sequelize } = require('sequelize')
-const dotenv = require('dotenv')
+const {
+  DB_HOST,
+  DB_PORT,
+  DB_NAME,
+  DB_USER,
+  DB_PASSWORD
+} = require('./env')
 
-// Always load .env from project root (not cwd-dependent)
-dotenv.config({ path: path.resolve(__dirname, '../../../.env') })
-
-const dbPort = Number.parseInt(process.env.DB_PORT, 10) || 5000
-const dbHost = process.env.DB_HOST || '127.0.0.1'
-const dbName = (process.env.DB_NAME || '').trim()
-const dbUser = process.env.DB_USER || 'postgres'
-const dbPassword = String(process.env.DB_PASSWORD || '').replace(/^"|"$/g, '')
-
-const sequelize = new Sequelize(dbName, dbUser, dbPassword, {
-  host: dbHost,
-  port: dbPort,
+const sequelize = new Sequelize(DB_NAME, DB_USER, DB_PASSWORD, {
+  host: DB_HOST,
+  port: DB_PORT,
   dialect: 'postgres',
   logging: false
 })

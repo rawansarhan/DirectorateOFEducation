@@ -1,8 +1,10 @@
 'use strict'
 
-const MIN_INTERVAL_MS = Number(process.env.OPERATION_MIN_INTERVAL_MS || 2000)
-const IDEMPOTENCY_TTL_MS = Number(process.env.IDEMPOTENCY_TTL_MS || 24 * 60 * 60 * 1000)
-const CLEANUP_INTERVAL_MS = Number(process.env.OPERATION_GUARD_CLEANUP_MS || 60 * 1000)
+const {
+  OPERATION_MIN_INTERVAL_MS: MIN_INTERVAL_MS,
+  IDEMPOTENCY_TTL_MS,
+  OPERATION_GUARD_CLEANUP_MS: CLEANUP_INTERVAL_MS
+} = require('../config/env')
 
 class OperationGuardService {
   constructor () {
@@ -62,6 +64,28 @@ class OperationGuardService {
       error.code = 'DUPLICATE_IN_FLIGHT'
       throw error
     }
+  }
+
+  /**
+   * Read cached idempotency result only — does not register in-flight.
+   * @returns {*|null}
+   */
+  getReplay ({ scope, userId, idempotencyKey }) {
+    if (!userId || !idempotencyKey) {
+      return null
+    }
+
+    const idemStoreKey = this.buildIdempotencyKey(scope, userId, idempotencyKey)
+    const cached = this.idempotencyResults.get(idemStoreKey)
+
+    if (cached && cached.expiresAt > Date.now()) {
+      return {
+        ...cached.result,
+        idempotent_replay: true
+      }
+    }
+
+    return null
   }
 
   /**

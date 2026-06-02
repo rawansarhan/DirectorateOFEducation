@@ -1,11 +1,10 @@
-const path = require('path')
+const { API_PUBLIC_URL } = require('../config/env')
 
 function getApiBaseUrl () {
-  return (
-    process.env.API_PUBLIC_URL ||
-    `http://localhost:${process.env.PORT || 4000}`
-  )
+  return API_PUBLIC_URL
 }
+
+const path = require('path')
 
 function normalizeStoredFilePath (filePath) {
   if (!filePath || typeof filePath !== 'string') {

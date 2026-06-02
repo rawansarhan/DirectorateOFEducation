@@ -62,6 +62,12 @@ router.get('/tasks/:taskId', authMiddleware, getTaskDetailsController)
  * /api/workflow/tasks/{taskId}/signing-challenge:
  *   post:
  *     summary: Create transaction signing challenge (USB private key)
+ *     description: |
+ *       الخطوة 1 قبل complete عندما تتطلب المرحلة توقيع USB.
+ *       1. GET /tasks/{taskId} — احصل على task lock
+ *       2. أرسل pin + variables.action
+ *       3. وقّع حقل `message` من الاستجابة بـ USB
+ *       4. أرسل challenge_id + signature في POST /tasks/{taskId}/complete
  *     tags: [Workflow]
  *     security:
  *       - bearerAuth: []
@@ -71,16 +77,23 @@ router.get('/tasks/:taskId', authMiddleware, getTaskDetailsController)
  *         required: true
  *         schema:
  *           type: string
+ *         description: Camunda task ID
  *     requestBody:
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/StageSubmissionPayload'
+ *             $ref: '#/components/schemas/SigningChallengePayload'
  *     responses:
  *       200:
  *         description: Signing challenge created
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SigningChallengeResponse'
  *       400:
- *         description: Validation error
+ *         description: Validation error or signature not required for this task
+ *       409:
+ *         description: Task lock required or held by another user
  *       423:
  *         description: Account locked
  *       429:
@@ -98,6 +111,27 @@ router.post(
  * /api/workflow/tasks/{taskId}/complete:
  *   post:
  *     summary: Complete workflow task
+ *     description: |
+ *       إكمال مهمة Camunda وحفظ بيانات المرحلة في المعاملة.
+ *
+ *       **تسلسل مقترح:**
+ *       1. `GET /api/workflow/tasks/{taskId}` — task lock
+ *       2. إذا التوقيع مطلوب: `POST /tasks/{taskId}/signing-challenge` ثم وقّع `message` من USB
+ *       3. `POST /tasks/{taskId}/complete` — أرسل stage_name/fields/files/templates/variables/signature/idempotency_key
+ *
+ *       **Response `data` (بدون actions):**
+ *       `stage_name` → `fields` → `files` → `templates` (مع `path`) → `variables` → `signature` → `idempotency_key`
+ *
+ *       **Response format:**
+ *       - success: `{ success, status_code, message, data }`
+ *       - error: `{ success, status_code, message, error, data: null }`
+ *
+ *       **ملاحظات:**
+ *       - `variables.action` لتوجيه مسار Camunda (approve / reject ...)
+ *       - `signature.challenge_id` + `signature.signature` من signing-challenge
+ *       - `expected_version` اختياري لمنع تعارض التحديث
+ *       - `idempotency_key` في الـ body (أو هيدر `Idempotency-Key`) — يُسجَّل **بعد** نجاح التوقيع
+ *       - الاستجابة تتضمن `idempotent_replay: true/false` مثل submit
  *     tags: [Workflow]
  *     security:
  *       - bearerAuth: []
@@ -107,20 +141,28 @@ router.post(
  *         required: true
  *         schema:
  *           type: string
+ *         description: Camunda task ID
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
- *             allOf:
- *               - $ref: '#/components/schemas/StageSubmissionPayload'
- *               - type: object
- *                 required: [signature]
+ *             $ref: '#/components/schemas/CompleteTaskPayload'
  *     responses:
  *       200:
  *         description: Task completed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/CompleteTaskResponse'
  *       400:
  *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ApiErrorResponse'
+ *       409:
+ *         description: Task lock conflict or duplicate in-flight request
  *       423:
  *         description: Account locked after failed signature attempts
  *       429:

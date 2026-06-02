@@ -1,5 +1,7 @@
 'use strict'
 
+const { HTTP_STATUS } = require('../../../core/middleware/httpStatusCodes')
+
 const {
   ValidateCreateOrganization,
   ValidateUpdateOrganization
@@ -7,6 +9,11 @@ const {
 
 const organizationRepository = require('../repositories/organizationRepository')
 const locationRepository = require('../repositories/locationRepository')
+const {
+  getOrLoad,
+  KEYS,
+  invalidateOrganizations
+} = require('../../../core/cache/apiCacheService')
 
 // ================= CREATE =================
 async function createOrganizationService(data) {
@@ -15,7 +22,7 @@ async function createOrganizationService(data) {
   if (error) {
     const msg = error.details.map(d => d.message).join(' | ')
     const err = new Error(msg)
-    err.statusCode = 400
+    err.statusCode = HTTP_STATUS.BAD_REQUEST
     throw err
   }
 
@@ -23,7 +30,7 @@ async function createOrganizationService(data) {
     const parent = await organizationRepository.findById(data.parent_id)
     if (!parent) {
       const err = new Error('المؤسسة الأب غير موجودة')
-      err.statusCode = 404
+      err.statusCode = HTTP_STATUS.NOT_FOUND
       throw err
     }
   }
@@ -32,7 +39,7 @@ async function createOrganizationService(data) {
     const location = await locationRepository.findById(data.location_id)
     if (!location) {
       const err = new Error('الموقع غير موجود')
-      err.statusCode = 404
+      err.statusCode = HTTP_STATUS.NOT_FOUND
       throw err
     }
   }
@@ -43,6 +50,8 @@ async function createOrganizationService(data) {
     location_id: data.location_id ?? null
   })
 
+  await invalidateOrganizations()
+
   return organization
 }
 
@@ -52,7 +61,7 @@ async function updateOrganizationService(data, id) {
 
   if (!Number.isInteger(organizationId) || organizationId < 1) {
     const err = new Error('معرّف المؤسسة غير صالح')
-    err.statusCode = 400
+    err.statusCode = HTTP_STATUS.BAD_REQUEST
     throw err
   }
 
@@ -61,7 +70,7 @@ async function updateOrganizationService(data, id) {
   if (error) {
     const msg = error.details.map(d => d.message).join(' | ')
     const err = new Error(msg)
-    err.statusCode = 400
+    err.statusCode = HTTP_STATUS.BAD_REQUEST
     throw err
   }
 
@@ -69,21 +78,21 @@ async function updateOrganizationService(data, id) {
 
   if (!organization) {
     const err = new Error('المؤسسة غير موجودة')
-    err.statusCode = 404
+    err.statusCode = HTTP_STATUS.NOT_FOUND
     throw err
   }
 
   if (data.parent_id !== undefined && data.parent_id !== null) {
     if (data.parent_id === organizationId) {
       const err = new Error('لا يمكن أن تكون المؤسسة أب لنفسها')
-      err.statusCode = 400
+      err.statusCode = HTTP_STATUS.BAD_REQUEST
       throw err
     }
 
     const parent = await organizationRepository.findById(data.parent_id)
     if (!parent) {
       const err = new Error('المؤسسة الأب غير موجودة')
-      err.statusCode = 404
+      err.statusCode = HTTP_STATUS.NOT_FOUND
       throw err
     }
   }
@@ -92,7 +101,7 @@ async function updateOrganizationService(data, id) {
     const location = await locationRepository.findById(data.location_id)
     if (!location) {
       const err = new Error('الموقع غير موجود')
-      err.statusCode = 404
+      err.statusCode = HTTP_STATUS.NOT_FOUND
       throw err
     }
   }
@@ -102,7 +111,11 @@ async function updateOrganizationService(data, id) {
   if (data.parent_id !== undefined) payload.parent_id = data.parent_id
   if (data.location_id !== undefined) payload.location_id = data.location_id
 
-  return organizationRepository.updateInstance(organization, payload)
+  const updated = await organizationRepository.updateInstance(organization, payload)
+
+  await invalidateOrganizations()
+
+  return updated
 }
 
 // ================= DELETE =================
@@ -111,7 +124,7 @@ async function deleteOrganizationService(id) {
 
   if (!Number.isInteger(organizationId) || organizationId < 1) {
     const err = new Error('معرّف المؤسسة غير صالح')
-    err.statusCode = 400
+    err.statusCode = HTTP_STATUS.BAD_REQUEST
     throw err
   }
 
@@ -119,18 +132,24 @@ async function deleteOrganizationService(id) {
 
   if (!organization) {
     const err = new Error('المؤسسة غير موجودة')
-    err.statusCode = 404
+    err.statusCode = HTTP_STATUS.NOT_FOUND
     throw err
   }
 
   await organizationRepository.destroyInstance(organization)
+
+  await invalidateOrganizations()
 
   return { id: organizationId }
 }
 
 // ================= GET ALL =================
 async function getAllOrganizationsService() {
-  return organizationRepository.findAll()
+  return getOrLoad(
+    KEYS.organizations(),
+    () => organizationRepository.findAll(),
+    { label: 'GET /api/organization/' }
+  )
 }
 
 // ================= GET BY ID =================
@@ -139,7 +158,7 @@ async function getOrganizationByIdService(id) {
 
   if (!Number.isInteger(organizationId) || organizationId < 1) {
     const err = new Error('معرّف المؤسسة غير صالح')
-    err.statusCode = 400
+    err.statusCode = HTTP_STATUS.BAD_REQUEST
     throw err
   }
 
@@ -147,7 +166,7 @@ async function getOrganizationByIdService(id) {
 
   if (!organization) {
     const err = new Error('المؤسسة غير موجودة')
-    err.statusCode = 404
+    err.statusCode = HTTP_STATUS.NOT_FOUND
     throw err
   }
 

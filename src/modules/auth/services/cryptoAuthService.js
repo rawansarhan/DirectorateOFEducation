@@ -8,12 +8,16 @@ const {
   createPublicKey
 } = require('crypto')
 const bcrypt = require('bcryptjs')
+const {
+  AUTH_CHALLENGE_TTL_MS: CHALLENGE_TTL_MS,
+  PIN_SESSION_TTL_MS,
+  TX_SIGN_TTL_MS,
+  BCRYPT_ROUNDS
+} = require('../../../core/config/env')
 
 const TX_SIGN_PREFIX = 'DOE-TX-SIGN|v1'
+const TX_CHAIN_PREFIX = 'DOE-TX-CHAIN|v2'
 const CHALLENGE_PREFIX = 'DOE-AUTH-CHALLENGE|v1'
-const CHALLENGE_TTL_MS = 5 * 60 * 1000
-const PIN_SESSION_TTL_MS = 5 * 60 * 1000
-const TX_SIGN_TTL_MS = 5 * 60 * 1000
 
 function generateEd25519KeyPair () {
   return generateKeyPairSync('ed25519', {
@@ -67,7 +71,7 @@ function hashValue (value) {
 }
 
 async function hashPin (pin) {
-  return bcrypt.hash(String(pin), 10)
+  return bcrypt.hash(String(pin), BCRYPT_ROUNDS)
 }
 
 async function verifyPin (pin, pinHash) {
@@ -116,6 +120,37 @@ function verifyChallengeSignature ({
 
 function getChallengeExpiresAt () {
   return new Date(Date.now() + CHALLENGE_TTL_MS)
+}
+
+function buildTransactionChainSignMessage ({
+  challengeId,
+  taskId,
+  transactionId,
+  stageCode,
+  stageOrder,
+  preCumulativeHash,
+  previousLinkHash,
+  genesisHash,
+  payloadHash,
+  expiresAt,
+  userId,
+  keyFingerprint
+}) {
+  return [
+    TX_CHAIN_PREFIX,
+    challengeId,
+    taskId,
+    transactionId,
+    stageCode,
+    stageOrder,
+    preCumulativeHash,
+    previousLinkHash || '',
+    genesisHash,
+    payloadHash,
+    new Date(expiresAt).toISOString(),
+    userId,
+    keyFingerprint
+  ].join('|')
 }
 
 function buildTransactionSignMessage ({
@@ -167,6 +202,7 @@ module.exports = {
   generateNonce,
   buildChallengeMessage,
   buildTransactionSignMessage,
+  buildTransactionChainSignMessage,
   buildCanonicalPayloadHash,
   verifyChallengeSignature,
   getChallengeExpiresAt,

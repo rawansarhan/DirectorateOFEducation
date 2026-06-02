@@ -12,6 +12,7 @@
  */
 
 const Redis = require('ioredis')
+const { REDIS_URL, PROCESS_CACHE_TTL_SECONDS } = require('../config/env')
 
 const LOG_PREFIX = '[ProcessCache]'
 
@@ -21,8 +22,8 @@ const CACHE_PREFIX = 'process:list:'
 /** مفتاح ثابت لحفظ organization_department_roles.id للمواطن (CITIZEN) */
 const CITIZEN_ODR_KEY = 'odr:citizen'
 
-/** مدة بقاء الكاش بالثواني (ساعة واحدة) */
-const DEFAULT_TTL_SECONDS = 3600
+/** مدة بقاء الكاش بالثواني */
+const DEFAULT_TTL_SECONDS = PROCESS_CACHE_TTL_SECONDS
 
 const SEP = '─'.repeat(52)
 
@@ -104,7 +105,7 @@ async function connectRedis (url) {
 }
 
 function isRedisEnabled () {
-  return Boolean(process.env.REDIS_URL)
+  return Boolean(REDIS_URL)
 }
 
 function logBlock (lines) {
@@ -114,6 +115,7 @@ function logBlock (lines) {
 }
 
 function logCacheHit ({ label, fullKey, count }) {
+  console.log('⚡ data from Redis cache')
   logBlock([
     'CACHE HIT — source: REDIS',
     `   operation: ${label}`,
@@ -123,6 +125,7 @@ function logCacheHit ({ label, fullKey, count }) {
 }
 
 function logDbFetch ({ label, fullKey, count, durationMs, cached }) {
+  console.log('🐢 data from DATABASE')
   const lines = [
     'CACHE MISS — source: DATABASE (PostgreSQL)',
     `   operation: ${label}`,
@@ -141,6 +144,7 @@ function logDbFetch ({ label, fullKey, count, durationMs, cached }) {
 }
 
 function logCitizenOdrHit (id) {
+  console.log('⚡ data from Redis cache')
   logBlock([
     'CACHE HIT — source: REDIS',
     '   operation: CITIZEN organization_department_roles',
@@ -149,6 +153,7 @@ function logCitizenOdrHit (id) {
 }
 
 function logCitizenOdrDb ({ id, durationMs, cached }) {
+  console.log('🐢 data from DATABASE')
   logBlock([
     'CACHE MISS — source: DATABASE (organization service)',
     '   operation: CITIZEN organization_department_roles',
@@ -164,15 +169,13 @@ function logCitizenOdrDb ({ id, durationMs, cached }) {
  * التحقق أن Redis جاهز — مع إعادة محاولة الاتصال إذا كان متوقفاً سابقاً
  */
 async function ensureConnected () {
-  const url = process.env.REDIS_URL
-
-  if (!url) {
+  if (!REDIS_URL) {
     console.warn(`${LOG_PREFIX} REDIS_URL is not set — running without cache`)
     return false
   }
 
   try {
-    await connectRedis(url)
+    await connectRedis(REDIS_URL)
     await redisClient.ping()
     return true
   } catch (err) {
@@ -180,7 +183,7 @@ async function ensureConnected () {
     resetRedisClient()
 
     try {
-      await connectRedis(url)
+      await connectRedis(REDIS_URL)
       await redisClient.ping()
       console.log(`${LOG_PREFIX} Redis reconnected successfully`)
       return true

@@ -1,24 +1,12 @@
-const authClientService =
-  require('../../services/internal/authClientService')
+const authClientService = require('../../services/internal/authClientService')
+const { sendOk, sendControllerError } = require('../../../../core/utils/controllerResponse')
 
-async function getUserRoleIds(req, res, next) {
-
+async function getUserRoleIds (req, res) {
   try {
-
-    const { userId } = req.params
-
-    const data =
-      await authClientService.getUserRoleIds(
-        userId
-      )
-
-    res.status(200).json({
-      message: 'success',
-      data
-    })
-
+    const data = await authClientService.getUserRoleIds(req.params.userId)
+    return sendOk(res, data, 'success')
   } catch (err) {
-    next(err)
+    return sendControllerError(res, err)
   }
 }
 

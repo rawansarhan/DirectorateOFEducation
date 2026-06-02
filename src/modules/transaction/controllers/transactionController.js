@@ -1,254 +1,86 @@
 const {
-
   UpdateDraft,
-
   createDraft,
-
   getUserDraftByProcess,
-
   getTransactionById,
-
   submitTransaction
-
 } = require('../services/transactionService')
-
 const { getClientMeta } = require('../../../core/security/securityConfig')
+const { sendOk, sendControllerError } = require('../../../core/utils/controllerResponse')
 
-const { respondIfOperationGuardError } = require('../../../core/security/securityResponseHelper')
+async function createDraftController (req, res) {
+  try {
+    const result = await createDraft({
+      userId: req.user.id,
+      processId: req.params.processId
+    })
 
-function handleTransactionError (res, err, defaultStatus = 400) {
-  if (respondIfOperationGuardError(res, err)) {
-    return
+    return sendOk(res, result, 'تمت العملية بنجاح')
+  } catch (err) {
+    return sendControllerError(res, err)
   }
-
-  return res.status(defaultStatus).json({
-    success: false,
-    message: err.message
-  })
 }
 
-// ======================================================
-// CREATE E DRAFT
-// ======================================================
-
-async function createDraftController(
-  req,
-  res,
-  next
-) {
-
+async function UpdateDraftController (req, res) {
   try {
-
-    const userId =
-      req.user.id
-
-    const {
-      processId
-    } = req.params
-
-    const result =
-      await createDraft({
-        userId,
-
-        processId
-      })
-
-    return res.status(200).json({
-
-      success: true,
-      message:'تمت العملية بنجاح',
-      data: result
-    
+    const result = await UpdateDraft({
+      transId: req.params.transId,
+      userId: req.user.id,
+      data: req.body
     })
 
+    return sendOk(res, result, 'تم حفظ المسودة بنجاح')
   } catch (err) {
-    return res.status(400).json({
-      success: false,
-      message: err.message
-    })}
+    return sendControllerError(res, err)
+  }
 }
 
-// ======================================================
-// CREATE OR UPDATE DRAFT
-// ======================================================
-
-async function UpdateDraftController(
-  req,
-  res,
-  next
-) {
-
+async function getUserDraftByProcessController (req, res) {
   try {
-    const {
-      transId
-    } = req.params
-
-    const userId = req.user.id
-
-    const result =
-      await UpdateDraft({
-        transId,
-        userId,
-        data: req.body
-      })
-
-    return res.status(200).json({
-
-      success: true,
-      message:'تم حفظ المسودة بنجاح',
-      data: result
-    
-    })
-
+    const result = await getUserDraftByProcess(req.user.id, req.params.processId)
+    return sendOk(res, result, 'تم جلب المسودة بنجاح')
   } catch (err) {
-    const status = err.code === 'VERSION_CONFLICT' ? 409 : 400
-
-    return res.status(status).json({
-      success: false,
-      message: err.message,
-      code: err.code || undefined,
-      current_version: err.currentVersion,
-      expected_version: err.expectedVersion
-    })}
-}
-// ======================================================
-// GET USER DRAFT BY PROCESS
-// ======================================================
-
-async function getUserDraftByProcessController(
-  req,
-  res,
-  next
-) {
-
-  try {
-
-    const userId =
-      req.user.id
-
-    const {
-      processId
-    } = req.params
-
-    const result =
-      await getUserDraftByProcess(
-
-        userId,
-
-        processId
-      )
-
-    return res.status(200).json({
-
-       success: true,
-      message:'تم جلب المسودة بنجاح',
-      data: result
-    })
-
-  } catch (err) {
-    return res.status(400).json({
-      success: false,
-      message: err.message
-    })}
+    return sendControllerError(res, err)
+  }
 }
 
-// ======================================================
-// GET TRANSACTION BY ID
-// ======================================================
-
-async function getTransactionController(
-  req,
-  res,
-  next
-) {
-
+async function getTransactionController (req, res) {
   try {
-
-    const userId =
-      req.user.id
-
-    const {
-      transactionId
-    } = req.params
-
-    const result =
-      await getTransactionById(
-
-        transactionId,
-
-        userId
-      )
-
-    return res.status(200).json({
-
-      success: true,
-      message:'تم العملية بنجاح',
-      data: result
-    })
-
+    const result = await getTransactionById(req.params.transactionId, req.user.id)
+    return sendOk(res, result, 'تم العملية بنجاح')
   } catch (err) {
-    return res.status(400).json({
-      success: false,
-      message: err.message
-    })}
+    return sendControllerError(res, err)
+  }
 }
 
-// ======================================================
-// SUBMIT TRANSACTION
-// ======================================================
-
-async function submitTransactionController(
-  req,
-  res,
-  next
-) {
-
+async function submitTransactionController (req, res) {
   try {
+    const result = await submitTransaction(
+      req.params.transactionId,
+      req.body,
+      req.user.id,
+      getClientMeta(req)
+    )
 
-    const {
-      transactionId
-    } = req.params
-
-    const userId = req.user.id
-
-    const result =
-      await submitTransaction(
-        transactionId,
-        req.body,
-        userId,
-        getClientMeta(req)
-      )
-
-    return res.status(200).json({
-
-      success: true,
-      message: result.idempotent_replay
+    return sendOk(
+      res,
+      {
+        ...result,
+        idempotent_replay: Boolean(result.idempotent_replay)
+      },
+      result.idempotent_replay
         ? 'تم إرسال المعاملة مسبقاً'
-        : 'تم العملية بنجاح',
-      data: result,
-      idempotent_replay: Boolean(result.idempotent_replay)
-    })
-
+        : 'تم العملية بنجاح'
+    )
   } catch (err) {
-    return handleTransactionError(res, err)
-  }}
+    return sendControllerError(res, err)
+  }
+}
 
-
-
-
-
-
-    module.exports = {
-
+module.exports = {
   createDraftController,
-
   UpdateDraftController,
-
   getUserDraftByProcessController,
-
   getTransactionController,
-
-  submitTransactionController,
-
-
+  submitTransactionController
 }

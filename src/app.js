@@ -1,11 +1,10 @@
+require('./core/config/env')
+
 const express = require('express')
 const path = require('path')
-const dotenv = require('dotenv')
 const cors = require('cors')
 const errorHandler = require('./core/middleware/errorMiddleware')
 const { setupSwagger } = require('./swagger')
-
-dotenv.config()
 
 const app = express()
 

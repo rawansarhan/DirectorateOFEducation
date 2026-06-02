@@ -1,5 +1,7 @@
 'use strict'
 
+const { HTTP_STATUS } = require('../../../core/middleware/httpStatusCodes')
+
 const {
   ValidateCreateTypeProcess,
   ValidateUpdateTypeProcess
@@ -10,6 +12,12 @@ const typeTransRepository =
 
 const typeProcessMapper =
   require('../mappers/typeProcessMapper')
+
+const {
+  getOrLoad,
+  KEYS,
+  invalidateTypeProcesses
+} = require('../../../core/cache/apiCacheService')
 
 // ======================================================
 // CREATE
@@ -31,7 +39,7 @@ async function createTypeProcessService(data) {
 
     const err = new Error(msg)
 
-    err.statusCode = 400
+    err.statusCode = HTTP_STATUS.BAD_REQUEST
 
     throw err
   }
@@ -43,6 +51,8 @@ async function createTypeProcessService(data) {
 
       name: data.name
     })
+
+  await invalidateTypeProcesses()
 
   // ================= RESPONSE =================
 
@@ -68,7 +78,7 @@ async function updateTypeProcessService(
     const err =
       new Error('Invalid ID')
 
-    err.statusCode = 400
+    err.statusCode = HTTP_STATUS.BAD_REQUEST
 
     throw err
   }
@@ -87,7 +97,7 @@ async function updateTypeProcessService(
 
     const err = new Error(msg)
 
-    err.statusCode = 400
+    err.statusCode = HTTP_STATUS.BAD_REQUEST
 
     throw err
   }
@@ -106,7 +116,7 @@ async function updateTypeProcessService(
         'Type process not found'
       )
 
-    err.statusCode = 404
+    err.statusCode = HTTP_STATUS.NOT_FOUND
 
     throw err
   }
@@ -129,6 +139,8 @@ async function updateTypeProcessService(
       payload
     )
 
+  await invalidateTypeProcesses()
+
   // ================= RESPONSE =================
 
   return typeProcessMapper.toDTO(
@@ -141,13 +153,14 @@ async function updateTypeProcessService(
 // ======================================================
 
 async function getAllTypeProcessesService () {
-  console.log('[TypeProcess] getAllTypeProcesses — all types (including complaint type in catalog)')
-
-  const rows = await typeTransRepository.findAll()
-
-  console.log(`[TypeProcess] returned ${rows.length} type(s)`)
-
-  return rows.map(typeProcessMapper.toDTO)
+  return getOrLoad(
+    KEYS.typeProcesses(),
+    async () => {
+      const rows = await typeTransRepository.findAll()
+      return rows.map(typeProcessMapper.toDTO)
+    },
+    { label: 'GET /api/typeProcess/' }
+  )
 }
 
 // ======================================================

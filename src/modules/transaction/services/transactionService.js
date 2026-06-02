@@ -16,6 +16,14 @@ const {
 const EVENTS = require('../../../core/shared/events/types')
 
 const operationGuardService = require('../../../core/security/operationGuardService')
+const { ensureGenesisHash } = require('./integrityChainService')
+
+const {
+  getOrLoad,
+  KEYS,
+  invalidateTransactionById,
+  invalidateUserTransactionDrafts
+} = require('../../../core/cache/apiCacheService')
 
 async function assertDraftOwnership (draft, userId) {
   if (!draft) {
@@ -36,34 +44,46 @@ async function assertDraftOwnership (draft, userId) {
 }
 
 async function createDraft ({ userId, processId }) {
-  const process = await workflowClient.getProcessById(processId)
+  const processIdNum = parseInt(processId, 10)
 
-  if (!process) {
+  if (!Number.isInteger(processIdNum) || processIdNum < 1) {
     throw new Error('Process not found')
   }
 
-  if (!process.is_active) {
-    throw new Error('Process is inactive')
-  }
+  return getOrLoad(
+    KEYS.createDraft(userId, processIdNum),
+    async () => {
+      const process = await workflowClient.getProcessById(processIdNum)
 
-  const processCode = process.code
+      if (!process) {
+        throw new Error('Process not found')
+      }
 
-  let draft = await repo.findDraftByCode(userId, processCode)
+      if (!process.is_active) {
+        throw new Error('Process is inactive')
+      }
 
-  if (draft) {
-    return draft
-  }
+      const processCode = process.code
 
-  draft = await repo.create({
-    code: processCode,
-    user_id: userId,
-    status: 'draft'
-  })
+      let draft = await repo.findDraftByCode(userId, processCode)
 
-  return {
-    isNew: true,
-    draft
-  }
+      if (draft) {
+        return draft
+      }
+
+      draft = await repo.create({
+        code: processCode,
+        user_id: userId,
+        status: 'draft'
+      })
+
+      return {
+        isNew: true,
+        draft
+      }
+    },
+    { label: `POST /api/transaction/CreateDraft/${processIdNum}` }
+  )
 }
 
 async function UpdateDraft ({ transId, userId, data }) {
@@ -86,6 +106,9 @@ async function UpdateDraft ({ transId, userId, data }) {
 
   const updated = await repo.findById(transId)
 
+  await invalidateTransactionById(userId, transId)
+  await invalidateUserTransactionDrafts(userId)
+
   return {
     isNew: false,
     draft: updated,
@@ -95,33 +118,57 @@ async function UpdateDraft ({ transId, userId, data }) {
 }
 
 async function getUserDraftByProcess (userId, processId) {
-  const process = await workflowClient.getProcessById(processId)
+  const processIdNum = parseInt(processId, 10)
 
-  if (!process) {
-    throw new Error('لا يوجد عملية')
+  if (!Number.isInteger(processIdNum) || processIdNum < 1) {
+    throw new Error('معرّف العملية غير صالح')
   }
 
-  const draft = await repo.findDraftByCode(userId, process.code)
+  return getOrLoad(
+    KEYS.transactionDraft(userId, processIdNum),
+    async () => {
+      const process = await workflowClient.getProcessById(processIdNum)
 
-  if (!draft) {
-    throw new Error('لا يوجد مسودة')
-  }
+      if (!process) {
+        throw new Error('لا يوجد عملية')
+      }
 
-  return draft
+      const draft = await repo.findDraftByCode(userId, process.code)
+
+      if (!draft) {
+        throw new Error('لا يوجد مسودة')
+      }
+
+      return draft
+    },
+    { label: `GET /api/transaction/draft/${processIdNum}` }
+  )
 }
 
 async function getTransactionById (transactionId, userId) {
-  const transaction = await repo.findById(transactionId)
+  const transactionIdNum = parseInt(transactionId, 10)
 
-  if (!transaction) {
+  if (!Number.isInteger(transactionIdNum) || transactionIdNum < 1) {
     throw new Error('Transaction not found')
   }
 
-  if (userId && transaction.user_id !== userId) {
-    throw new Error('Unauthorized access')
-  }
+  return getOrLoad(
+    KEYS.transactionById(userId, transactionIdNum),
+    async () => {
+      const transaction = await repo.findById(transactionIdNum)
 
-  return transaction
+      if (!transaction) {
+        throw new Error('Transaction not found')
+      }
+
+      if (userId && transaction.user_id !== userId) {
+        throw new Error('Unauthorized access')
+      }
+
+      return transaction
+    },
+    { label: `GET /api/transaction/${transactionIdNum}` }
+  )
 }
 
 async function submitTransaction (transactionId, data, userId, clientMeta = {}) {
@@ -189,6 +236,8 @@ async function submitTransaction (transactionId, data, userId, clientMeta = {}) 
       status: 'submitted'
     })
 
+    await ensureGenesisHash(transaction)
+
     await outboxRepository.create({
       event_type: EVENTS.TRANSACTION_SUBMITTED,
       payload: {
@@ -201,6 +250,9 @@ async function submitTransaction (transactionId, data, userId, clientMeta = {}) 
     const plain = refreshed.get
       ? refreshed.get({ plain: true })
       : refreshed
+
+    await invalidateTransactionById(userId, transactionId)
+    await invalidateUserTransactionDrafts(userId)
 
     return operationGuardService.commit(guardContext, {
       ...plain,

@@ -41,6 +41,15 @@ class StageRepository {
     return Stage.findByPk(id)
   }
 
+  async findByProcessId (processId) {
+    return Stage.findAll({
+      where: {
+        process_definition_id: processId
+      },
+      order: [['id', 'ASC']]
+    })
+  }
+
   async findFirstAuthStage (processId) {
     return await Stage.findOne({
       where: {
