@@ -1,5 +1,7 @@
 'use strict'
 
+const { buildProcessDefinitionCode } = require('../../modules/workflow/utils/processDefinitionCode')
+
 module.exports = (sequelize, DataTypes) => {
   class ProcessDefinition extends sequelize.Sequelize.Model {
     static associate (models) {
@@ -124,6 +126,17 @@ module.exports = (sequelize, DataTypes) => {
       updatedAt: 'updated_at'
     }
   )
+
+  ProcessDefinition.addHook('afterCreate', async (instance) => {
+    const version = instance.version ?? 1
+    const code = buildProcessDefinitionCode(instance.id, version)
+
+    if (instance.code === code) {
+      return
+    }
+
+    await instance.update({ code }, { hooks: false })
+  })
 
   return ProcessDefinition
 }

@@ -24,7 +24,6 @@ const createProcessDefinition = asyncHandler(async (req, res) => {
 
     const data = {
       name: req.body.name,
-      code: req.body.code,
       is_complaint: isComplaint,
       type_trans_id: isComplaint ? null : Number(req.body.type_trans_id),
       organization_id: req.body.organization_id

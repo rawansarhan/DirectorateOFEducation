@@ -1056,7 +1056,14 @@ const swaggerOptions = {
             status_code: { type: 'integer', example: 400 },
             message: { type: 'string', example: 'Validation error' },
             error: { type: 'string', example: 'Validation error' },
-            data: { type: 'null', nullable: true }
+            data: { type: 'object', nullable: true, example: null }
+          },
+          example: {
+            success: false,
+            status_code: 400,
+            message: 'ملف BPMN مطلوب !',
+            error: 'ملف BPMN مطلوب !',
+            data: null
           }
         },
 
@@ -1492,23 +1499,93 @@ const swaggerOptions = {
           type: 'object',
           required: ['file', 'name', 'priority', 'start_date'],
           properties: {
-            file: { type: 'string', format: 'binary' },
+            file: { type: 'string', format: 'binary', description: 'ملف BPMN' },
             name: { type: 'string', example: 'Leave Process' },
-            code: { type: 'string', example: 'LEAVE_001' },
             is_complaint: {
               type: 'boolean',
               default: false,
-              description: 'true → type_trans_id = null'
+              description: 'true → type_trans_id = null (معاملة شكوى)'
             },
             type_trans_id: {
               type: 'integer',
               nullable: true,
+              example: 2,
               description: 'مطلوب عند is_complaint = false'
             },
             organization_id: { type: 'integer', example: 10 },
             priority: { type: 'integer', example: 1 },
-            start_date: { type: 'string', format: 'date' },
-            end_date: { type: 'string', format: 'date', nullable: true }
+            start_date: {
+              type: 'string',
+              format: 'date',
+              example: '2026-01-01',
+              description: 'تاريخ البداية — يُقبل تاريخ اليوم أو أي تاريخ سابق؛ العملية تصبح active بعد الموافقة إذا start_date ≤ اليوم'
+            },
+            end_date: {
+              type: 'string',
+              format: 'date',
+              nullable: true,
+              example: '2026-06-30',
+              description: 'تاريخ النهاية اختياري — يجب أن يكون أكبر من start_date (يُقبل تاريخ سابق إذا كان بعد start_date)'
+            }
+          }
+        },
+
+        ProcessDefinitionCreateData: {
+          type: 'object',
+          properties: {
+            process: {
+              type: 'object',
+              description: 'code يُولَّد تلقائياً: process-{id}-v{version}',
+              properties: {
+                id: { type: 'integer', example: 12 },
+                name: { type: 'string', example: 'Leave Process' },
+                code: { type: 'string', example: 'process-12-v1', readOnly: true },
+                version: { type: 'integer', example: 1 },
+                status: { type: 'string', example: 'deployed' },
+                camunda_process_key: { type: 'string', example: 'Process_1' },
+                is_complaint: { type: 'boolean', example: false },
+                type_trans_id: { type: 'integer', nullable: true, example: 2 },
+                organization_id: { type: 'integer', nullable: true, example: 10 },
+                priority: { type: 'integer', example: 1 },
+                start_date: { type: 'string', format: 'date-time' },
+                end_date: { type: 'string', format: 'date-time', nullable: true }
+              }
+            },
+            stages: {
+              type: 'array',
+              items: { type: 'object' },
+              description: 'المراحل المُولَّدة من Camunda'
+            }
+          }
+        },
+
+        ProcessDefinitionCreateSuccessResponse: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            status_code: { type: 'integer', example: 200 },
+            message: { type: 'string', example: 'تم إنشاء العملية بنجاح' },
+            data: { $ref: '#/components/schemas/ProcessDefinitionCreateData' }
+          },
+          example: {
+            success: true,
+            status_code: 200,
+            message: 'تم إنشاء العملية بنجاح',
+            data: {
+              process: {
+                id: 12,
+                name: 'Leave Process',
+                code: 'process-12-v1',
+                version: 1,
+                status: 'deployed',
+                camunda_process_key: 'Process_1',
+                is_complaint: false,
+                type_trans_id: 2,
+                organization_id: 10,
+                priority: 1
+              },
+              stages: []
+            }
           }
         }
       }

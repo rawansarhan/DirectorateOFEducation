@@ -282,48 +282,10 @@ async deactivateProcesses(now) {
 
 
 /////////////////////////////////////////////////////////////////////////////
-async  update(id, data) {
+async update (id, data) {
   return await ProcessDefinition.update(data, {
     where: { id }
   })
-}
-
-
-/////////////////////////////////////////////////////////////////////////
-
-async  activateProcesses(now) {
-
-  return await ProcessDefinition.update(
-    { is_active: true },
-    {
-      where: {
-        start_date: {
-          [Op.lte]: now
-        },
-        approval_status: 'APPROVED',
-        is_active: false
-      }
-    }
-  )
-}
-
-// =====================================
-// DEACTIVATE PROCESSES
-// =====================================
-
-async  deactivateProcesses(now) {
-
-  return await ProcessDefinition.update(
-    { is_active: false },
-    {
-      where: {
-        end_date: {
-          [Op.lt]: now
-        },
-        is_active: true
-      }
-    }
-  )
 }
 
 }

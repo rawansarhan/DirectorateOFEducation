@@ -29,52 +29,38 @@ const { authMiddleware ,authorize } = require('../../../core/middleware/authMidd
  *       content:
  *         multipart/form-data:
  *           schema:
- *             type: object
- *             required:
- *               - file
- *               - name
- *               - priority
- *               - start_date
- *             properties:
- *               file:
- *                 type: string
- *                 format: binary
- *                 description: BPMN file
- *               name:
- *                 type: string
- *                 example: Leave Process
- *               code:
- *                 type: string
- *                 example: LEAVE_001
- *               is_complaint:
- *                 type: boolean
- *                 default: false
- *                 description: |
- *                   إذا true → type_trans_id يجب أن يكون null (معاملة شكوى)
- *               type_trans_id:
- *                 type: integer
- *                 nullable: true
- *                 example: 2
- *                 description: مطلوب فقط عندما is_complaint = false
- *               organization_id:
- *                 type: integer
- *                 example: 10
- *               priority:
- *                 type: integer
- *                 example: 1
- *               start_date:
- *                 type: string
- *                 format: date
- *                 example: 2026-01-01
- *               end_date:
- *                 type: string
- *                 format: date
- *                 example: 2026-12-31
+ *             $ref: '#/components/schemas/ProcessDefinitionCreateForm'
  *     responses:
  *       200:
- *         description: تم إنشاء العملية بنجاح.
+ *         description: تم إنشاء العملية بنجاح
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ProcessDefinitionCreateSuccessResponse'
  *       400:
- *         description: ملف BPMN مطلوب أو خطأ بالبيانات.
+ *         description: ملف BPMN مطلوب أو خطأ بالبيانات
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ApiErrorResponse'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ApiErrorResponse'
+ *       403:
+ *         description: Forbidden — PROCESS_CREATE permission required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ApiErrorResponse'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ApiErrorResponse'
  */
 router.post(
   '/create',

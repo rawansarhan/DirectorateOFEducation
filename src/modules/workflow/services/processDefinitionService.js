@@ -31,6 +31,10 @@ const {
   invalidateAllProcessLists
 } = require('../../../core/cache/processCacheService')
 
+const {
+  isProcessActiveBySchedule
+} = require('../utils/processActivation')
+
 const LOG_PREFIX = '[ProcessDefinition]'
 
 /** تحويل is_complaint من multipart/form (string/boolean) */
@@ -39,13 +43,12 @@ function parseBoolean (value) {
 }
 
 /**
- * إنشاء ProcessDefinition جديد
  * - is_complaint=true  → type_trans_id = null (شكوى)
  * - is_complaint=false → type_trans_id مطلوب (معاملة عادية)
  * - بعد الإنشاء: مسح كاش قوائم المعاملات
  */
 async function createProcessDefinitionService (data) {
-  console.log(`${LOG_PREFIX} createProcessDefinition code=${data.code}`)
+  console.log(`${LOG_PREFIX} createProcessDefinition name=${data.name}`)
 
   const { error } = createProcessDefinitionSchema.validate(data)
 
@@ -77,22 +80,27 @@ async function createProcessDefinitionService (data) {
   console.log(`${LOG_PREFIX} deploying BPMN → Camunda...`)
   const deployRes = await camundaClient.deployProcess(data.filePath)
 
+  const version = 1
+
   const process = await processRepository.create({
     name: data.name,
-    code: data.code || deployRes.processKey,
     camunda_process_key: deployRes.processKey,
     camunda_deployment_id: deployRes.deploymentId,
     is_complaint: isComplaint,
     type_trans_id: isComplaint ? null : data.type_trans_id,
     organization_id: data.organization_id || null,
     status: 'deployed',
-    version: 1,
+    version,
     priority: data.priority,
     start_date: data.start_date,
     end_date: data.end_date
   })
 
-  console.log(`${LOG_PREFIX} created process id=${process.id} — invalidating cache...`)
+  await process.reload()
+
+  console.log(
+    `${LOG_PREFIX} created process id=${process.id} code=${process.code} — invalidating cache...`
+  )
   await invalidateAllProcessLists()
 
   return process
@@ -348,14 +356,20 @@ async function reviewProcess(
     throw new Error('العملية غير موجودة')
   }
 
-  // update
+  const updatePayload = {
+    approval_status: approvalStatus
+  }
 
-  await processRepository.update(
-    processId,
-    {
-      approval_status: approvalStatus
-    }
-  )
+  if (decision === 'APPROVE') {
+    updatePayload.is_active = isProcessActiveBySchedule(
+      process.start_date,
+      process.end_date
+    )
+  } else {
+    updatePayload.is_active = false
+  }
+
+  await processRepository.update(processId, updatePayload)
 
   console.log(`${LOG_PREFIX} review process id=${processId} → ${approvalStatus} — invalidating cache...`)
   await invalidateAllProcessLists()

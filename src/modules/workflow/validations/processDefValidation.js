@@ -1,15 +1,10 @@
 const Joi = require('joi')
 
-const today = new Date()
-today.setHours(0, 0, 0, 0)
-
 const createProcessDefinitionSchema = Joi.object({
   name: Joi.string()
     .min(3)
     .max(100)
     .required(),
-
-  code: Joi.string().required(),
 
   filePath: Joi.string().required(),
 
@@ -31,11 +26,10 @@ const createProcessDefinitionSchema = Joi.object({
     .required(),
 
   start_date: Joi.date()
-    .min(today)
-    .allow(null)
+    .required()
     .messages({
       'date.base': 'start_date يجب أن يكون تاريخ صحيح',
-      'date.min': 'start_date يجب أن يكون من اليوم أو بعده'
+      'any.required': 'start_date مطلوب'
     }),
 
   end_date: Joi.date()
