@@ -110,12 +110,16 @@ function toPlain (value) {
     return value
   }
 
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value.toISOString()
+  }
+
   if (Array.isArray(value)) {
     return value.map(toPlain)
   }
 
   if (typeof value.get === 'function') {
-    return value.get({ plain: true })
+    return toPlain(value.get({ plain: true }))
   }
 
   if (typeof value === 'object') {
