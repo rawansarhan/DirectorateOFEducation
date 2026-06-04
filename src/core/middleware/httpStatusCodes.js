@@ -92,6 +92,31 @@ const HTTP_STATUS_MESSAGE = Object.freeze({
   [HTTP_STATUS.INTERNAL_SERVER_ERROR]: 'Internal Server Error'
 })
 
+const WORKFLOW_NOT_FOUND_MESSAGES = new Set([
+  'Task not found',
+  'Process instance not found',
+  'Transaction not found',
+  'Process not found',
+  'Stage not found',
+  'Signing challenge not found'
+])
+
+const WORKFLOW_BAD_REQUEST_MESSAGES = new Set([
+  'decision does not match the signed signing challenge',
+  'decision is required to verify signing challenge',
+  'decision is required when completing a task with digital signature',
+  'Signing challenge does not belong to this user',
+  'Signing challenge already used (replay attack)',
+  'Signing challenge expired',
+  'Digital signature is not required for this task',
+  'Digital key is not active',
+  'Invalid digital signature',
+  'stage_name does not match current task stage',
+  'Process is inactive',
+  'Digital signature is required. Call POST /tasks/:taskId/signing-challenge first.',
+  'لا يوجد مفتاح رقمي مرتبط بهذا الموظف'
+])
+
 function resolveHttpStatusFromError (err, defaultStatus = HTTP_STATUS.BAD_REQUEST) {
   if (err?.statusCode) {
     return err.statusCode
@@ -101,12 +126,23 @@ function resolveHttpStatusFromError (err, defaultStatus = HTTP_STATUS.BAD_REQUES
     return ERROR_CODE_STATUS[err.code]
   }
 
-  if (err?.message === 'Task not found' || err?.message === 'Process instance not found') {
+  const message = err?.message
+
+  if (message && WORKFLOW_NOT_FOUND_MESSAGES.has(message)) {
     return HTTP_STATUS.NOT_FOUND
   }
 
-  if (err?.message === 'Transaction not found') {
-    return HTTP_STATUS.NOT_FOUND
+  if (message && WORKFLOW_BAD_REQUEST_MESSAGES.has(message)) {
+    return HTTP_STATUS.BAD_REQUEST
+  }
+
+  if (
+    message &&
+    (message.includes('signing challenge') ||
+      message.includes('Digital signature') ||
+      message.includes('required'))
+  ) {
+    return HTTP_STATUS.BAD_REQUEST
   }
 
   return defaultStatus

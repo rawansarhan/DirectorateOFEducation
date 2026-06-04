@@ -2,11 +2,11 @@
 
 const Joi = require('joi')
 
+const taskDecisionSchema = Joi.string().min(1).max(64).required()
+
 const signingChallengePayloadSchema = Joi.object({
   pin: Joi.string().min(4).max(12).required(),
-  variables: Joi.object({
-    action: Joi.string().min(1).max(512).required()
-  }).required().unknown(false)
+  decision: taskDecisionSchema
 }).unknown(false)
 
 function validateSigningChallengePayload (payload = {}) {
@@ -26,6 +26,7 @@ function validateSigningChallengePayload (payload = {}) {
 }
 
 module.exports = {
+  taskDecisionSchema,
   signingChallengePayloadSchema,
   validateSigningChallengePayload
 }

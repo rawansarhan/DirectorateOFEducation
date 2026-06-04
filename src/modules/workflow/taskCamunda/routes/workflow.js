@@ -65,7 +65,7 @@ router.get('/tasks/:taskId', authMiddleware, getTaskDetailsController)
  *     description: |
  *       الخطوة 1 قبل complete عندما تتطلب المرحلة توقيع USB.
  *       1. GET /tasks/{taskId} — احصل على task lock
- *       2. أرسل pin + variables.action
+ *       2. أرسل pin + decision (مثل approve / reject)
  *       3. وقّع حقل `message` من الاستجابة بـ USB
  *       4. أرسل challenge_id + signature في POST /tasks/{taskId}/complete
  *     tags: [Workflow]
@@ -117,7 +117,7 @@ router.post(
  *       **تسلسل مقترح:**
  *       1. `GET /api/workflow/tasks/{taskId}` — task lock
  *       2. إذا التوقيع مطلوب: `POST /tasks/{taskId}/signing-challenge` ثم وقّع `message` من USB
- *       3. `POST /tasks/{taskId}/complete` — أرسل stage_name/fields/files/templates/variables/signature/idempotency_key
+ *       3. `POST /tasks/{taskId}/complete` — أرسل stage_name/fields/files/templates/variables/decision/signature/idempotency_key
  *
  *       **Response `data` (بدون actions):**
  *       `stage_name` → `fields` → `files` → `templates` (مع `path`) → `variables` → `signature` → `idempotency_key`
@@ -127,7 +127,8 @@ router.post(
  *       - error: `{ success, status_code, message, error, data: null }`
  *
  *       **ملاحظات:**
- *       - `variables.action` لتوجيه مسار Camunda (approve / reject ...)
+ *       - `variables.decision` لتوجيه مسار Camunda (مثل over_50 — يطابق شرط BPMN)
+ *       - `decision` قرار التوقيع (approve / reject) — يجب أن يطابق signing-challenge
  *       - `signature.challenge_id` + `signature.signature` من signing-challenge
  *       - `expected_version` اختياري لمنع تعارض التحديث
  *       - `idempotency_key` في الـ body (أو هيدر `Idempotency-Key`) — يُسجَّل **بعد** نجاح التوقيع

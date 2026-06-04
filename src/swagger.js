@@ -1172,15 +1172,20 @@ const swaggerOptions = {
             },
             variables: {
               type: 'object',
-              required: ['action'],
+              required: ['decision'],
               properties: {
-                action: {
+                decision: {
                   type: 'string',
-                  example: 'اذا كان العمر اقل من خمسين',
-                  description: 'مسار Camunda gateway'
+                  example: 'over_50',
+                  description: 'متغير Camunda للـ gateway — يطابق BPMN مثل ${decision == "over_50"}'
                 }
               },
               additionalProperties: false
+            },
+            decision: {
+              type: 'string',
+              example: 'approve',
+              description: 'قرار التوقيع USB (approve / reject) — مستقل عن variables.decision'
             },
             signature: {
               $ref: '#/components/schemas/StageSubmissionSignature'
@@ -1203,7 +1208,7 @@ const swaggerOptions = {
             }
           },
           example: {
-            stage_name: 'مرحلة الموافقة',
+            stage_name: 'التشيك على العمر',
             fields: [
               { key: 'citizen_name', value: 'روان سرحان' }
             ],
@@ -1214,10 +1219,11 @@ const swaggerOptions = {
               { template_id: 1, values: { full_name: 'روان' } }
             ],
             variables: {
-              action: 'اذا كان العمر اقل من خمسين'
+              decision: 'over_50'
             },
+            decision: 'approve',
             signature: {
-              challenge_id: '592d2a9d-fb20-4c69-bac4-8b3001313991',
+              challenge_id: '53fb4988-4a82-4e48-8326-fe463f1e3820',
               signature: 'Zki6/aI4DlyawrBtQ5fMipuAmE+plNa4o955RmwoOdjGBesSRK3DufMyyiG3VApD3rf5AtJSDaBrFs6MW7ZYBw=='
             },
             idempotency_key: '0dbc8ad0-2618-4be2-8080-07e13c862d9b'
@@ -1275,11 +1281,17 @@ const swaggerOptions = {
             },
             variables: {
               type: 'object',
-              required: ['action'],
+              required: ['decision'],
               properties: {
-                action: { type: 'string', example: 'اذا كان العمر اقل من خمسين' }
+                decision: { type: 'string', example: 'over_50' }
               },
               additionalProperties: false
+            },
+            decision: {
+              type: 'string',
+              nullable: true,
+              example: 'approve',
+              description: 'قرار التوقيع — ليس مسار Camunda'
             },
             signature: {
               $ref: '#/components/schemas/StageSubmissionSignature'
@@ -1310,7 +1322,7 @@ const swaggerOptions = {
               }
             ],
             variables: {
-              action: 'اذا كان العمر اقل من خمسين'
+              decision: 'over_50'
             },
             signature: {
               challenge_id: '592d2a9d-fb20-4c69-bac4-8b3001313991',
@@ -1363,7 +1375,7 @@ const swaggerOptions = {
 
         SigningChallengePayload: {
           type: 'object',
-          required: ['pin', 'variables'],
+          required: ['pin', 'decision'],
           additionalProperties: false,
           properties: {
             pin: {
@@ -1371,21 +1383,15 @@ const swaggerOptions = {
               example: '123456',
               description: 'رمز PIN للموظف'
             },
-            variables: {
-              type: 'object',
-              required: ['action'],
-              additionalProperties: false,
-              properties: {
-                action: {
-                  type: 'string',
-                  example: 'approve'
-                }
-              }
+            decision: {
+              type: 'string',
+              example: 'approve',
+              description: 'قرار الموظف للتوقيع — يُقارَن عند complete (approve / reject ...)'
             }
           },
           example: {
             pin: '123456',
-            variables: { action: 'approve' }
+            decision: 'approve'
           }
         },
 

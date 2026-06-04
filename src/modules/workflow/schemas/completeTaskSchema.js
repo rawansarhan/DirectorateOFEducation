@@ -1,6 +1,7 @@
 'use strict'
 
 const Joi = require('joi')
+const { taskDecisionSchema } = require('./signingChallengeSchema')
 
 const fieldItemSchema = Joi.object({
   key: Joi.string().max(128).required(),
@@ -28,8 +29,13 @@ const actionItemSchema = Joi.object({
 const completeTaskPayloadSchema = Joi.object({
   stage_name: Joi.string().max(256).optional(),
   variables: Joi.object({
-    action: Joi.string().min(1).max(512).required()
+    decision: Joi.string().min(1).max(128).required()
   }).required().unknown(false),
+  decision: taskDecisionSchema.when('signature', {
+    is: Joi.exist(),
+    then: Joi.required(),
+    otherwise: Joi.optional()
+  }),
   signature: Joi.object({
     challenge_id: Joi.string().uuid().required(),
     signature: Joi.string().min(16).required()

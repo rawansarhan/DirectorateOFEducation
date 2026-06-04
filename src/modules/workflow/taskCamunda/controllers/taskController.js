@@ -6,8 +6,7 @@ const { createSigningChallenge } = require('../services/transactionSigningServic
 const { getClientMeta } = require('../../../../core/security/securityConfig')
 const {
   sendWorkflowSuccess,
-  sendWorkflowError,
-  HTTP_STATUS
+  sendWorkflowError
 } = require('../../../../core/utils/workflowResponseHelper')
 const { validateCompleteTaskPayload } = require('../../schemas/completeTaskSchema')
 
@@ -24,9 +23,13 @@ async function startWorkflowController (req, res) {
 
     const result = await startWorkflow({ transactionId, processCode })
 
-    return sendWorkflowSuccess(res, result, 'Workflow started successfully')
+    return sendWorkflowSuccess(
+      res,
+      result.data,
+      result.message || 'Workflow started successfully'
+    )
   } catch (error) {
-    return sendWorkflowError(res, error, HTTP_STATUS.BAD_REQUEST)
+    return sendWorkflowError(res, error)
   }
 }
 
@@ -45,7 +48,7 @@ async function createSigningChallengeController (req, res) {
       'Signing challenge created successfully'
     )
   } catch (error) {
-    return sendWorkflowError(res, error, HTTP_STATUS.BAD_REQUEST)
+    return sendWorkflowError(res, error)
   }
 }
 
@@ -79,7 +82,7 @@ async function completeTaskController (req, res) {
         : 'تم إكمال المهمة بنجاح'
     )
   } catch (error) {
-    return sendWorkflowError(res, error, HTTP_STATUS.INTERNAL_SERVER_ERROR)
+    return sendWorkflowError(res, error)
   }
 }
 
@@ -91,7 +94,7 @@ async function getAllTasksController (req, res) {
 
     return sendWorkflowSuccess(res, result.data, result.message)
   } catch (error) {
-    return sendWorkflowError(res, error, HTTP_STATUS.INTERNAL_SERVER_ERROR)
+    return sendWorkflowError(res, error)
   }
 }
 
@@ -104,7 +107,7 @@ async function getTaskDetailsController (req, res) {
 
     return sendWorkflowSuccess(res, result.data, result.message)
   } catch (error) {
-    return sendWorkflowError(res, error, HTTP_STATUS.INTERNAL_SERVER_ERROR)
+    return sendWorkflowError(res, error)
   }
 }
 

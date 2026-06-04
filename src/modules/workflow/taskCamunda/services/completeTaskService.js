@@ -25,7 +25,8 @@ const documentTemplateRepository =
   require('../../../requirements/repositories/documentTemplateRepository')
 const {
   requiresDigitalSignature,
-  verifyAndPersistSignature,
+  verifySignatureForComplete,
+  persistVerifiedSignature,
   buildTransactionSignatureLedger,
   appendSignatureToTransactionData
 } = require('./transactionSigningService')
@@ -238,6 +239,7 @@ function buildCompleteTaskResponseData ({
     files: stageSnapshot.files,
     templates: stageSnapshot.templates,
     variables: payload.variables || {},
+    decision: payload.decision || null,
     idempotency_key: idempotencyKey || payload.idempotency_key || null
   }
 
@@ -281,7 +283,7 @@ async function completeTaskCore ({
    *
    * {
    *   variables: {
-   *     action: 'approve'
+   *     decision: 'over_50'
    *   }
    * }
    *
@@ -367,9 +369,16 @@ async function completeTaskCore ({
   }
 
   const stageConfig = await stageConfigRepository.findByStageId(stage.id)
-  let digitalSignatureRecord = null
+  const needsSignature = requiresDigitalSignature(
+    stage,
+    payload,
+    stageConfig,
+    { isAutoComplete }
+  )
 
-  if (requiresDigitalSignature(stage, payload, stageConfig, { isAutoComplete })) {
+  let signingRequest = null
+
+  if (needsSignature) {
     const challengeId = payload.signature?.challenge_id
     const signature = payload.signature?.signature
 
@@ -379,11 +388,23 @@ async function completeTaskCore ({
       )
     }
 
-    digitalSignatureRecord = await verifyAndPersistSignature({
+    if (!payload.decision) {
+      throw new Error(
+        'decision is required when completing a task with digital signature'
+      )
+    }
+
+    signingRequest = {
+      challengeId,
+      signature,
+      decision: payload.decision
+    }
+
+    await verifySignatureForComplete({
       challengeId,
       signature,
       userId,
-      variables: payload.variables || {},
+      decision: payload.decision,
       clientMeta
     })
   }
@@ -419,10 +440,6 @@ async function completeTaskCore ({
     files: [],
     templates: [],
     actions: []
-  }
-
-  if (digitalSignatureRecord) {
-    stageSnapshot.digital_signature = toPublicSignatureRecord(digitalSignatureRecord)
   }
 
   // ====================================================
@@ -497,6 +514,10 @@ async function completeTaskCore ({
 
   if (payload.variables && Object.keys(payload.variables).length) {
     stageSnapshot.variables = payload.variables
+  }
+
+  if (payload.decision) {
+    stageSnapshot.decision = payload.decision
   }
 
   // ====================================================
@@ -575,16 +596,49 @@ async function completeTaskCore ({
    * }
    */
 
+  // ====================================================
+  // PREPARE CAMUNDA VARIABLES
+  // ====================================================
+
+  const variables = {}
+
+  if (payload.variables) {
+    Object.entries(payload.variables).forEach(([key, value]) => {
+      variables[key] = {
+        value
+      }
+    })
+  }
+
+  // ====================================================
+  // COMPLETE TASK IN CAMUNDA (before any DB persist)
+  // ====================================================
+
+  await camundaClient.completeTask(task.id, variables)
+
+  // ====================================================
+  // PERSIST STAGE + SIGNATURE (only after Camunda succeeds)
+  // ====================================================
+
+  let digitalSignatureRecord = null
+
+  if (signingRequest) {
+    digitalSignatureRecord = await persistVerifiedSignature({
+      challengeId: signingRequest.challengeId,
+      signature: signingRequest.signature,
+      userId,
+      clientMeta
+    })
+
+    stageSnapshot.digital_signature =
+      toPublicSignatureRecord(digitalSignatureRecord)
+  }
+
   let transactionData = {
     ...(transaction.data || {})
   }
 
-  // ====================================================
-  // SAVE STAGE SNAPSHOT UNDER STAGE CODE
-  // ====================================================
-
   transactionData[stage.code] = {
-    ...(transactionData[stage.code] || {}),
     ...stageSnapshot,
     completed_by: userId,
     completed_at: new Date()
@@ -611,9 +665,13 @@ async function completeTaskCore ({
     })
   }
 
-  // ====================================================
-  // UPDATE TRANSACTION DATA
-  // ====================================================
+  transactionData = await runServiceTaskActions({
+    processInstance,
+    transaction,
+    transactionData,
+    task,
+    userId
+  })
 
   const updatedTransaction = await transactionClient.updateData(
     transaction.id,
@@ -622,10 +680,6 @@ async function completeTaskCore ({
   )
 
   currentVersion = updatedTransaction.version
-
-  // ====================================================
-  // SAVE STAGE EVENT
-  // ====================================================
 
   await outboxRepository.create({
     event_type: EVENTS.PROCESSINSTANCESTAGE_CREATED,
@@ -650,54 +704,6 @@ async function completeTaskCore ({
       data: transactionData[stage.code]
     }
   })
-
-  // ====================================================
-  // PREPARE CAMUNDA VARIABLES
-  // ====================================================
-
-  /**
-   * Example:
-   *
-   * {
-   *   variables: {
-   *     action: 'approve'
-   *   }
-   * }
-   */
-
-  const variables = {}
-
-  if (payload.variables) {
-    Object.entries(payload.variables).forEach(([key, value]) => {
-      variables[key] = {
-        value
-      }
-    })
-  }
-
-  // ====================================================
-  // COMPLETE TASK IN CAMUNDA
-  // ====================================================
-
-  await camundaClient.completeTask(task.id, variables)
-
-  transactionData = await runServiceTaskActions({
-    processInstance,
-    transaction,
-    transactionData,
-    task,
-    userId
-  })
-
-  if (transactionData._executedServiceTasks?.length) {
-    const serviceTaskUpdate = await transactionClient.updateData(
-      transaction.id,
-      transactionData,
-      currentVersion
-    )
-
-    currentVersion = serviceTaskUpdate.version
-  }
 
   // ====================================================
   // GET NEXT TASK
