@@ -18,9 +18,6 @@ const stageConfigMapper = require('../mappers/stageConfigMapper')
 const processRepository =
   require('../repositories/processRepository')
 
-const {
-  invalidateAllProcessLists
-} = require('../../../core/cache/processCacheService')
 
 const {
   getOrLoad,

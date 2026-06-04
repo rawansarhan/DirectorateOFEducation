@@ -28,6 +28,9 @@ const orgDeptRolesClient = require('../../../core/shared/clients/organization/or
 const {
   isProcessActiveBySchedule
 } = require('../utils/processActivation')
+const {
+  invalidateAllProcessLists
+} = require('../../../core/cache/processCacheService')
 
 const LOG_PREFIX = '[ProcessDefinition]'
 

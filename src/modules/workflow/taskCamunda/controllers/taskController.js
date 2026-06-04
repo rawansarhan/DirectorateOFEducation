@@ -14,7 +14,6 @@ const { respondIfSecurityError } = require('../../../../core/security/securityRe
 
 const ApiResponder = require('../../../../core/utils/apiResponder')
 const {
-  sendWorkflowSuccess,
   sendWorkflowError,
   workflowValidationError
 } = require('../../../../core/utils/workflowResponseHelper')
@@ -135,7 +134,8 @@ async function createSigningChallengeController (req, res) {
 
 
 async function completeTaskController (req, res) {
-try{
+  try {
+    const { error: validationError } = validateCompleteTaskPayload(req.body)
     if (validationError) {
       return sendWorkflowError(
         res,

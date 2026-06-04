@@ -330,6 +330,7 @@ async function invalidateAllTransactionsForUser (userId) {
 
 module.exports = {
   KEYS,
+  deleteKeysByPattern,
   getOrLoad,
   invalidateOrganizations,
   invalidateTypeProcesses,
