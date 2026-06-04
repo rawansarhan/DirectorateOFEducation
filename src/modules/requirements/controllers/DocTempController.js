@@ -1,4 +1,5 @@
 const asyncHandler = require('../../../core/middleware/asyncHandler')
+const ApiResponder = require('../../../core/utils/apiResponder')
 
 
 const {
@@ -20,16 +21,9 @@ const createDocumentTemplate = asyncHandler(async (req, res) => {
       : null
     }
     const result = await createDocumentTemplateService(data)
-    return res.status(201).json({
-      success: true,
-      message: 'تم انشاء القالب بنجاح',
-      data: result
-    })
+    return ApiResponder.createdResponse(res, result, 'تم انشاء القالب بنجاح')
   } catch (err) {
-    return res.status(400).json({
-      success: false,
-      message: err.message
-    })
+    return ApiResponder.badRequestResponse(res, err.message)
   }
 })
 
@@ -44,16 +38,9 @@ const updateDocumentTemplate = asyncHandler(async (req, res) => {
     }
     const Id = req.params.id
     const result = await updateDocumentTemplateService(Id,data)
-    return res.status(201).json({
-      success: true,
-      message: 'تم تعديل القالب بنجاح',
-      data: result
-    })
+    return ApiResponder.createdResponse(res, result, 'تم تعديل القالب بنجاح')
   } catch (err) {
-    return res.status(400).json({
-      success: false,
-      message: err.message
-    })
+    return ApiResponder.badRequestResponse(res, err.message)
   }
 })
 
@@ -64,12 +51,9 @@ const getAllActiveDocumentTemplates = asyncHandler(async (req, res) => {
   try {
     const result = await getAllActiveDocumentTemplatesService()
 
-    return res.status(200).json(result)
+    return ApiResponder.okResponse(res, result)
   } catch (err) {
-    return res.status(400).json({
-      success: false,
-      message: err.message
-    })
+    return ApiResponder.badRequestResponse(res, err.message)
   }
 })
 //=========================================
@@ -79,12 +63,9 @@ const getOneActiveDocumentTemplate = asyncHandler(async (req, res) => {
   try {
     const result = await getOneActiveDocumentTemplateService(req.params.id)
 
-    return res.status(200).json(result)
+    return ApiResponder.okResponse(res, result)
   } catch (err) {
-    return res.status(400).json({
-      success: false,
-      message: err.message
-    })
+    return ApiResponder.badRequestResponse(res, err.message)
   }
 })
 

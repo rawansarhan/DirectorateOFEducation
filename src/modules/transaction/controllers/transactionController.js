@@ -1,6 +1,10 @@
+const ApiResponder = require('../../../core/utils/apiResponder')
+
 const {
 
-  createOrUpdateDraft,
+  UpdateDraft,
+
+  createDraft,
 
   getUserDraftByProcess,
 
@@ -11,10 +15,10 @@ const {
 } = require('../services/transactionService')
 
 // ======================================================
-// CREATE OR UPDATE DRAFT
+// CREATE E DRAFT
 // ======================================================
 
-async function createOrUpdateDraftController(
+async function createDraftController(
   req,
   res,
   next
@@ -30,30 +34,45 @@ async function createOrUpdateDraftController(
     } = req.params
 
     const result =
-      await createOrUpdateDraft({
-
+      await createDraft({
         userId,
 
-        processId,
+        processId
+      })
+
+    return ApiResponder.okResponse(res, result, 'تمت العملية بنجاح')
+
+  } catch (err) {
+    return ApiResponder.badRequestResponse(res, err.message)}
+}
+
+// ======================================================
+// CREATE OR UPDATE DRAFT
+// ======================================================
+
+async function UpdateDraftController(
+  req,
+  res,
+  next
+) {
+
+  try {
+    const {
+      transId
+    } = req.params
+
+    const result =
+      await UpdateDraft({
+        transId,
 
         data: req.body
       })
 
-    return res.status(200).json({
-
-      success: true,
-      message:'تم حفظ المسودة بنجاح',
-      data: result
-    
-    })
+    return ApiResponder.okResponse(res, result, 'تم حفظ المسودة بنجاح')
 
   } catch (err) {
-    return res.status(400).json({
-      success: false,
-      message: err.message
-    })}
+    return ApiResponder.badRequestResponse(res, err.message)}
 }
-
 // ======================================================
 // GET USER DRAFT BY PROCESS
 // ======================================================
@@ -81,18 +100,10 @@ async function getUserDraftByProcessController(
         processId
       )
 
-    return res.status(200).json({
-
-       success: true,
-      message:'تم جلب المسودة بنجاح',
-      data: result
-    })
+    return ApiResponder.okResponse(res, result, 'تم جلب المسودة بنجاح')
 
   } catch (err) {
-    return res.status(400).json({
-      success: false,
-      message: err.message
-    })}
+    return ApiResponder.badRequestResponse(res, err.message)}
 }
 
 // ======================================================
@@ -122,18 +133,10 @@ async function getTransactionController(
         userId
       )
 
-    return res.status(200).json({
-
-      success: true,
-      message:'تم العملية بنجاح',
-      data: result
-    })
+    return ApiResponder.okResponse(res, result, 'تم العملية بنجاح')
 
   } catch (err) {
-    return res.status(400).json({
-      success: false,
-      message: err.message
-    })}
+    return ApiResponder.badRequestResponse(res, err.message)}
 }
 
 // ======================================================
@@ -160,18 +163,10 @@ async function submitTransactionController(
         req.body
       )
 
-    return res.status(200).json({
-
-      success: true,
-      message:'تم العملية بنجاح',
-      data: result
-    })
+    return ApiResponder.okResponse(res, result, 'تم العملية بنجاح')
 
   } catch (err) {
-    return res.status(400).json({
-      success: false,
-      message: err.message
-    })}
+    return ApiResponder.badRequestResponse(res, err.message)}
 }
 
 
@@ -180,7 +175,9 @@ async function submitTransactionController(
 
     module.exports = {
 
-  createOrUpdateDraftController,
+  createDraftController,
+
+  UpdateDraftController,
 
   getUserDraftByProcessController,
 

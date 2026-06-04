@@ -5,65 +5,268 @@ const {
   registerCitizen,
   verifyRegisterOtp,
   login,
-  verifyLoginOtp
-} = require("../services/Auth")
+  verifyLoginOtp,
+  registerDeviceToken,
+} = require('../services/Auth')
 
-// ================= REGISTER EMPLOYEE — Step 1 =================
+const {
+  setupPin,
+  verifyAppPin,
+  changePin,
+  employeeVerifyPin,
+  createEmployeeChallenge,
+  verifyEmployeeSignature,
+} = require('../services/pinAuthService')
+
+const tokenService = require('../services/tokenService')
+
+const {
+  validateSetupPin,
+  validateVerifyAppPin,
+  validateChangePin,
+  validateEmployeeVerifyPin,
+  validateCreateChallenge,
+  validateVerifySignature,
+  validateRefreshToken,
+} = require('../validations/authValidations')
+
+const { getClientMeta } = require('../../../core/security/securityConfig')
+const { respondIfSecurityError } = require('../../../core/security/securityResponseHelper')
+const ApiResponder = require('../../../core/utils/apiResponder')
+
+function handleControllerError (res, err, defaultStatus = 400) {
+  if (respondIfSecurityError(res, err, defaultStatus)) {
+    return
+  }
+
+  return ApiResponder.error(res, {
+    message: err.message,
+    statusCode: err.statusCode || defaultStatus
+  })
+}
+
 const registerEmployeeUser = async (req, res) => {
   try {
     const result = await registerEmployee(req.body)
-    return res.status(200).json({ success: true, data: result })
+    return ApiResponder.okResponse(res, result, 'تم تسجيل الموظف بنجاح')
   } catch (err) {
-    return res.status(400).json({ success: false, message: err.message })
+    return handleControllerError(res, err, 400)
   }
 }
 
-// ================= REGISTER CITIZEN — Step 1 =================
 const registerCitizenUser = async (req, res) => {
   try {
     const result = await registerCitizen(req.body)
-
-     
-    return res.status(200).json({ success: true, data: result })
+    return ApiResponder.okResponse(res, result, 'تم تسجيل المواطن بنجاح')
   } catch (err) {
-    return res.status(400).json({ success: false, message: err.message })
+    return handleControllerError(res, err, 400)
   }
 }
 
-// ================= VERIFY REGISTER OTP — Step 2 =================
 const verifyRegisterOtpUser = async (req, res) => {
   try {
-    const result = await verifyRegisterOtp(req.body)
-    return res.status(201).json({ success: true, data: result })
+    const result = await verifyRegisterOtp(req.body, getClientMeta(req))
+    return ApiResponder.createdResponse(res, result, 'تم تأكيد رمز التحقق بنجاح')
   } catch (err) {
-    return res.status(400).json({ success: false, message: err.message })
+    return handleControllerError(res, err, 400)
   }
 }
 
-// ================= LOGIN — Step 1 =================
 const loginUser = async (req, res) => {
   try {
-    const result = await login(req.body)
-    return res.status(200).json({ success: true, data: result })
+    const result = await login(req.body, getClientMeta(req))
+    return ApiResponder.okResponse(res, result, 'تم تسجيل الدخول بنجاح')
   } catch (err) {
-    return res.status(401).json({ success: false, message: err.message })
+    return handleControllerError(res, err, 401)
   }
 }
 
-// ================= VERIFY LOGIN OTP — Step 2 =================
 const verifyLoginOtpUser = async (req, res) => {
   try {
-    const result = await verifyLoginOtp(req.body)
-    return res.status(200).json({ success: true, data: result })
+    const result = await verifyLoginOtp(req.body, getClientMeta(req))
+    return ApiResponder.okResponse(res, result, 'تم تأكيد رمز الدخول بنجاح')
   } catch (err) {
-    return res.status(401).json({ success: false, message: err.message })
+    return handleControllerError(res, err, 401)
   }
 }
-///////////////////////////////////////////////////////////////////////
+
+const registerDeviceTokenUser = async (req, res) => {
+  try {
+    const result = await registerDeviceToken(req.user.id, req.body)
+    return ApiResponder.okResponse(
+      res,
+      {
+        id: result.id,
+        user_id: result.user_id,
+        platform: result.platform,
+        device_id: result.device_id,
+        is_active: result.is_active
+      },
+      'تم تسجيل جهاز الإشعارات بنجاح'
+    )
+  } catch (err) {
+    return handleControllerError(res, err, 400)
+  }
+}
+
+const setupPinUser = async (req, res) => {
+  try {
+    const { error } = validateSetupPin(req.body)
+
+    if (error) {
+      throw new Error(error.details.map(item => item.message).join(', '))
+    }
+
+    const result = await setupPin(req.user.id, req.body.pin, getClientMeta(req))
+    return ApiResponder.okResponse(res, result, 'تم إنشاء رمز PIN بنجاح')
+  } catch (err) {
+    return handleControllerError(res, err, 400)
+  }
+}
+
+const verifyAppPinUser = async (req, res) => {
+  try {
+    const { error } = validateVerifyAppPin(req.body)
+
+    if (error) {
+      throw new Error(error.details.map(item => item.message).join(', '))
+    }
+
+    const result = await verifyAppPin(req.user.id, req.body.pin, getClientMeta(req))
+    return ApiResponder.okResponse(res, result, 'تم التحقق من رمز PIN بنجاح')
+  } catch (err) {
+    return handleControllerError(res, err, 401)
+  }
+}
+
+const changePinUser = async (req, res) => {
+  try {
+    const { error } = validateChangePin(req.body)
+
+    if (error) {
+      throw new Error(error.details.map(item => item.message).join(', '))
+    }
+
+    const result = await changePin(req.user.id, req.body, getClientMeta(req))
+    return ApiResponder.okResponse(res, result, 'تم تغيير رمز PIN بنجاح')
+  } catch (err) {
+    return handleControllerError(res, err, 400)
+  }
+}
+
+const employeeVerifyPinUser = async (req, res) => {
+  try {
+    const { error } = validateEmployeeVerifyPin(req.body)
+
+    if (error) {
+      throw new Error(error.details.map(item => item.message).join(', '))
+    }
+
+    const result = await employeeVerifyPin({
+      ...req.body,
+      clientMeta: getClientMeta(req)
+    })
+    return ApiResponder.okResponse(res, result, 'تم التحقق من رمز الموظف بنجاح')
+  } catch (err) {
+    return handleControllerError(res, err, 401)
+  }
+}
+
+const employeeChallengeUser = async (req, res) => {
+  try {
+    const { error } = validateCreateChallenge(req.body)
+
+    if (error) {
+      throw new Error(error.details.map(item => item.message).join(', '))
+    }
+
+    const result = await createEmployeeChallenge({
+      ...req.body,
+      clientMeta: getClientMeta(req)
+    })
+    return ApiResponder.okResponse(res, result, 'تم إنشاء تحدي التوقيع بنجاح')
+  } catch (err) {
+    return handleControllerError(res, err, 400)
+  }
+}
+
+const employeeVerifySignatureUser = async (req, res) => {
+  try {
+    const { error } = validateVerifySignature(req.body)
+
+    if (error) {
+      throw new Error(error.details.map(item => item.message).join(', '))
+    }
+
+    const result = await verifyEmployeeSignature({
+      ...req.body,
+      clientMeta: getClientMeta(req)
+    })
+    return ApiResponder.okResponse(res, result, 'تم التحقق من التوقيع بنجاح')
+  } catch (err) {
+    return handleControllerError(res, err, 401)
+  }
+}
+
+const refreshTokenUser = async (req, res) => {
+  try {
+    const { error } = validateRefreshToken(req.body)
+
+    if (error) {
+      throw new Error(error.details.map(item => item.message).join(', '))
+    }
+
+    const result = await tokenService.rotateRefreshToken(
+      req.body.refreshToken,
+      getClientMeta(req)
+    )
+
+    return ApiResponder.okResponse(
+      res,
+      {
+        token: result.accessToken,
+        refreshToken: result.refreshToken
+      },
+      'تم تحديث رمز الدخول بنجاح'
+    )
+  } catch (err) {
+    return handleControllerError(res, err, err.statusCode || 401)
+  }
+}
+
+const logoutUser = async (req, res) => {
+  try {
+    const { error } = validateRefreshToken(req.body)
+
+    if (error) {
+      throw new Error(error.details.map(item => item.message).join(', '))
+    }
+
+    const result = await tokenService.revokeRefreshToken(req.body.refreshToken)
+
+    return ApiResponder.okResponse(
+      res,
+      { revoked: result.revoked },
+      'تم تسجيل الخروج بنجاح'
+    )
+  } catch (err) {
+    return handleControllerError(res, err, 400)
+  }
+}
+
 module.exports = {
   registerEmployeeUser,
   registerCitizenUser,
   verifyRegisterOtpUser,
   loginUser,
   verifyLoginOtpUser,
+  registerDeviceTokenUser,
+  setupPinUser,
+  verifyAppPinUser,
+  changePinUser,
+  employeeVerifyPinUser,
+  employeeChallengeUser,
+  employeeVerifySignatureUser,
+  refreshTokenUser,
+  logoutUser,
 }

@@ -46,7 +46,8 @@ async function updateStatus(
 
 async function updateData(
   id,
-  data
+  data,
+  expectedVersion = null
 ) {
 
   const transaction =
@@ -56,6 +57,10 @@ async function updateData(
     throw new Error(
       'Transaction not found'
     )
+  }
+
+  if (expectedVersion != null) {
+    return repo.updateDataOptimistic(id, data, expectedVersion)
   }
 
   await transaction.update({

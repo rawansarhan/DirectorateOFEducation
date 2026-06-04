@@ -4,13 +4,15 @@ const workflowClient = require('../../../core/shared/clients/workflow/workflowCl
 
 const eventBus = require('../../../core/shared/events/eventBus')
 
-const EVENTS = require('../../../core/shared/events/types')
+const outboxRepository =
+  require('../../../core/shared/outbox/repositories/OutboxRepository')
 
+const EVENTS = require('../../../core/shared/events/types')
 // ======================================================
 // CREATE OR UPDATE DRAFT
 // ======================================================
 
-async function createOrUpdateDraft ({ userId, processId, data }) {
+async function createDraft ({ userId, processId }) {
   // =====================================
   // GET PROCESS
   // =====================================
@@ -42,31 +44,8 @@ async function createOrUpdateDraft ({ userId, processId, data }) {
   // =====================================
 
   if (draft) {
-    await draft.update({
-      data: {
-        ...data
-      }
-    })
 
-    // ===================================
-    // EVENT
-    // ===================================
-
-    await eventBus.publish(
-      EVENTS.TRANSACTION_UPDATED,
-
-      {
-        transactionId: draft.id,
-        userId,
-        processId,
-        processCode
-      }
-    )
-
-    return {
-      isNew: false,
-      draft
-    }
+  return draft
   }
 
   // =====================================
@@ -78,25 +57,10 @@ async function createOrUpdateDraft ({ userId, processId, data }) {
 
     user_id: userId,
 
-    status: 'draft',
-
-    data: data || {}
+    status: 'draft'
   })
 
-  // =====================================
-  // EVENT
-  // =====================================
 
-  await eventBus.publish(
-    EVENTS.TRANSACTION_CREATED,
-
-    {
-      transactionId: draft.id,
-      userId,
-      processId,
-      processCode
-    }
-  )
 
   return {
     isNew: true,
@@ -104,6 +68,44 @@ async function createOrUpdateDraft ({ userId, processId, data }) {
     draft
   }
 }
+
+// ======================================================
+//  UPDATE DRAFT
+// ======================================================
+
+async function UpdateDraft ({ transId, data }) {
+  // =====================================
+  // GET PROCESS
+  // =====================================
+
+   const draft = await repo.findDraft(transId)
+  console.log(process)
+  if (!draft) {
+    throw new Error('لا يوجد مسودة')
+  }
+
+  if (!draft.is_active) {
+    throw new Error('المسودة غير مفعلة')
+  }
+
+  // =====================================
+  // UPDATE EXISTING DRAFT
+  // =====================================
+
+    await draft.update({
+      data: {
+        ...data
+      }
+    })
+
+    return {
+      isNew: false,
+      draft
+    }
+  }
+
+
+
 
 // ======================================================
 // GET USER DRAFT BY PROCESS
@@ -188,6 +190,9 @@ async function submitTransaction (transactionId , data  ) {
   // =====================================
 
   await transaction.update({
+      data: {
+        ...data
+      },
     status: 'submitted'
   })
 
@@ -195,15 +200,17 @@ async function submitTransaction (transactionId , data  ) {
   // EVENT
   // =====================================
 
-  await eventBus.publish(
-    EVENTS.TRANSACTION_SUBMITTED,
+await outboxRepository.create({
 
-    {
-      transactionId: transaction.id,
-      
-      processCode: transaction.code,
-    }
-  )
+  event_type: EVENTS.TRANSACTION_SUBMITTED,
+
+  payload: {
+
+    transactionId: transaction.id,
+
+    processCode: transaction.code
+  }
+})
 
   return  transaction
   
@@ -213,7 +220,9 @@ async function submitTransaction (transactionId , data  ) {
 
 
 module.exports = {
-  createOrUpdateDraft,
+  UpdateDraft,
+
+  createDraft,
 
   getUserDraftByProcess,
 

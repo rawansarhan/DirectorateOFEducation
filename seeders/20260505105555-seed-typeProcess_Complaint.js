@@ -10,7 +10,7 @@ await queryInterface.bulkInsert('type_trans', [
         created_at: new Date(),
         updated_at: new Date()
   }
-])
+], { ignoreDuplicates: true })
   },
 
   down: async (queryInterface) => {

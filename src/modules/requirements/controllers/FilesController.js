@@ -1,5 +1,6 @@
 'use strict'
 const asyncHandler = require('../../../core/middleware/asyncHandler')
+const ApiResponder = require('../../../core/utils/apiResponder')
 
 const {
   createFileService,
@@ -14,15 +15,9 @@ const createFile = asyncHandler(async (req, res) => {
   try {
     const FileData = req.body
     const newFile = await createFileService(FileData)
-    return res.status(200).json({
-      message: 'تم انشاء الملف بنجاح !',
-      data: newFile
-    })
+    return ApiResponder.okResponse(res, newFile, 'تم انشاء الملف بنجاح !')
   } catch (err) {
-    return res.status(400).json({
-      success: false,
-      message: err.message
-    })
+    return ApiResponder.badRequestResponse(res, err.message)
   }
 })
 
@@ -33,15 +28,9 @@ const updateFile = asyncHandler(async (req, res) => {
     const FileData = req.body
     const FileId = req.params.id
     const updated = await updateFileService(FileData, FileId)
-    return res.status(200).json({
-      message: 'تم تعديل الملف بنجاح !',
-      data: updated
-    })
+    return ApiResponder.okResponse(res, updated, 'تم تعديل الملف بنجاح !')
   } catch (err) {
-    return res.status(400).json({
-      success: false,
-      message: err.message
-    })
+    return ApiResponder.badRequestResponse(res, err.message)
   }
 })
 
@@ -50,15 +39,9 @@ const updateFile = asyncHandler(async (req, res) => {
 const getAllFile = asyncHandler(async (req, res) => {
   try {
     const files = await getAllFilesService()
-    return res.status(200).json({
-      message: 'عرض كل الملفات بنجاح !',
-      data: files
-    })
+    return ApiResponder.okResponse(res, files, 'عرض كل الملفات بنجاح !')
   } catch (err) {
-    return res.status(400).json({
-      success: false,
-      message: err.message
-    })
+    return ApiResponder.badRequestResponse(res, err.message)
   }
 })
 //=========================================
@@ -68,12 +51,9 @@ const getOneActiveFile = asyncHandler(async (req, res) => {
   try {
     const result = await getOneActiveFileService(req.params.id)
 
-    return res.status(200).json(result)
+    return ApiResponder.okResponse(res, result)
   } catch (err) {
-    return res.status(400).json({
-      success: false,
-      message: err.message
-    })
+    return ApiResponder.badRequestResponse(res, err.message)
   }
 })
 module.exports = {

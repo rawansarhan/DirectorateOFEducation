@@ -1,59 +1,32 @@
-const Redis = require('ioredis')
-
 class EventBus {
-
   constructor () {
-
-    this.publisher = new Redis(process.env.REDIS_URL)
-
-    this.subscriber = new Redis(process.env.REDIS_URL)
-
     this.handlers = {}
   }
 
-  // =====================================
-  // PUBLISH
-  // =====================================
-
-  async publish (event, payload) {
-
-    console.log(`📢 EVENT: ${event}`)
-
-    await this.publisher.publish(
-      event,
-      JSON.stringify(payload)
-    )
-  }
-
-  // =====================================
-  // SUBSCRIBE
-  // =====================================
-
   subscribe (event, handler) {
-
     if (!this.handlers[event]) {
       this.handlers[event] = []
     }
 
     this.handlers[event].push(handler)
+  }
 
-    this.subscriber.subscribe(event)
+  async dispatch (event, payload) {
+    const handlers = this.handlers[event] || []
 
-    this.subscriber.on(
-      'message',
-      async (channel, message) => {
+    if (!handlers.length) {
+      throw new Error(`No handlers registered for event: ${event}`)
+    }
 
-        if (channel !== event) return
+    console.log(`📢 EVENT: ${event}`)
 
-        const payload = JSON.parse(message)
+    for (const handler of handlers) {
+      await handler(payload)
+    }
+  }
 
-        console.log(`📥 RECEIVED: ${event}`)
-
-        for (const h of this.handlers[event]) {
-          await h(payload)
-        }
-      }
-    )
+  async publish (event, payload) {
+    await this.dispatch(event, payload)
   }
 }
 

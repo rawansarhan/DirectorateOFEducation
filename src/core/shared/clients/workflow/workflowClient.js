@@ -20,7 +20,7 @@ console.log('getProcessById')
 
     const response = await axios.get(
 
-      `${WORKFLOW_URL}/api/process_definitions/${processId}`
+      `${WORKFLOW_URL}/internal/process_definitions/${processId}`
 
     )
 console.log(WORKFLOW_URL)

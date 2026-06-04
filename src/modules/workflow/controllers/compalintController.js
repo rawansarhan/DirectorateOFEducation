@@ -1,4 +1,5 @@
 const asyncHandler = require('../../../core/middleware/asyncHandler')
+const ApiResponder = require('../../../core/utils/apiResponder')
 const {
   getAuthProcessesCompaint
 } = require('../services/complaintService')
@@ -11,15 +12,9 @@ try{
   const userId = req.user.id
   const result = await getAuthProcessesCompaint(userId)
 
-  return res.status(200).json({
-    success: true,
-    data: result
-  })
+  return ApiResponder.okResponse(res, result, 'تم جلب البيانات بنجاح')
     } catch (err) {
-    return res.status(400).json({
-      success: false,
-      message: err.message
-    })
+    return ApiResponder.badRequestResponse(res, err.message)
   }
 })
 

@@ -7,7 +7,8 @@ const {
   deleteRole,
   getAllRoles,
   getRoleById,
-  getRolesByDepartment
+  getRolesByDepartment,
+  toggleRoleStatus
 } = require('../controllers/RoleController')
 
 const { authMiddleware, authorize } = require('../../../core/middleware/authMiddleware')
@@ -46,71 +47,71 @@ router.post(
   createRole
 )
 
-/**
- * @swagger
- * /api/role/{id}:
- *   put:
- *     summary: تعديل سجل ربط الدور (organization_department_roles.id)
- *     tags: [Role]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *         description: معرّف سجل organization_department_roles
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/RoleUpdate'
- *     responses:
- *       200:
- *         description: updated
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/RoleEnvelope'
- */
-router.put(
-  '/:id',
-  authMiddleware,
-  authorize('ROLE_UPDATE'),
-  updateRole
-)
+// /**
+//  * @swagger
+//  * /api/role/{id}:
+//  *   put:
+//  *     summary: تعديل سجل ربط الدور (organization_department_roles.id)
+//  *     tags: [Role]
+//  *     security:
+//  *       - bearerAuth: []
+//  *     parameters:
+//  *       - in: path
+//  *         name: id
+//  *         required: true
+//  *         schema:
+//  *           type: integer
+//  *         description: معرّف سجل organization_department_roles
+//  *     requestBody:
+//  *       required: true
+//  *       content:
+//  *         application/json:
+//  *           schema:
+//  *             $ref: '#/components/schemas/RoleUpdate'
+//  *     responses:
+//  *       200:
+//  *         description: updated
+//  *         content:
+//  *           application/json:
+//  *             schema:
+//  *               $ref: '#/components/schemas/RoleEnvelope'
+//  */
+// router.put(
+//   '/:id',
+//   authMiddleware,
+//   authorize('ROLE_UPDATE'),
+//   updateRole
+// )
 
-/**
- * @swagger
- * /api/role/{id}:
- *   delete:
- *     summary: حذف سجل ربط الدور (لا يحذف الدور الأصلي من جدول roles)
- *     tags: [Role]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *         description: معرّف سجل organization_department_roles
- *     responses:
- *       200:
- *         description: deleted
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/RoleDeleteEnvelope'
- */
-router.delete(
-  '/:id',
-  authMiddleware,
-  authorize('ROLE_DELETE'),
-  deleteRole
-)
+// /**
+//  * @swagger
+//  * /api/role/{id}:
+//  *   delete:
+//  *     summary: حذف سجل ربط الدور (لا يحذف الدور الأصلي من جدول roles)
+//  *     tags: [Role]
+//  *     security:
+//  *       - bearerAuth: []
+//  *     parameters:
+//  *       - in: path
+//  *         name: id
+//  *         required: true
+//  *         schema:
+//  *           type: integer
+//  *         description: معرّف سجل organization_department_roles
+//  *     responses:
+//  *       200:
+//  *         description: deleted
+//  *         content:
+//  *           application/json:
+//  *             schema:
+//  *               $ref: '#/components/schemas/RoleDeleteEnvelope'
+//  */
+// router.delete(
+//   '/:id',
+//   authMiddleware,
+//   authorize('ROLE_DELETE'),
+//   deleteRole
+// )
 
 /**
  * @swagger
@@ -163,6 +164,37 @@ router.get(
   authMiddleware,
   authorize('ROLE_VIEW'),
   getRolesByDepartment
+)
+
+/**
+ * @swagger
+ * /api/role/{id}/toggle-status:
+ *   patch:
+ *     summary: قلب حالة تفعيل سجل ربط الدور (is_active)
+ *     description: يقلب قيمة is_active في organization_department_roles من true إلى false أو العكس.
+ *     tags: [Role]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: معرّف سجل organization_department_roles
+ *     responses:
+ *       200:
+ *         description: toggled
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/RoleEnvelope'
+ */
+router.patch(
+  '/:id/toggle-status',
+  authMiddleware,
+  authorize('ROLE_TOGGLE_STATUS'),
+  toggleRoleStatus
 )
 
 /**

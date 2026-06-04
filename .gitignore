@@ -1,4 +1,9 @@
-node_modules
+# Dependencies
+node_modules/
+
+# Private keys for local testing
+test-keys/
+
 
 # Environment variables
 .env

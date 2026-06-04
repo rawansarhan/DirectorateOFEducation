@@ -279,9 +279,4 @@ router.post(
   reviewProcessController
 )
 
-
-router.get(
-  '/:id',
-  processById
-)
 module.exports = router

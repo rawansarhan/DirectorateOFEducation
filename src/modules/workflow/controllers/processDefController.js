@@ -1,6 +1,7 @@
 'use strict'
 
 const asyncHandler = require('../../../core/middleware/asyncHandler')
+const ApiResponder = require('../../../core/utils/apiResponder')
 
 const {
   createProcessDefinitionService,
@@ -33,21 +34,15 @@ const createProcessDefinition = asyncHandler(async (req, res) => {
     console.log('rawan')
     const setup = await setupProcessAfterCreation(processID)
 
-    return res.status(200).json({
-      message: 'تم إنشاء العملية بنجاح',
-      data: {
-        success: true,
+    return ApiResponder.okResponse(res, {
+      success: true,
 
-        process,
+      process,
 
-        stages: setup || []
-      }
-    })
+      stages: setup || []
+    }, 'تم إنشاء العملية بنجاح')
   } catch (err) {
-    return res.status(400).json({
-      success: false,
-      message: err.message
-    })
+    return ApiResponder.badRequestResponse(res, err.message)
   }
 })
 
@@ -59,15 +54,9 @@ const getAuthProcessesController = asyncHandler(async (req, res) => {
     const userId = req.user.id
     const result = await getAuthProcesses(typeTransID, userId)
 
-    return res.status(200).json({
-      message: result.message,
-      data: result.data
-    })
+    return ApiResponder.okResponse(res, result.data, result.message)
   } catch (err) {
-    return res.status(400).json({
-      success: false,
-      message: err.message
-    })
+    return ApiResponder.badRequestResponse(res, err.message)
   }
 })
 // =========================================
@@ -80,15 +69,9 @@ const getProcessDetails = asyncHandler(async (req, res) => {
   const result =
     await getProcessDetailsWithValidation(processId)
 
-  return res.status(200).json({
-    success: true,
-    ...result
-  })
+  return ApiResponder.okResponse(res, result, 'تم جلب البيانات بنجاح')
     } catch (err) {
-    return res.status(400).json({
-      success: false,
-      message: err.message
-    })
+    return ApiResponder.badRequestResponse(res, err.message)
   }
 })
 
@@ -103,15 +86,9 @@ const reviewProcessController = asyncHandler(async (req, res) => {
   const result =
     await reviewProcess(processId, decision)
 
-  return res.status(200).json({
-    success: true,
-    ...result
-  })
+  return ApiResponder.okResponse(res, result, 'تم تنفيذ المراجعة بنجاح')
     } catch (err) {
-    return res.status(400).json({
-      success: false,
-      message: err.message
-    })
+    return ApiResponder.badRequestResponse(res, err.message)
   }
 })
 ///////////////////////////////////////////////////
@@ -119,17 +96,10 @@ const processById = asyncHandler(async (req, res) => {
   try {
     const result = await getProcessByIdService(req.params.id)
 
-    return res.status(200).json({
-      success: true,
-      message: 'تم جلب البيانات بنجاح',
-      data: result
-    })
+    return ApiResponder.okResponse(res, result, 'تم جلب البيانات بنجاح')
 
   } catch (err) {
-    return res.status(404).json({
-      success: false,
-      message: err.message
-    })
+    return ApiResponder.notFoundResponse(res, err.message)
   }
 })
 

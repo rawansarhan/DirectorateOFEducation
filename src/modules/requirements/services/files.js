@@ -1,12 +1,12 @@
 'use strict'
 
-const {  ValidateCreateFile ,  ValidateUpdateFile} = require('../validations/filesValidations')
-const { File } = require('../../../entities')
-const { FileInputDTO} = require('../dto/FileInputDTO')
+const { ValidateCreateFile, ValidateUpdateFile } = require('../validations/filesValidations')
+const fileRepository = require('../repositories/fileRepository')
+const { FileInputDTO } = require('../dto/FileInputDTO')
 const { FileOutputDTO } = require('../dto/FileOutputDTO')
 
-//// =========================================== create new File =========================== : 
-async function createFileService (FileData) {
+//// =========================================== create new File =========================== :
+async function createFileService(FileData) {
 
   try {
     const dataToValidate = { ...FileData }
@@ -17,7 +17,7 @@ async function createFileService (FileData) {
       ...FileData
     })
 
-    const file = await File.create({
+    const file = await fileRepository.create({
       ...inputFiledDTO
     })
 
@@ -30,7 +30,7 @@ async function createFileService (FileData) {
 }
 
 
-//////=============================================  update File ============================== : 
+//////=============================================  update File ============================== :
 async function updateFileService(FileData, FileId) {
 
   const id = parseInt(FileId, 10)
@@ -53,7 +53,7 @@ async function updateFileService(FileData, FileId) {
   // =========================================
   // GET CURRENT FILE
   // =========================================
-  const oldFile = await File.findByPk(id)
+  const oldFile = await fileRepository.findById(id)
 
   if (!oldFile) {
     const err = new Error('الملف غير موجودة')
@@ -64,14 +64,14 @@ async function updateFileService(FileData, FileId) {
   // =========================================
   // DEACTIVATE OLD VERSION
   // =========================================
-  await oldFile.update({
+  await fileRepository.updateInstance(oldFile, {
     is_active: false
   })
 
   // =========================================
   // CREATE NEW VERSION
   // =========================================
-  const newFile = await File.create({
+  const newFile = await fileRepository.create({
 
     file_name:
       FileData.file_name ?? oldFile.file_name,
@@ -82,10 +82,8 @@ async function updateFileService(FileData, FileId) {
     type:
       FileData.type ?? oldFile.type,
 
-    // 🔥 زيادة النسخة
     version: oldFile.version + 1,
 
-    // النسخة الجديدة فعالة
     is_active:
       FileData.is_active ?? true
   })
@@ -96,13 +94,9 @@ async function updateFileService(FileData, FileId) {
   return new FileOutputDTO(newFile)
 }
 
-/////============================== get all Files ==================================== : 
-async function getAllFilesService () {
-  const rows = await File.findAll({
-        is_active: true,
-
-    order: [['id', 'ASC']]
-  })
+/////============================== get all Files ==================================== :
+async function getAllFilesService() {
+  const rows = await fileRepository.findAllActive()
   return rows.map(row => new FileOutputDTO(row))
 }
 
@@ -112,13 +106,7 @@ async function getAllFilesService () {
 // =========================================
 const getOneActiveFileService = async id => {
 
-  const file =
-    await File.findOne({
-      where: {
-        id,
-        is_active: true
-      }
-    })
+  const file = await fileRepository.findOneActiveById(id)
 
   if (!file) {
     throw new Error('هذا ملف غير موجود')

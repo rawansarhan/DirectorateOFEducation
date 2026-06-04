@@ -31,17 +31,24 @@ const perms = [
 'DEPARTMENT_UPDATE',
 'DEPARTMENT_DELETE',
 'DEPARTMENT_VIEW',
+'DEPARTMENT_TOGGLE_STATUS',
 'ROLE_CREATE',
 'ROLE_UPDATE',
 'ROLE_DELETE',
 'ROLE_VIEW',
+'ROLE_TOGGLE_STATUS',
 'PROCESS_APPROVE',
 'PROCESS_VIEW',
-'PROCESS_VIEW_COMPLAINT'
+'PROCESS_VIEW_COMPLAINT',
+'LOCATION_VIEW'
 ];
 
 
-await queryInterface.bulkInsert('permissions', perms.map(p => ({ name: p, created_at: new Date(), updated_at: new Date() })), {});
+await queryInterface.bulkInsert(
+  'permissions',
+  perms.map(p => ({ name: p, created_at: new Date(), updated_at: new Date() })),
+  { ignoreDuplicates: true }
+);
 },
 down: async (queryInterface) => {
 await queryInterface.bulkDelete('permissions', null, {});

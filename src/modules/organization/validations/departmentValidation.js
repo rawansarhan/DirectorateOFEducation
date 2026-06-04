@@ -16,9 +16,7 @@ function ValidateCreateDepartment(data) {
     parent_id: Joi.number()
       .integer()
       .positive()
-      .allow(null),
-
-    is_active: Joi.boolean()
+      .allow(null)
   })
 
   return schema.validate(data, {
@@ -41,9 +39,7 @@ function ValidateUpdateDepartment(data) {
     parent_id: Joi.number()
       .integer()
       .positive()
-      .allow(null),
-
-    is_active: Joi.boolean()
+      .allow(null)
   }).min(1)
 
   return schema.validate(data, {

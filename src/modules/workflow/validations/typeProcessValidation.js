@@ -17,11 +17,6 @@ function ValidateCreateTypeProcess(data) {
 
 function ValidateUpdateTypeProcess(data) {
   const schema = Joi.object({
-    name: Joi.string()
-      .trim()
-      .min(2)
-      .max(100),
-
     is_active: Joi.boolean()
   }).min(1)
 

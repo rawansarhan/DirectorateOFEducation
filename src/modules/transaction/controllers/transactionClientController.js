@@ -1,5 +1,7 @@
+const ApiResponder = require('../../../core/utils/apiResponder')
+
   const{
-  
+
   getById,
 
   updateStatus,
@@ -22,21 +24,11 @@ async function getTransactionByIdController(
         req.params.id
       )
 
-    return res.status(200).json({
-
-      success: true,
-
-      data: result
-    })
+    return ApiResponder.okResponse(res, result)
 
   } catch (err) {
 
-    return res.status(400).json({
-
-      success: false,
-
-      message: err.message
-    })
+    return ApiResponder.badRequestResponse(res, err.message)
   }
 }
 
@@ -59,24 +51,11 @@ async function updateTransactionStatusController(
         req.body.status
       )
 
-    return res.status(200).json({
-
-      success: true,
-
-      message:
-        'Status updated successfully',
-
-      data: result
-    })
+    return ApiResponder.okResponse(res, result, 'Status updated successfully')
 
   } catch (err) {
 
-    return res.status(400).json({
-
-      success: false,
-
-      message: err.message
-    })
+    return ApiResponder.badRequestResponse(res, err.message)
   }
 }
 
@@ -91,35 +70,37 @@ async function updateTransactionDataController(
 
   try {
 
+    const hasWrappedPayload = Object.prototype.hasOwnProperty.call(req.body, 'data')
+    const payload = hasWrappedPayload ? req.body.data : req.body
+    const expectedVersion = hasWrappedPayload
+      ? req.body.expected_version ?? null
+      : null
+
     const result =
       await updateData(
-
         req.params.id,
-
-        req.body
+        payload,
+        expectedVersion
       )
 
-    return res.status(200).json({
-
-      success: true,
-
-      message:
-        'Data updated successfully',
-
-      data: result
-    })
+    return ApiResponder.okResponse(res, result, 'Data updated successfully')
 
   } catch (err) {
 
-    return res.status(400).json({
+    const status = err.code === 'VERSION_CONFLICT' ? 409 : 400
 
-      success: false,
-
-      message: err.message
+    return ApiResponder.error(res, {
+      message: err.message,
+      statusCode: status,
+      extra: {
+        code: err.code,
+        current_version: err.currentVersion,
+        expected_version: err.expectedVersion
+      }
     })
+
   }
 }
-
 
 module.exports = {
   updateTransactionDataController,

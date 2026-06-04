@@ -1,4 +1,5 @@
 const asyncHandler = require('../../../core/middleware/asyncHandler')
+const ApiResponder = require('../../../core/utils/apiResponder')
 
 
 const {
@@ -13,16 +14,9 @@ const {
 const createOrganization = asyncHandler(async (req, res) => {
   try {
     const result = await createOrganizationService(req.body)
-    return res.status(201).json({
-      success: true,
-      message: 'تم إنشاء المؤسسة بنجاح',
-      data: result
-    })
+    return ApiResponder.createdResponse(res, result, 'تم إنشاء المؤسسة بنجاح')
   } catch (err) {
-    return res.status(err.statusCode || 400).json({
-      success: false,
-      message: err.message
-    })
+    return ApiResponder.error(res, { message: err.message, statusCode: err.statusCode || 400 })
   }
 })
 
@@ -30,16 +24,9 @@ const createOrganization = asyncHandler(async (req, res) => {
 const updateOrganization = asyncHandler(async (req, res) => {
   try {
     const result = await updateOrganizationService(req.body, req.params.id)
-    return res.status(200).json({
-      success: true,
-      message: 'تم تعديل المؤسسة بنجاح',
-      data: result
-    })
+    return ApiResponder.okResponse(res, result, 'تم تعديل المؤسسة بنجاح')
   } catch (err) {
-    return res.status(err.statusCode || 400).json({
-      success: false,
-      message: err.message
-    })
+    return ApiResponder.error(res, { message: err.message, statusCode: err.statusCode || 400 })
   }
 })
 
@@ -47,16 +34,9 @@ const updateOrganization = asyncHandler(async (req, res) => {
 const deleteOrganization = asyncHandler(async (req, res) => {
   try {
     const result = await deleteOrganizationService(req.params.id)
-    return res.status(200).json({
-      success: true,
-      message: 'تم حذف المؤسسة بنجاح',
-      data: result
-    })
+    return ApiResponder.okResponse(res, result, 'تم حذف المؤسسة بنجاح')
   } catch (err) {
-    return res.status(err.statusCode || 400).json({
-      success: false,
-      message: err.message
-    })
+    return ApiResponder.error(res, { message: err.message, statusCode: err.statusCode || 400 })
   }
 })
 
@@ -64,16 +44,9 @@ const deleteOrganization = asyncHandler(async (req, res) => {
 const getAllOrganizations = asyncHandler(async (req, res) => {
   try {
     const result = await getAllOrganizationsService()
-    return res.status(200).json({
-      success: true,
-      message: 'تم جلب البيانات بنجاح',
-      data: result
-    })
+    return ApiResponder.okResponse(res, result, 'تم جلب البيانات بنجاح')
   } catch (err) {
-    return res.status(err.statusCode || 400).json({
-      success: false,
-      message: err.message
-    })
+    return ApiResponder.error(res, { message: err.message, statusCode: err.statusCode || 400 })
   }
 })
 
@@ -81,16 +54,9 @@ const getAllOrganizations = asyncHandler(async (req, res) => {
 const getOrganizationById = asyncHandler(async (req, res) => {
   try {
     const result = await getOrganizationByIdService(req.params.id)
-    return res.status(200).json({
-      success: true,
-      message: 'تم جلب البيانات بنجاح',
-      data: result
-    })
+    return ApiResponder.okResponse(res, result, 'تم جلب البيانات بنجاح')
   } catch (err) {
-    return res.status(err.statusCode || 400).json({
-      success: false,
-      message: err.message
-    })
+    return ApiResponder.error(res, { message: err.message, statusCode: err.statusCode || 400 })
   }
 })
 

@@ -1,6 +1,4 @@
-const {
-  DocumentTemplate
-} = require('../../../entities')
+const documentTemplateRepository = require('../repositories/documentTemplateRepository')
 
 const {
   createDocumentTemplateValidation,
@@ -24,15 +22,14 @@ const createDocumentTemplateService = async data => {
   }
 
   const documentTemplate =
-    await DocumentTemplate.create({
+    await documentTemplateRepository.create({
 
       name: data.name,
       file_path: data.file_path,
       file_type: data.file_type,
-      engine_type:'ACROFORM',
+      engine_type: 'ACROFORM',
       config_json: data.config_json || null,
 
-      // 🔥 server-controlled fields
       version: 1,
       is_active: true,
       is_latest: true
@@ -55,9 +52,6 @@ const updateDocumentTemplateService = async (
   data
 ) => {
 
-  // =========================================
-  // VALIDATION
-  // =========================================
   const { error } =
     updateDocumentTemplateValidation(data)
 
@@ -65,29 +59,20 @@ const updateDocumentTemplateService = async (
     throw new Error(error.details[0].message)
   }
 
-  // =========================================
-  // GET CURRENT TEMPLATE
-  // =========================================
   const oldTemplate =
-    await DocumentTemplate.findByPk(id)
+    await documentTemplateRepository.findById(id)
 
   if (!oldTemplate) {
     throw new Error('Document template not found')
   }
 
-  // =========================================
-  // DEACTIVATE OLD VERSION
-  // =========================================
-  await oldTemplate.update({
+  await documentTemplateRepository.updateInstance(oldTemplate, {
     is_active: false,
     is_latest: false
   })
 
-  // =========================================
-  // CREATE NEW VERSION
-  // =========================================
   const newTemplate =
-    await DocumentTemplate.create({
+    await documentTemplateRepository.create({
 
       name:
         data.name ?? oldTemplate.name,
@@ -108,14 +93,11 @@ const updateDocumentTemplateService = async (
         data.config_json ??
         oldTemplate.config_json,
 
-      // 🔥 زيادة النسخة
       version:
         (oldTemplate.version || 1) + 1,
 
-      // النسخة الجديدة هي الأحدث
       is_latest: true,
 
-      // النسخة الجديدة فعالة
       is_active:
         data.is_active ?? true
     })
@@ -134,14 +116,7 @@ const updateDocumentTemplateService = async (
 // =========================================
 const getAllActiveDocumentTemplatesService = async () => {
 
-  const templates =
-    await DocumentTemplate.findAll({
-      where: {
-        is_active: true
-
-    },
-      order: [['id', 'DESC']]
-    })
+  const templates = await documentTemplateRepository.findAllActive()
 
   return {
     message: 'تم جلب القوالب بنجاح',
@@ -157,13 +132,7 @@ const getAllActiveDocumentTemplatesService = async () => {
 // =========================================
 const getOneActiveDocumentTemplateService = async id => {
 
-  const template =
-    await DocumentTemplate.findOne({
-      where: {
-        id,
-        is_active: true
-      }
-    })
+  const template = await documentTemplateRepository.findOneActiveById(id)
 
   if (!template) {
     throw new Error('Document template not found')
@@ -177,6 +146,7 @@ const getOneActiveDocumentTemplateService = async id => {
     }
   }
 }
+
 module.exports = {
   createDocumentTemplateService,
   updateDocumentTemplateService,

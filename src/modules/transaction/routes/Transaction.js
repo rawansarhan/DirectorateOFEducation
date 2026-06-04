@@ -3,7 +3,9 @@ const express = require('express')
 const router = express.Router()
 
 const {
-   createOrUpdateDraftController,
+   createDraftController,
+
+  UpdateDraftController,
 
   getUserDraftByProcessController,
 
@@ -17,7 +19,44 @@ const {
 const {
   authMiddleware
 } = require('../../../core/middleware/authMiddleware')
+/**
+ * =====================================================
+ * CREATE  DRAFT
+ * =====================================================
+ */
 
+/**
+ * @swagger
+ * /api/transaction/CreateDraft/{processId}:
+ *   post:
+ *     summary: Create new draft 
+ *     tags: [Transaction]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: processId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         example: 1
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *     responses:
+ *       200:
+ *         description: Draft created or updated
+ *       401:
+ *         description: Unauthorized
+ */
+router.post(
+  '/CreateDraft/:processId',
+  authMiddleware,
+  createDraftController
+)
 /**
  * =====================================================
  * CREATE OR UPDATE DRAFT
@@ -26,15 +65,15 @@ const {
 
 /**
  * @swagger
- * /api/transaction/draft/{processId}:
+ * /api/transaction/updateDraft/{transId}:
  *   post:
- *     summary: Create new draft or update existing draft for same process
+ *     summary: update existing draft 
  *     tags: [Transaction]
  *     security:
  *       - bearerAuth: []
  *     parameters:
  *       - in: path
- *         name: processId
+ *         name: transId
  *         required: true
  *         schema:
  *           type: integer
@@ -56,9 +95,9 @@ const {
  *         description: Unauthorized
  */
 router.post(
-  '/draft/:processId',
+  '/updateDraft/:transId',
   authMiddleware,
-  createOrUpdateDraftController
+  UpdateDraftController
 )
 
 /**

@@ -6,7 +6,7 @@ const EVENTS =
 
 const {
   startWorkflow
-} = require('../services/processInstanceService')
+} = require('../taskCamunda/services/startWorkflowService')
 
 // =====================================
 // LISTEN

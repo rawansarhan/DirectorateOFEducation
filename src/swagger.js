@@ -10,10 +10,10 @@ const swaggerOptions = {
       version: '1.0.0',
       description: 'API documentation for Grass project'
     },
-        servers: [
+    servers: [
       {
         url: process.env.API_PUBLIC_URL || `http://localhost:${process.env.PORT || 4000}`,
-        description: process.env.API_PUBLIC_URL ? "Public server" : "Local server"
+        description: process.env.API_PUBLIC_URL ? 'Public server' : 'Local server'
       }
     ],
     tags: [
@@ -22,6 +22,7 @@ const swaggerOptions = {
       { name: 'Field', description: 'إدارة الحقول (Fields)' },
       { name: 'File', description: 'إدارة الملفات (Files)' },
       { name: 'Tasks', description: 'إدارة المهام (Workflow Tasks)' },
+      { name: 'Workflow', description: 'إدارة سير العمل مع Camunda (Workflow Tasks)' },
       {
         name: 'TypeProcess',
         description: 'أنواع العمليات (Type Process)'
@@ -37,6 +38,10 @@ const swaggerOptions = {
       {
         name: 'Role',
         description: 'إدارة الأدوار وربطها بالمؤسسات والأقسام (Roles)'
+      },
+      {
+        name: 'Location',
+        description: 'إدارة المواقع الجغرافية (Locations)'
       }
     ],
     components: {
@@ -74,31 +79,64 @@ const swaggerOptions = {
           required: [
             'userName',
             'email',
-            'password',
             'phone_number',
+            'pin',
             'organization_id',
             'department_id',
-            'role_id'
+            'role_id',
+            'public_key'
           ],
           properties: {
-            userName: { type: 'string', example: 'john_doe' },
-            email: { type: 'string', example: 'john@gmail.com' },
-            phone_number: { type: 'string', example: '0954263536' },
-            password: { type: 'string', example: 'pass1234' },
+            userName: {
+              type: 'string',
+              minLength: 3,
+              maxLength: 50,
+              pattern: '^\\S+$',
+              example: 'john_doe',
+              description: 'بدون مسافات'
+            },
+            email: {
+              type: 'string',
+              format: 'email',
+              example: 'john@gmail.com'
+            },
+            phone_number: {
+              type: 'string',
+              pattern: '^09\\d{8}$',
+              example: '0912345678',
+              description: '10 أرقام تبدأ بـ 09'
+            },
+            pin: {
+              type: 'string',
+              minLength: 6,
+              maxLength: 6,
+              pattern: '^\\d{6}$',
+              example: '123456',
+              description: 'رمز PIN مكون من 6 أرقام'
+            },
             organization_id: {
               type: 'integer',
+              minimum: 1,
               example: 1,
               description: 'معرف المؤسسة'
             },
             department_id: {
               type: 'integer',
+              minimum: 1,
               example: 5,
               description: 'معرف آخر قسم في الهرمية (مثل: شعبة التدقيق داخل قسم المحاسبة)'
             },
             role_id: {
               type: 'integer',
+              minimum: 1,
               example: 2,
               description: 'معرف الدور (Role)'
+            },
+            public_key: {
+              type: 'string',
+              minLength: 40,
+              example: '-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEA...\n-----END PUBLIC KEY-----',
+              description: 'مفتاح Ed25519 العام يُولَّد في المتصفح (PEM أو base64 SPKI)'
             }
           }
         },
@@ -111,10 +149,18 @@ const swaggerOptions = {
               type: 'object',
               properties: {
                 userName: { type: 'string', example: 'john_doe' },
-                password: { type: 'string', example: '123456' },
+                key_fingerprint: {
+                  type: 'string',
+                  example: 'a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456',
+                  description: 'SHA-256 fingerprint للمفتاح العام'
+                },
+                organization_department_roles_id: {
+                  type: 'integer',
+                  example: 3
+                },
                 message: {
                   type: 'string',
-                  example: 'تم إنشاء حساب الموظف بنجاح. سلّم بيانات الدخول للموظف.'
+                  example: 'تم إنشاء حساب الموظف بنجاح. private_key يبقى في المتصفح/USB ولا يُخزَّن على السيرفر.'
                 }
               }
             }
@@ -470,7 +516,6 @@ const swaggerOptions = {
           type: 'object',
           minProperties: 1,
           properties: {
-            name: { type: 'string', example: 'تحويل طالب محدث' },
             is_active: { type: 'boolean', example: true }
           }
         },
@@ -635,10 +680,6 @@ const swaggerOptions = {
               type: 'integer',
               nullable: true,
               example: null
-            },
-            is_active: {
-              type: 'boolean',
-              example: true
             }
           }
         },
@@ -661,10 +702,6 @@ const swaggerOptions = {
               type: 'integer',
               nullable: true,
               example: 3
-            },
-            is_active: {
-              type: 'boolean',
-              example: false
             }
           }
         },
@@ -802,10 +839,6 @@ const swaggerOptions = {
               nullable: true,
               example: null,
               description: 'معرّف الدور الأب من organization_department_roles'
-            },
-            is_active: {
-              type: 'boolean',
-              example: true
             }
           }
         },
@@ -826,10 +859,6 @@ const swaggerOptions = {
               type: 'integer',
               nullable: true,
               example: 5
-            },
-            is_active: {
-              type: 'boolean',
-              example: false
             }
           }
         },
@@ -898,6 +927,49 @@ const swaggerOptions = {
             data: {
               type: 'array',
               items: { $ref: '#/components/schemas/RoleByDepartmentItem' }
+            }
+          }
+        },
+
+        // ======================== Location ==========================
+        TypeLocation: {
+          type: 'object',
+          properties: {
+            id: { type: 'integer', example: 1 },
+            name: { type: 'string', example: 'محافظة' },
+            created_at: { type: 'string', format: 'date-time' },
+            updated_at: { type: 'string', format: 'date-time' }
+          }
+        },
+
+        Location: {
+          type: 'object',
+          properties: {
+            id: { type: 'integer', example: 1 },
+            name: { type: 'string', example: 'ريف دمشق' },
+            typeLocation_id: { type: 'integer', example: 1 },
+            parent_id: { type: 'integer', nullable: true, example: null },
+            type_location: { $ref: '#/components/schemas/TypeLocation' },
+            parent: {
+              allOf: [{ $ref: '#/components/schemas/Location' }],
+              nullable: true
+            },
+            created_at: { type: 'string', format: 'date-time' },
+            updated_at: { type: 'string', format: 'date-time' }
+          }
+        },
+
+        LocationListEnvelope: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            message: {
+              type: 'string',
+              example: 'تم جلب البيانات بنجاح'
+            },
+            data: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/Location' }
             }
           }
         }

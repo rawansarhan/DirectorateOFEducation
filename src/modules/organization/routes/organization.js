@@ -41,69 +41,69 @@ router.post(
   createOrganization
 )
 
-/**
- * @swagger
- * /api/organization/{id}:
- *   put:
- *     summary: تعديل مؤسسة
- *     tags: [Organization]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/OrganizationUpdate'
- *     responses:
- *       200:
- *         description: updated
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/OrganizationEnvelope'
- */
-router.put(
-  '/:id',
-  authMiddleware,
-  authorize('ORGANIZATION_UPDATE'),
-  updateOrganization
-)
+// /**
+//  * @swagger
+//  * /api/organization/{id}:
+//  *   put:
+//  *     summary: تعديل مؤسسة
+//  *     tags: [Organization]
+//  *     security:
+//  *       - bearerAuth: []
+//  *     parameters:
+//  *       - in: path
+//  *         name: id
+//  *         required: true
+//  *         schema:
+//  *           type: integer
+//  *     requestBody:
+//  *       required: true
+//  *       content:
+//  *         application/json:
+//  *           schema:
+//  *             $ref: '#/components/schemas/OrganizationUpdate'
+//  *     responses:
+//  *       200:
+//  *         description: updated
+//  *         content:
+//  *           application/json:
+//  *             schema:
+//  *               $ref: '#/components/schemas/OrganizationEnvelope'
+//  */
+// router.put(
+//   '/:id',
+//   authMiddleware,
+//   authorize('ORGANIZATION_UPDATE'),
+//   updateOrganization
+// )
 
-/**
- * @swagger
- * /api/organization/{id}:
- *   delete:
- *     summary: حذف مؤسسة
- *     tags: [Organization]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *     responses:
- *       200:
- *         description: deleted
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/OrganizationDeleteEnvelope'
- */
-router.delete(
-  '/:id',
-  authMiddleware,
-  authorize('ORGANIZATION_DELETE'),
-  deleteOrganization
-)
+// /**
+//  * @swagger
+//  * /api/organization/{id}:
+//  *   delete:
+//  *     summary: حذف مؤسسة
+//  *     tags: [Organization]
+//  *     security:
+//  *       - bearerAuth: []
+//  *     parameters:
+//  *       - in: path
+//  *         name: id
+//  *         required: true
+//  *         schema:
+//  *           type: integer
+//  *     responses:
+//  *       200:
+//  *         description: deleted
+//  *         content:
+//  *           application/json:
+//  *             schema:
+//  *               $ref: '#/components/schemas/OrganizationDeleteEnvelope'
+//  */
+// router.delete(
+//   '/:id',
+//   authMiddleware,
+//   authorize('ORGANIZATION_DELETE'),
+//   deleteOrganization
+// )
 
 /**
  * @swagger

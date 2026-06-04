@@ -1,7 +1,11 @@
 'use strict'
 
-const { ProcessDefinition } = require('../../../entities')
-const { Op } = require('sequelize')
+const Sequelize = require('sequelize')
+
+const Op = Sequelize.Op
+
+const processDefinitionRepository =
+  require('../repositories/processRepository')
 
 async function updateProcessActivationStatus() {
 
@@ -9,33 +13,15 @@ async function updateProcessActivationStatus() {
 
   console.log('NOW:', now)
 
-  const activated = await ProcessDefinition.update(
-    { is_active: true },
-    {
-      where: {
-        start_date: {
-          [Op.lte]: now
-        },
-        approval_status: 'APPROVED',
-        is_active: false
-      }
-    }
-  )
+  const [activatedCount] =
+    await processDefinitionRepository.activateProcesses(now)
 
-  const deactivated = await ProcessDefinition.update(
-    { is_active: false },
-    {
-      where: {
-        end_date: {
-          [Op.lt]: now
-        },
-        is_active: true
-      }
-    }
-  )
+  const [deactivatedCount] =
+    await processDefinitionRepository.deactivateProcesses(now)
 
-  console.log('Activated:', activated[0])
-  console.log('Deactivated:', deactivated[0])
+  console.log('Activated:', activatedCount)
+
+  console.log('Deactivated:', deactivatedCount)
 }
 
 module.exports = {

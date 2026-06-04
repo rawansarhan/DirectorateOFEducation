@@ -1,12 +1,11 @@
 'use strict'
 
-const { ValidateCreateField , ValidateUpdateField } = require('../validations/fieldValidations')
-const { Field } = require('../../../entities')
-const { FieldInputDTO} = require('../dto/FieldInputDTO')
+const { ValidateCreateField, ValidateUpdateField } = require('../validations/fieldValidations')
+const fieldRepository = require('../repositories/fieldRepository')
+const { FieldInputDTO } = require('../dto/FieldInputDTO')
 const { FieldOutputDTO } = require('../dto/FieldOutputDTO')
-const { where } = require('sequelize')
 
-//// =========================================== create new field =========================== : 
+//// =========================================== create new field =========================== :
 async function createFieldService(fieldData) {
 
   try {
@@ -44,7 +43,6 @@ async function createFieldService(fieldData) {
         )
       }
 
-      // كل العناصر لازم تكون string غير فاضي
       const invalidItem = inputFiledDTO.list_json.find(
         item => typeof item !== 'string' || item.trim() === ''
       )
@@ -55,11 +53,9 @@ async function createFieldService(fieldData) {
         )
       }
 
-      // تنظيف القيم
       inputFiledDTO.list_json =
         inputFiledDTO.list_json.map(item => item.trim())
 
-      // منع التكرار
       const uniqueValues = new Set(inputFiledDTO.list_json)
 
       if (uniqueValues.size !== inputFiledDTO.list_json.length) {
@@ -69,14 +65,13 @@ async function createFieldService(fieldData) {
       }
 
     } else {
-      // أي نوع غير list → نخليها null
       inputFiledDTO.list_json = null
     }
 
     // =========================================
     // CREATE FIELD
     // =========================================
-    const field = await Field.create({
+    const field = await fieldRepository.create({
       ...inputFiledDTO
     })
 
@@ -98,7 +93,7 @@ async function createFieldService(fieldData) {
 }
 
 
-//////=============================================  update Field ============================== : 
+//////=============================================  update Field ============================== :
 async function updateFieldService(FieldData, FieldId) {
 
   const id = parseInt(FieldId, 10)
@@ -117,7 +112,7 @@ async function updateFieldService(FieldData, FieldId) {
   }
 
   // GET CURRENT FIELD
-  const oldField = await Field.findByPk(id)
+  const oldField = await fieldRepository.findById(id)
 
   if (!oldField) {
     const err = new Error('الحقل غير موجودة')
@@ -141,7 +136,6 @@ async function updateFieldService(FieldData, FieldId) {
     )
   }
 
-  // إذا النوع صار list لازم list_json
   const typeChangedToList =
     FieldData.field_type &&
     isListType &&
@@ -154,12 +148,12 @@ async function updateFieldService(FieldData, FieldId) {
   }
 
   // DEACTIVATE OLD VERSION
-  await oldField.update({
+  await fieldRepository.updateInstance(oldField, {
     is_active: false
   })
 
   // CREATE NEW VERSION
-  const newField = await Field.create({
+  const newField = await fieldRepository.create({
 
     field_name:
       FieldData.field_name ?? oldField.field_name,
@@ -167,7 +161,6 @@ async function updateFieldService(FieldData, FieldId) {
     field_type:
       finalFieldType,
 
-    // list_json logic
     list_json: isListType
       ? (FieldData.list_json ?? oldField.list_json)
       : null,
@@ -178,16 +171,12 @@ async function updateFieldService(FieldData, FieldId) {
       FieldData.is_active ?? true
   })
 
-  // RETURN DTO
   return new FieldOutputDTO(newField)
 }
 
-/////============================== get all fields ==================================== : 
-async function getAllFieldsService () {
-  const rows = await Field.findAll({
-    where : { is_active :true },
-    order: [['id', 'ASC']]
-  })
+/////============================== get all fields ==================================== :
+async function getAllFieldsService() {
+  const rows = await fieldRepository.findAllActive()
   return rows.map(row => new FieldOutputDTO(row))
 }
 
@@ -197,13 +186,7 @@ async function getAllFieldsService () {
 // =========================================
 const getOneActiveFieldService = async id => {
 
-  const field =
-    await Field.findOne({
-      where: {
-        id,
-        is_active: true
-      }
-    })
+  const field = await fieldRepository.findOneActiveById(id)
 
   if (!field) {
     throw new Error('هذا الحقل غير موجود')

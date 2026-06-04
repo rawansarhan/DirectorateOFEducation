@@ -7,7 +7,7 @@ module.exports = {
       location_id: 1,
       created_at: new Date(),
       updated_at: new Date()
-    }], {});
+    }], { ignoreDuplicates: true });
   },
 
   down: async (queryInterface, Sequelize) => {

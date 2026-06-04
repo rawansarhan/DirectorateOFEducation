@@ -1,145 +1,199 @@
 'use strict'
-
+const orgDeptRolesClient = require('../../../core/shared/clients/organization/orgDeptRolesClient')
 const { re } = require('mathjs')
-const {
-  StageConfig,
-  Stage,
-  StageAssignment,
-  OrgDeptRole,
-  ProcessDefinition
-} = require('../../../entities')
+;('use strict')
+
 const {
   createStageConfigSchema
 } = require('../validations/stageConfigValidations')
 
+const stageRepository = require('../repositories/stageRepository')
+
+const stageConfigRepository = require('../repositories/stageConfigRepository')
+
+const stageAssignmentRepository = require('../repositories/stageAssignmentRepository')
+
+const stageConfigMapper = require('../mappers/stageConfigMapper')
+
+const processRepository =
+  require('../repositories/processRepository')
+// ======================================================
+// CREATE STAGE CONFIG
+// ======================================================
+
 async function createStageConfigService (data) {
+  // =====================================
+  // VALIDATION
+  // =====================================
+
   const { error } = createStageConfigSchema.validate(data)
-  if (error) throw new Error(error.details[0].message)
+
+  if (error) {
+    throw new Error(error.details[0].message)
+  }
+
+  // =====================================
+  // LOAD STAGES ONCE
+  // =====================================
+
+  const stageIds = data.stages.map(s => s.stage_id)
+
+  const stages = await stageRepository.findByIds(stageIds)
+
+  const stageMap = new Map(stages.map(s => [s.id, s]))
+
+  // =====================================
+  // LOAD EXISTING ASSIGNMENTS ONCE
+  // =====================================
+
+  const existingAssignments = await stageAssignmentRepository.findByStageIds(
+    stageIds
+  )
+
+  const existingSet = new Set(
+    existingAssignments.map(
+      a => `${a.stage_id}_${a.organization_department_roles_id}`
+    )
+  )
+
+  // =====================================
+  // PREPARE BULK INSERTS
+  // =====================================
+
+  const configsToCreate = []
+
+  const assignmentsToCreate = []
 
   const results = []
 
-  for (const item of data.stages) {
-    const stage = await Stage.findByPk(item.stage_id)
-    if (!stage) throw new Error(`Stage ${item.stage_id} غير موجود`)
+  // =====================================
+  // LOOP STAGES
+  // =====================================
 
-    const config = await StageConfig.create({
+  for (const item of data.stages) {
+    const stage = stageMap.get(item.stage_id)
+
+    if (!stage) {
+      throw new Error(`Stage ${item.stage_id} غير موجود`)
+    }
+
+    // =================================
+    // CONFIG
+    // =================================
+
+    configsToCreate.push({
       stage_id: item.stage_id,
+
       config_json: item.config_json
     })
 
-    let assignments = []
+    // =================================
+    // USER TASK ASSIGNMENTS
+    // =================================
 
-if (stage.type === 'USER_TASK') {
+    if (stage.type === 'USER_TASK') {
+      const assignments = item.assignments || []
 
-  const assignmentsData =
-    item.assignments || []
+      // =============================
+      // CALL ORGANIZATION SERVICE
+      // =============================
 
-  if (assignmentsData.length > 0) {
+ const normalize = (v) => (v === 0 || v === '0' ? null : v)
 
-    // =========================================
-    // GET organization_department_roles
-    // =========================================
-    const orgDeptRoles = []
+for (const a of assignments) {
+  const orgDeptRole = await orgDeptRolesClient.findOrgDeptRole({
+    organization_id: normalize(a.organization_id),
+    department_id: normalize(a.department_id),
+    role_id: a.role_id
+  })
 
-    for (const a of assignmentsData) {
 
-      const orgDeptRole =
-        await OrgDeptRole.findOne({
-          where: {
-            organization_id: a.organization_id,
-            department_id: a.department_id,
-            role_id: a.role_id,
-            is_active: true
-          }
+        if (!orgDeptRole) {
+          throw new Error(
+            `لم يتم العثور على role_id=${a.role_id}
+             ضمن organization=${a.organization_id}
+             department=${a.department_id}`
+          )
+        }
+
+        const existingKey = `${stage.id}_${orgDeptRole.id}`
+
+        // skip duplicate
+        if (existingSet.has(existingKey)) {
+          continue
+        }
+
+        assignmentsToCreate.push({
+          stage_id: stage.id,
+
+          organization_department_roles_id: orgDeptRole.id
         })
 
-      if (!orgDeptRole) {
-        throw new Error(
-          `لم يتم العثور على role_id=${a.role_id}
-           ضمن organization=${a.organization_id}
-           department=${a.department_id}`
-        )
+        existingSet.add(existingKey)
       }
-
-      orgDeptRoles.push(orgDeptRole)
     }
-
-    // =========================================
-    // EXISTING
-    // =========================================
-    const existing = await StageAssignment.findAll({
-      where: {
-        stage_id: stage.id
-      }
-    })
-
-    const existingSet = new Set(
-      existing.map(
-        e => e.organization_department_roles_id
-      )
-    )
-
-    // =========================================
-    // FILTER NEW ONLY
-    // =========================================
-    const toInsert = orgDeptRoles
-
-      .filter(
-        r => !existingSet.has(r.id)
-      )
-
-      .map(r => ({
-        stage_id: stage.id,
-        organization_department_roles_id: r.id
-      }))
-
-    // =========================================
-    // BULK CREATE
-    // =========================================
-    if (toInsert.length > 0) {
-
-      assignments =
-        await StageAssignment.bulkCreate(toInsert)
-    }
-  }
-}
 
     results.push({
       stage_id: stage.id,
-      config: config.config_json,
-      assignments: assignments.map(a => a.organization_department_roles_id)
+      config: item.config_json
     })
+  }
+
+  // =====================================
+  // BULK CREATE CONFIGS
+  // =====================================
+
+  if (configsToCreate.length > 0) {
+    await stageConfigRepository.bulkCreate(configsToCreate)
+  }
+
+  // =====================================
+  // BULK CREATE ASSIGNMENTS
+  // =====================================
+
+  if (assignmentsToCreate.length > 0) {
+    await stageAssignmentRepository.bulkCreate(assignmentsToCreate)
   }
 
   return {
     message: 'Stages configured successfully',
-    data: results
+
+    data: stageConfigMapper.mapConfigs(results)
   }
 }
-// ========================== get config_json for process =========================
+
+// ======================================================
+// GET CONFIG JSON
+// ======================================================
+
 async function getConfig_json (processID) {
-  const Process = await ProcessDefinition.findByPk(processID)
-  if (!Process) {
+  // =====================================
+  // PROCESS
+  // =====================================
+
+  const process = await processRepository.findById(processID)
+
+  if (!process) {
     return {
       message: 'لم يتم ايجاد العملية',
+
       data: {
         success: false,
         config_json: []
       }
     }
   }
-  // 1. جيب أول stage AUTH (الأقدم)
-  const stage = await Stage.findOne({
-    where: {
-      process_definition_id: processID,
-      auth_type: 'AUTH'
-    },
-    order: [['id', 'ASC']]
-  })
+
+  // =====================================
+  // AUTH STAGE
+  // =====================================
+
+  const stage = await stageRepository.findFirstAuthStage(processID)
 
   if (!stage) {
     return {
-      message: 'لا توجد مرحلة  لهذه العملية',
+      message: 'لا توجد مرحلة لهذه العملية',
+
       data: {
         success: false,
         config_json: []
@@ -147,16 +201,16 @@ async function getConfig_json (processID) {
     }
   }
 
-  // 2. جيب config
-  const stageConfig = await StageConfig.findOne({
-    where: {
-      stage_id: stage.id
-    }
-  })
+  // =====================================
+  // CONFIG
+  // =====================================
+
+  const stageConfig = await stageConfigRepository.findByStageId(stage.id)
 
   if (!stageConfig) {
     return {
       message: 'لم نجد إعدادات للمرحلة',
+
       data: {
         success: false,
         config_json: []
@@ -165,9 +219,11 @@ async function getConfig_json (processID) {
   }
 
   return {
-    message: 'تم جلب إعدادات العملية بنجاح !',
+    message: 'تم جلب إعدادات العملية بنجاح',
+
     data: {
       success: true,
+
       config_json: stageConfig.config_json
     }
   }

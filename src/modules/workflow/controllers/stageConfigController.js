@@ -1,6 +1,7 @@
 'use strict'
 
 const asyncHandler = require('../../../core/middleware/asyncHandler')
+const ApiResponder = require('../../../core/utils/apiResponder')
 const {
   createStageConfigService,
   getConfig_json
@@ -14,15 +15,9 @@ const createStageConfig = asyncHandler(async (req, res) => {
 
     const result = await createStageConfigService(data)
 
-    return res.status(200).json({
-      message: 'تم إعداد المراحل بنجاح !',
-      data: result
-    })
+    return ApiResponder.okResponse(res, result, 'تم إعداد المراحل بنجاح !')
   } catch (err) {
-    return res.status(400).json({
-      success: false,
-      message: err.message
-    })
+    return ApiResponder.badRequestResponse(res, err.message)
   }
 })
 
@@ -34,15 +29,9 @@ const getJsonProcess = asyncHandler(async (req, res) => {
 
     const result = await getConfig_json(processID)
 
-    return res.status(200).json({
-      message: result.message,
-      data: result.data
-    })
+    return ApiResponder.okResponse(res, result.data, result.message)
   } catch (err) {
-    return res.status(400).json({
-      success: false,
-      message: err.message
-    })
+    return ApiResponder.badRequestResponse(res, err.message)
   }
 })
 module.exports = {

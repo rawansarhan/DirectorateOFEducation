@@ -209,6 +209,10 @@ module.exports = {
       },
       {
         organization_department_roles_id: roleMap.TECHNICAL_OFFICER,
+        permission_id: permMap.DEPARTMENT_TOGGLE_STATUS
+      },
+      {
+        organization_department_roles_id: roleMap.TECHNICAL_OFFICER,
         permission_id: permMap.ROLE_CREATE
       },
       {
@@ -222,13 +226,21 @@ module.exports = {
       {
         organization_department_roles_id: roleMap.TECHNICAL_OFFICER,
         permission_id: permMap.ROLE_VIEW
+      },
+      {
+        organization_department_roles_id: roleMap.TECHNICAL_OFFICER,
+        permission_id: permMap.ROLE_TOGGLE_STATUS
+      },
+      {
+        organization_department_roles_id: roleMap.TECHNICAL_OFFICER,
+        permission_id: permMap.LOCATION_VIEW
       }
     ]
 
     // =========================================
-    // INSERT
+    // INSERT (idempotent)
     // =========================================
-    await queryInterface.bulkInsert('role_permissions', data)
+    await queryInterface.bulkInsert('role_permissions', data, { ignoreDuplicates: true })
   },
 
   async down(queryInterface) {

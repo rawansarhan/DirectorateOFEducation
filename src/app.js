@@ -1,4 +1,5 @@
 const express = require('express')
+const path = require('path')
 const dotenv = require('dotenv')
 const cors = require('cors')
 const errorHandler = require('./core/middleware/errorMiddleware')
@@ -8,9 +9,14 @@ dotenv.config()
 
 const app = express()
 
+app.set('trust proxy', 1)
+
 app.use(cors())
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
+
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')))
+app.use('/public', express.static(path.join(__dirname, '../public')))
 
 setupSwagger(app)
 
@@ -21,6 +27,16 @@ setupSwagger(app)
 
 const authRoutes = require('./modules/auth/routes/auth')
 app.use('/api/auth', authRoutes)
+
+
+//auth client:
+const authClientRoutes =
+  require('./modules/auth/routes/internal/authClient')
+
+app.use(
+  '/internal/users',
+  authClientRoutes
+)
 
 //==========================================================================
 //=========================== repositories services ========================
@@ -48,11 +64,33 @@ app.use('/api/department', departmentRoutes)
 
 const roleRoutes = require('./modules/organization/routes/role')
 app.use('/api/role', roleRoutes)
+
+const locationRoutes = require('./modules/organization/routes/location')
+app.use('/api/location', locationRoutes)
+
+// organization client 
+
+const organizationClientRoutes =
+  require('./modules/organization/routes/internal/Organization')
+app.use(
+  '/organizations',
+  organizationClientRoutes
+)
+
+//  OrgDeptRole
+
+const OrgDeptRoleClientRoutes =
+  require('./modules/organization/routes/internal/OrgDeptRoles')
+app.use(
+  '/internal/org-dept-roles',
+  OrgDeptRoleClientRoutes
+)
+
 //==========================================================================
 //======================= workflow services ================================
 
-const processInstancesRoutes = require('./modules/workflow/routes/processInstance')
-app.use('/process-instances', processInstancesRoutes)
+const workflowRoutes = require('./modules/workflow/taskCamunda/routes/workflow')
+app.use('/api/workflow', workflowRoutes)
 
 const complaintsRoutes = require('./modules/workflow/routes/complaint')
 app.use('/api/complaint', complaintsRoutes)
@@ -62,6 +100,14 @@ app.use('/api/stage_config', stageConfigRoutes)
 
 const processDefinitionsRoutes = require('./modules/workflow/routes/processDefinition')
 app.use('/api/process_definitions', processDefinitionsRoutes)
+
+//process client
+const internalProcessRoutes =
+  require('./modules/workflow/routes/internal/processClient')
+app.use(
+  '/internal/process_definitions',
+  internalProcessRoutes
+)
 
 //===========================================================================
 //============================= transaction services ========================
@@ -77,6 +123,8 @@ app.use(
   '/internal/transactions',
   internalTransactionRoutes
 )
+
+
 
 // ====================== ERROR HANDLER ======================
 app.use(errorHandler)

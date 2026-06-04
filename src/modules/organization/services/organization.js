@@ -5,7 +5,8 @@ const {
   ValidateUpdateOrganization
 } = require('../validations/organizationValidation')
 
-const { Organization, Location } = require('../../../entities')
+const organizationRepository = require('../repositories/organizationRepository')
+const locationRepository = require('../repositories/locationRepository')
 
 // ================= CREATE =================
 async function createOrganizationService(data) {
@@ -19,7 +20,7 @@ async function createOrganizationService(data) {
   }
 
   if (data.parent_id) {
-    const parent = await Organization.findByPk(data.parent_id)
+    const parent = await organizationRepository.findById(data.parent_id)
     if (!parent) {
       const err = new Error('المؤسسة الأب غير موجودة')
       err.statusCode = 404
@@ -28,7 +29,7 @@ async function createOrganizationService(data) {
   }
 
   if (data.location_id) {
-    const location = await Location.findByPk(data.location_id)
+    const location = await locationRepository.findById(data.location_id)
     if (!location) {
       const err = new Error('الموقع غير موجود')
       err.statusCode = 404
@@ -36,7 +37,7 @@ async function createOrganizationService(data) {
     }
   }
 
-  const organization = await Organization.create({
+  const organization = await organizationRepository.create({
     name: data.name,
     parent_id: data.parent_id ?? null,
     location_id: data.location_id ?? null
@@ -64,7 +65,7 @@ async function updateOrganizationService(data, id) {
     throw err
   }
 
-  const organization = await Organization.findByPk(organizationId)
+  const organization = await organizationRepository.findById(organizationId)
 
   if (!organization) {
     const err = new Error('المؤسسة غير موجودة')
@@ -79,7 +80,7 @@ async function updateOrganizationService(data, id) {
       throw err
     }
 
-    const parent = await Organization.findByPk(data.parent_id)
+    const parent = await organizationRepository.findById(data.parent_id)
     if (!parent) {
       const err = new Error('المؤسسة الأب غير موجودة')
       err.statusCode = 404
@@ -88,7 +89,7 @@ async function updateOrganizationService(data, id) {
   }
 
   if (data.location_id !== undefined && data.location_id !== null) {
-    const location = await Location.findByPk(data.location_id)
+    const location = await locationRepository.findById(data.location_id)
     if (!location) {
       const err = new Error('الموقع غير موجود')
       err.statusCode = 404
@@ -101,10 +102,7 @@ async function updateOrganizationService(data, id) {
   if (data.parent_id !== undefined) payload.parent_id = data.parent_id
   if (data.location_id !== undefined) payload.location_id = data.location_id
 
-  await organization.update(payload)
-  await organization.reload()
-
-  return organization
+  return organizationRepository.updateInstance(organization, payload)
 }
 
 // ================= DELETE =================
@@ -117,7 +115,7 @@ async function deleteOrganizationService(id) {
     throw err
   }
 
-  const organization = await Organization.findByPk(organizationId)
+  const organization = await organizationRepository.findById(organizationId)
 
   if (!organization) {
     const err = new Error('المؤسسة غير موجودة')
@@ -125,22 +123,14 @@ async function deleteOrganizationService(id) {
     throw err
   }
 
-  await organization.destroy()
+  await organizationRepository.destroyInstance(organization)
 
   return { id: organizationId }
 }
 
 // ================= GET ALL =================
 async function getAllOrganizationsService() {
-  const rows = await Organization.findAll({
-    order: [['id', 'ASC']],
-    include: [
-      { model: Organization, as: 'parent' },
-      { model: Location, as: 'location' }
-    ]
-  })
-
-  return rows
+  return organizationRepository.findAll()
 }
 
 // ================= GET BY ID =================
@@ -153,13 +143,7 @@ async function getOrganizationByIdService(id) {
     throw err
   }
 
-  const organization = await Organization.findByPk(organizationId, {
-    include: [
-      { model: Organization, as: 'parent' },
-      { model: Organization, as: 'children' },
-      { model: Location, as: 'location' }
-    ]
-  })
+  const organization = await organizationRepository.findByIdWithRelations(organizationId)
 
   if (!organization) {
     const err = new Error('المؤسسة غير موجودة')
