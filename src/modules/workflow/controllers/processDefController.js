@@ -18,10 +18,12 @@ const createProcessDefinition = asyncHandler(async (req, res) => {
   try {
     const data = {
       name: req.body.name,
-      code: req.body.code,
-      type_trans_id: req.body.type_trans_id,
-      organization_id: req.body.organization_id,
-      priority: req.body.priority,
+      is_complaint: isComplaint,
+      type_trans_id: isComplaint ? null : Number(req.body.type_trans_id),
+      organization_id: req.body.organization_id
+        ? Number(req.body.organization_id)
+        : undefined,
+      priority: Number(req.body.priority),
       start_date: req.body.start_date,
       end_date: req.body.end_date,
       filePath: req.file?.path

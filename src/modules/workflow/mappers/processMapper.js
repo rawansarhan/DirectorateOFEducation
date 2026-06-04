@@ -57,6 +57,9 @@ function processDetailsMapper(process) {
       config:
         stage.stage_config?.config_json || null,
 
+      ui:
+        stage.stage_config?.ui_json || null,
+
       assignments:
         stage.stage_assignments.map(a => ({
 

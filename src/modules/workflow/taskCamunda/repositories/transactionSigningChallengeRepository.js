@@ -24,6 +24,10 @@ class TransactionSigningChallengeRepository {
     return TransactionSigningChallenge.create(data)
   }
 
+  async findById (id) {
+    return TransactionSigningChallenge.findByPk(id)
+  }
+
   async findByIdWithLock (id, transaction) {
     return TransactionSigningChallenge.findByPk(id, {
       transaction,

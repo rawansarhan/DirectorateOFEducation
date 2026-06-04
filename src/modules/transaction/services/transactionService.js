@@ -7,6 +7,14 @@ const eventBus = require('../../../core/shared/events/eventBus')
 const outboxRepository =
   require('../../../core/shared/outbox/repositories/OutboxRepository')
 
+const {
+  validateSubmissionRequest,
+  validateSubmissionAgainstConfig,
+  buildStoredSubmissionData,
+  loadAuthStageConfigBundleByProcessCode,
+  SUBMISSION_SCHEMA_VERSION
+} = require('../../workflow/services/stageSubmissionService')
+
 const EVENTS = require('../../../core/shared/events/types')
 // ======================================================
 // CREATE OR UPDATE DRAFT
@@ -212,8 +220,62 @@ await outboxRepository.create({
   }
 })
 
-  return  transaction
-  
+  const guardContext = guard.context
+
+  try {
+    const { config_json: configJson, ui_json: uiJson } =
+      await loadAuthStageConfigBundleByProcessCode(transaction.code)
+
+    const normalized = await validateSubmissionAgainstConfig(
+      data,
+      configJson,
+      {
+        mode: 'submit',
+        uiJson,
+        requireVariables: Boolean(
+          (uiJson.actions || []).length ||
+          data?.variables?.action
+        )
+      }
+    )
+
+    if (!normalized.variables.action) {
+      normalized.variables.action = 'submit'
+    }
+
+    const storedData = buildStoredSubmissionData(normalized)
+
+    await transaction.update({
+      data: storedData,
+      status: 'submitted'
+    })
+
+    await ensureGenesisHash(transaction)
+
+    await outboxRepository.create({
+      event_type: EVENTS.TRANSACTION_SUBMITTED,
+      payload: {
+        transactionId: transaction.id,
+        processCode: transaction.code
+      }
+    })
+
+    const refreshed = await repo.findById(transactionId)
+    const plain = refreshed.get
+      ? refreshed.get({ plain: true })
+      : refreshed
+
+    await invalidateTransactionById(userId, transactionId)
+    await invalidateUserTransactionDrafts(userId)
+
+    return operationGuardService.commit(guardContext, {
+      ...plain,
+      idempotent_replay: false
+    })
+  } catch (error) {
+    operationGuardService.release(guardContext)
+    throw error
+  }
 }
 ///////////////////////////////////////////////////////////////
 

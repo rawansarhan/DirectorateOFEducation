@@ -17,6 +17,37 @@ const stageConfigMapper = require('../mappers/stageConfigMapper')
 
 const processRepository =
   require('../repositories/processRepository')
+
+const {
+  invalidateAllProcessLists
+} = require('../../../core/cache/processCacheService')
+
+const {
+  getOrLoad,
+  KEYS,
+  invalidateStageConfig
+} = require('../../../core/cache/apiCacheService')
+
+const {
+  HTTP_STATUS,
+  createHttpError
+} = require('../../../core/middleware/httpStatusCodes')
+
+function formatJoiError (error) {
+  const lines = error.details.map(d => {
+    const path = d.path.length ? d.path.join('.') : 'body'
+    return `${path}: ${d.message}`
+  })
+
+  return `بيانات الطلب غير صالحة — ${lines.join(' | ')}`
+}
+
+function throwBusinessError (message, statusCode = HTTP_STATUS.BAD_REQUEST) {
+  const err = createHttpError(message, statusCode, 'VALIDATION_ERROR')
+  err.expose = true
+  throw err
+}
+
 // ======================================================
 // CREATE STAGE CONFIG
 // ======================================================
@@ -26,11 +57,16 @@ async function createStageConfigService (data) {
   // VALIDATION
   // =====================================
 
-  const { error } = createStageConfigSchema.validate(data)
+  const { error, value } = createStageConfigSchema.validate(data, {
+    abortEarly: false,
+    stripUnknown: true
+  })
 
   if (error) {
-    throw new Error(error.details[0].message)
+    throwBusinessError(formatJoiError(error))
   }
+
+  data = value
 
   // =====================================
   // LOAD STAGES ONCE
@@ -41,6 +77,25 @@ async function createStageConfigService (data) {
   const stages = await stageRepository.findByIds(stageIds)
 
   const stageMap = new Map(stages.map(s => [s.id, s]))
+
+  if (stages.length !== stageIds.length) {
+    const found = new Set(stages.map(s => s.id))
+    const missing = stageIds.filter(id => !found.has(id))
+    throwBusinessError(
+      `مرحلة غير موجودة: ${missing.join(', ')}`,
+      HTTP_STATUS.NOT_FOUND
+    )
+  }
+
+  const existingConfigs = await stageConfigRepository.findByStageIds(stageIds)
+
+  if (existingConfigs.length > 0) {
+    const taken = existingConfigs.map(c => c.stage_id).join(', ')
+    throwBusinessError(
+      `إعدادات المراحل التالية موجودة مسبقاً (stage_id): ${taken}`,
+      HTTP_STATUS.CONFLICT
+    )
+  }
 
   // =====================================
   // LOAD EXISTING ASSIGNMENTS ONCE
@@ -73,8 +128,40 @@ async function createStageConfigService (data) {
   for (const item of data.stages) {
     const stage = stageMap.get(item.stage_id)
 
-    if (!stage) {
-      throw new Error(`Stage ${item.stage_id} غير موجود`)
+    const configActions = item.config_json?.actions
+
+    if (stage.type === 'USER_TASK' && Array.isArray(configActions) && configActions.length) {
+      throwBusinessError(
+        `المرحلة ${item.stage_id}: actions لمهام USER_TASK تُرسل عند إكمال المهمة وليس في config_json`
+      )
+    }
+
+    const uiKeys = Object.keys(item.ui_json || {})
+
+    if (uiKeys.length > 0) {
+      throwBusinessError(
+        `المرحلة ${item.stage_id}: ui_json يجب أن يكون فارغاً {}`
+      )
+    }
+
+    if (stage.type === 'SERVICE_TASK' && Array.isArray(configActions)) {
+      for (const action of configActions) {
+        if (!action?.name) {
+          throwBusinessError(
+            `المرحلة ${item.stage_id}: كل action في config_json يحتاج name`
+          )
+        }
+      }
+    }
+
+    if (stage.type === 'USER_TASK') {
+      const assignments = item.assignments || []
+
+      if (!assignments.length) {
+        throwBusinessError(
+          `المرحلة ${item.stage_id} (USER_TASK): يجب تحديد assignments (مؤسسة/قسم/دور)`
+        )
+      }
     }
 
     // =================================
@@ -83,8 +170,8 @@ async function createStageConfigService (data) {
 
     configsToCreate.push({
       stage_id: item.stage_id,
-
-      config_json: item.config_json
+      config_json: item.config_json,
+      ui_json: item.ui_json || {}
     })
 
     // =================================
@@ -109,10 +196,8 @@ for (const a of assignments) {
 
 
         if (!orgDeptRole) {
-          throw new Error(
-            `لم يتم العثور على role_id=${a.role_id}
-             ضمن organization=${a.organization_id}
-             department=${a.department_id}`
+          throwBusinessError(
+            `لم يتم العثور على دور (role_id=${a.role_id}) للمؤسسة ${a.organization_id} والقسم ${a.department_id}`
           )
         }
 
@@ -135,7 +220,8 @@ for (const a of assignments) {
 
     results.push({
       stage_id: stage.id,
-      config: item.config_json
+      config: item.config_json,
+      ui: item.ui_json || {}
     })
   }
 
@@ -144,7 +230,22 @@ for (const a of assignments) {
   // =====================================
 
   if (configsToCreate.length > 0) {
-    await stageConfigRepository.bulkCreate(configsToCreate)
+    try {
+      await stageConfigRepository.bulkCreate(configsToCreate)
+    } catch (dbErr) {
+      dbErr.expose = true
+      throw dbErr
+    }
+
+    const processIds = new Set(
+      stages
+        .map(s => s.process_definition_id)
+        .filter(Boolean)
+    )
+
+    for (const processId of processIds) {
+      await invalidateStageConfig(processId)
+    }
   }
 
   // =====================================
@@ -163,72 +264,88 @@ for (const a of assignments) {
 }
 
 // ======================================================
-// GET CONFIG JSON
+// GET AUTH STAGE UI (مواطن / موظف — الأوراق المطلوبة)
 // ======================================================
 
-async function getConfig_json (processID) {
+function buildAuthStageUiJson (stageConfig) {
+  const stored = stageConfig?.ui_json || {}
+
+  if (stored && Object.keys(stored).length > 0) {
+    return stored
+  }
+
+  const cfg = stageConfig?.config_json || {}
+
+  return {
+    fields: cfg.fields || [],
+    files: cfg.files || [],
+    templates: cfg.templates || []
+  }
+}
+
+async function getConfig_json(processId) {
+  // =====================================
+  // VALIDATION
+  // =====================================
+
+  if (!Number.isInteger(processId) || processId < 1) {
+    throw createHttpError(
+      'معرّف العملية غير صالح',
+      HTTP_STATUS.BAD_REQUEST
+    );
+  }
+
   // =====================================
   // PROCESS
   // =====================================
 
-  const process = await processRepository.findById(processID)
+  const process = await processRepository.findById(processId);
 
   if (!process) {
-    return {
-      message: 'لم يتم ايجاد العملية',
-
-      data: {
-        success: false,
-        config_json: []
-      }
-    }
+    throw createHttpError(
+      'لم يتم ايجاد العملية',
+      HTTP_STATUS.NOT_FOUND
+    );
   }
 
   // =====================================
-  // AUTH STAGE
+  // STAGE
   // =====================================
 
-  const stage = await stageRepository.findFirstAuthStage(processID)
+  const stage = await stageRepository.findAuthStageByProcessId(
+    processId
+  );
 
   if (!stage) {
-    return {
-      message: 'لا توجد مرحلة لهذه العملية',
-
-      data: {
-        success: false,
-        config_json: []
-      }
-    }
+    throw createHttpError(
+      'لا توجد مرحلة لهذه العملية',
+      HTTP_STATUS.NOT_FOUND
+    );
   }
 
   // =====================================
   // CONFIG
   // =====================================
 
-  const stageConfig = await stageConfigRepository.findByStageId(stage.id)
+  const stageConfig =
+    await stageConfigRepository.findByStageId(
+      stage.id
+    );
 
   if (!stageConfig) {
-    return {
-      message: 'لم نجد إعدادات للمرحلة',
-
-      data: {
-        success: false,
-        config_json: []
-      }
-    }
+    throw createHttpError(
+      'لم نجد إعدادات للمرحلة',
+      HTTP_STATUS.NOT_FOUND
+    );
   }
 
   return {
     message: 'تم جلب إعدادات العملية بنجاح',
-
     data: {
-      success: true,
-
-      config_json: stageConfig.config_json
+      ui_json: buildAuthStageUiJson(stageConfig)
     }
-  }
+  };
 }
-
 module.exports = {
   createStageConfigService,
   getConfig_json

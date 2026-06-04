@@ -66,9 +66,11 @@ async function getTaskDetails ({ taskId, userId }) {
 
 
 
-  const currentStageConfig =
+  const stageConfigRow = processInstance.current_stage?.stage_config
 
-    processInstance.current_stage?.stage_config?.config_json || {}
+  const currentStageConfig = stageConfigRow?.config_json || {}
+
+  const currentStageUi = stageConfigRow?.ui_json || {}
 
 
 
@@ -122,7 +124,9 @@ async function getTaskDetails ({ taskId, userId }) {
 
         code: processInstance.current_stage?.code,
 
-        config: currentStageConfig
+        config: currentStageConfig,
+
+        ui: currentStageUi
 
       }
 

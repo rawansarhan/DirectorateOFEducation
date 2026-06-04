@@ -56,6 +56,32 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: true,
       },
 
+      first_name: {
+        type: DataTypes.STRING(64),
+        allowNull: true,
+      },
+
+      last_name: {
+        type: DataTypes.STRING(64),
+        allowNull: true,
+      },
+
+      father_name: {
+        type: DataTypes.STRING(64),
+        allowNull: true,
+      },
+
+      mother_name: {
+        type: DataTypes.STRING(64),
+        allowNull: true,
+      },
+
+      national_id: {
+        type: DataTypes.STRING(11),
+        allowNull: true,
+        unique: true,
+      },
+
       password: {
         type: DataTypes.STRING,
         allowNull: false,

@@ -13,7 +13,13 @@ const { getClientMeta } = require('../../../../core/security/securityConfig')
 const { respondIfSecurityError } = require('../../../../core/security/securityResponseHelper')
 
 const ApiResponder = require('../../../../core/utils/apiResponder')
-
+const {
+  sendWorkflowSuccess,
+  sendWorkflowError,
+  workflowValidationError
+} = require('../../../../core/utils/workflowResponseHelper')
+const { validateCompleteTaskPayload } = require('../../schemas/completeTaskSchema')
+const { parsePaginationQuery } = require('../../../../core/utils/pagination')
 
 
 function handleWorkflowError (res, error, defaultStatus = 400) {
@@ -66,6 +72,13 @@ function handleWorkflowError (res, error, defaultStatus = 400) {
 }
 
 
+const {
+  sendWorkflowSuccess,
+  sendWorkflowError,
+  workflowValidationError
+} = require('../../../../core/utils/workflowResponseHelper')
+const { validateCompleteTaskPayload } = require('../../schemas/completeTaskSchema')
+const { parsePaginationQuery } = require('../../../../core/utils/pagination')
 
 async function startWorkflowController (req, res) {
 
@@ -130,8 +143,13 @@ async function createSigningChallengeController (req, res) {
 
 
 async function completeTaskController (req, res) {
-
-  try {
+try{
+    if (validationError) {
+      return sendWorkflowError(
+        res,
+        workflowValidationError(validationError)
+      )
+    }
 
     const result = await completeTaskService.completeTask({
 
@@ -162,16 +180,16 @@ async function completeTaskController (req, res) {
 async function getAllTasksController (req, res) {
 
   try {
+    const { page, limit, offset } = parsePaginationQuery(req.query)
 
     const result = await getAllTasksService.getAllTasks({
-
-      userId: req.user.id
-
+      userId: req.user.id,
+      page,
+      limit,
+      offset
     })
 
-
-
-    return ApiResponder.success(res, {
+     return ApiResponder.success(res, {
 
       data: result.data,
 
@@ -185,9 +203,7 @@ async function getAllTasksController (req, res) {
 
     return handleWorkflowError(res, error, 500)
 
-  }
-
-}
+}}
 
 
 

@@ -1,16 +1,14 @@
 const Joi = require('joi')
 
-// ⚠️ اختياري: استخدام وقت السيرفر الحقيقي بدل 'now'
-const today = new Date()
-today.setHours(0, 0, 0, 0)
+// // ⚠️ اختياري: استخدام وقت السيرفر الحقيقي بدل 'now'
+// const today = new Date()
+// today.setHours(0, 0, 0, 0)
 
 const createProcessDefinitionSchema = Joi.object({
   name: Joi.string()
     .min(3)
     .max(100)
     .required(),
-
-  code: Joi.string().required(),
 
   filePath: Joi.string().required(),
 
@@ -26,9 +24,12 @@ const createProcessDefinitionSchema = Joi.object({
     .min(1)
     .required(),
 
-  // =========================================
-  // START DATE
-  // =========================================
+  start_date: Joi.date()
+    .required()
+    .messages({
+      'date.base': 'start_date يجب أن يكون تاريخ صحيح',
+      'any.required': 'start_date مطلوب'
+    }),
 
 
 start_date: Joi.date()

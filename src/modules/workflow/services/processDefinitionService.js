@@ -25,12 +25,21 @@ const authClient =
   require('../../../core/shared/clients/auth/authClient')
 const orgDeptRolesClient = require('../../../core/shared/clients/organization/orgDeptRolesClient')
 
+const {
+  isProcessActiveBySchedule
+} = require('../utils/processActivation')
 
-async function createProcessDefinitionService(data) {
+const LOG_PREFIX = '[ProcessDefinition]'
 
-  // validation
-  const { error } =
-    createProcessDefinitionSchema.validate(data)
+/**
+ * - is_complaint=true  → type_trans_id = null (شكوى)
+ * - is_complaint=false → type_trans_id مطلوب (معاملة عادية)
+ * - بعد الإنشاء: مسح كاش قوائم المعاملات
+ */
+async function createProcessDefinitionService (data) {
+  console.log(`${LOG_PREFIX} createProcessDefinition name=${data.name}`)
+
+  const { error } = createProcessDefinitionSchema.validate(data)
 
   if (error) {
     throw new Error(error.details[0].message)
@@ -66,38 +75,28 @@ async function createProcessDefinitionService(data) {
       data.filePath
     )
 
-  // persistence
-  const process =
-    await processRepository.create({
+  const version = 1
 
-      name: data.name,
+  const process = await processRepository.create({
+    name: data.name,
+    camunda_process_key: deployRes.processKey,
+    camunda_deployment_id: deployRes.deploymentId,
+    is_complaint: isComplaint,
+    type_trans_id: isComplaint ? null : data.type_trans_id,
+    organization_id: data.organization_id || null,
+    status: 'deployed',
+    version,
+    priority: data.priority,
+    start_date: data.start_date,
+    end_date: data.end_date
+  })
 
-      code:
-        data.code ||
-        deployRes.processKey,
+  await process.reload()
 
-      camunda_process_key:
-        deployRes.processKey,
-
-      camunda_deployment_id:
-        deployRes.deploymentId,
-
-      type_trans_id:
-        data.type_trans_id,
-
-      organization_id:
-        data.organization_id || null,
-
-      status: 'deployed',
-
-      version: 1,
-
-      priority: data.priority,
-
-      start_date: data.start_date,
-
-      end_date: data.end_date
-    })
+  console.log(
+    `${LOG_PREFIX} created process id=${process.id} code=${process.code} — invalidating cache...`
+  )
+  await invalidateAllProcessLists()
 
   return process
 }
@@ -325,14 +324,20 @@ async function reviewProcess(
     throw new Error('العملية غير موجودة')
   }
 
-  // update
+  const updatePayload = {
+    approval_status: approvalStatus
+  }
 
-  await processRepository.update(
-    processId,
-    {
-      approval_status: approvalStatus
-    }
-  )
+  if (decision === 'APPROVE') {
+    updatePayload.is_active = isProcessActiveBySchedule(
+      process.start_date,
+      process.end_date
+    )
+  } else {
+    updatePayload.is_active = false
+  }
+
+  await processRepository.update(processId, updatePayload)
 
   return {
     message:

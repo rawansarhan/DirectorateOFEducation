@@ -2,6 +2,7 @@
 
 const asyncHandler = require('../../../core/middleware/asyncHandler')
 const ApiResponder = require('../../../core/utils/apiResponder')
+const { sendOk } = require('../../../core/utils/controllerResponse')
 const {
   createStageConfigService,
   getConfig_json
@@ -19,6 +20,12 @@ const createStageConfig = asyncHandler(async (req, res) => {
   } catch (err) {
     return ApiResponder.badRequestResponse(res, err.message)
   }
+  const result = await createStageConfigService(req.body)
+  return sendOk(
+    res,
+    result.data,
+    result.message || 'تم إعداد المراحل بنجاح'
+  )
 })
 
 // ======================= get all config_json for process =========================
@@ -33,6 +40,8 @@ const getJsonProcess = asyncHandler(async (req, res) => {
   } catch (err) {
     return ApiResponder.badRequestResponse(res, err.message)
   }
+  const data = await getConfig_json(req.params.id)
+  return sendOk(res, data, 'تم جلب إعدادات العملية بنجاح')
 })
 module.exports = {
   createStageConfig,

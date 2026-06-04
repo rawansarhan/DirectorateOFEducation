@@ -99,16 +99,14 @@ function buildSigningPayload ({
   task,
   transaction,
   stage,
-  payload
+  decision
 }) {
   return {
     taskId: task.id,
     transactionId: transaction.id,
     stageCode: stage.code,
     stageId: stage.id,
-    variables: payload.variables || {},
-    fields: payload.fields || [],
-    files: payload.files || []
+    decision
   }
 }
 
@@ -142,10 +140,23 @@ async function createSigningChallenge ({
     task: context.task,
     transaction: context.transaction,
     stage: context.stage,
-    payload
+    decision: validatedPayload.decision
   })
 
   const payloadHash = buildCanonicalPayloadHash(signingPayload)
+  const genesisHash = await ensureGenesisHash(context.transaction)
+  const previousLinkHash = await getPreviousLinkHash(context.transaction.id)
+  const preCumulativeHash = computePreSignCumulativeHash(
+    context.transaction.data || {},
+    context.stage.code,
+    { decision: validatedPayload.decision }
+  )
+
+  const stages = await stageRepository.findByProcessId(
+    context.processInstance.process_definition_id
+  )
+  const stageOrderIndex = stages.findIndex(item => item.id === context.stage.id)
+  const stageOrder = stageOrderIndex >= 0 ? stageOrderIndex + 1 : 0
 
   await transactionSigningChallengeRepository.invalidateActiveByTaskAndUser(
     taskId,
@@ -188,7 +199,8 @@ async function createSigningChallenge ({
     details: {
       signingId: challenge.id,
       transactionId: context.transaction.id,
-      stageCode: context.stage.code
+      stageCode: context.stage.code,
+      decision: validatedPayload.decision
     }
   })
 
@@ -204,9 +216,115 @@ async function createSigningChallenge ({
     expires_in_seconds: Math.floor(TX_SIGN_TTL_MS / 1000)
   }
 }
-////////////////////////////////////////////////////////////
-async function verifyAndPersistSignature ({
-  signingId,
+async function assertSigningChallengeReady ({
+  challenge,
+  userId,
+  decision
+}) {
+  if (!challenge) {
+    throw new Error('Signing challenge not found')
+  }
+
+  if (challenge.user_id !== userId) {
+    throw new Error('Signing challenge does not belong to this user')
+  }
+
+  if (challenge.used_at) {
+    throw new Error('Signing challenge already used (replay attack)')
+  }
+
+  if (new Date() > challenge.expires_at) {
+    throw new Error('Signing challenge expired')
+  }
+
+  if (!decision) {
+    throw new Error('decision is required to verify signing challenge')
+  }
+
+  const stage = await stageRepository.findById(challenge.stage_id)
+  const signedPayload = buildSigningPayload({
+    task: { id: challenge.task_id },
+    transaction: { id: challenge.transaction_id },
+    stage: { code: stage?.code, id: challenge.stage_id },
+    decision
+  })
+  const requestPayloadHash = buildCanonicalPayloadHash(signedPayload)
+
+  if (requestPayloadHash !== challenge.payload_hash) {
+    throw new Error('decision does not match the signed signing challenge')
+  }
+
+  return { stage, requestPayloadHash }
+}
+
+/**
+ * تحقق فقط — بدون حفظ في DB (يُستدعى قبل Camunda).
+ */
+async function verifySignatureForComplete ({
+  challengeId,
+  signature,
+  userId,
+  decision = null,
+  clientMeta = {}
+}) {
+  await securityGuardService.assertAccountNotLocked(userId)
+
+  const challenge =
+    await transactionSigningChallengeRepository.findById(challengeId)
+
+  const { stage } = await assertSigningChallengeReady({
+    challenge,
+    userId,
+    decision
+  })
+
+  const userKey = await userKeyRepository.findById(challenge.user_key_id)
+
+  if (!userKey || !userKey.is_active) {
+    throw new Error('Digital key is not active')
+  }
+
+  const signatureValid = verifyChallengeSignature({
+    publicKeyPem: userKey.public_key,
+    message: challenge.message,
+    signatureBase64: signature
+  })
+
+  if (!signatureValid) {
+    const failure = await securityGuardService.recordFailure({
+      userId,
+      action: 'TX_SIGN_VERIFY_FAILED',
+      resourceType: 'task',
+      resourceId: challenge.task_id,
+      ipAddress: clientMeta.ip,
+      userAgent: clientMeta.userAgent,
+      details: { challengeId }
+    })
+
+    if (failure.locked) {
+      const error = new Error('الحساب مقفل مؤقتاً بسبب محاولات فاشلة متكررة')
+      error.code = 'ACCOUNT_LOCKED'
+      error.lockedUntil = failure.lockedUntil
+      throw error
+    }
+
+    const error = new Error('Invalid digital signature')
+    error.remainingAttempts = failure.remainingAttempts
+    throw error
+  }
+
+  return {
+    challenge,
+    userKey,
+    stage
+  }
+}
+
+/**
+ * حفظ التوقيع بعد نجاح Camunda — ضمن transaction DB واحدة.
+ */
+async function persistVerifiedSignature ({
+  challengeId,
   signature,
   userId,
   clientMeta = {}
@@ -246,36 +364,7 @@ async function verifyAndPersistSignature ({
       throw new Error('Digital key is not active')
     }
 
-    const signatureValid = verifyChallengeSignature({
-      publicKeyPem: userKey.public_key,
-      message: challenge.message,
-      signatureBase64: signature
-    })
-
-    if (!signatureValid) {
-      await transaction.rollback()
-
-      const failure = await securityGuardService.recordFailure({
-        userId,
-        action: 'TX_SIGN_VERIFY_FAILED',
-        resourceType: 'task',
-        resourceId: challenge.task_id,
-        ipAddress: clientMeta.ip,
-        userAgent: clientMeta.userAgent,
-        details: { signingId }
-      })
-
-      if (failure.locked) {
-        const error = new Error('الحساب مقفل مؤقتاً بسبب محاولات فاشلة متكررة')
-        error.code = 'ACCOUNT_LOCKED'
-        error.lockedUntil = failure.lockedUntil
-        throw error
-      }
-
-      const error = new Error('Invalid digital signature')
-      error.remainingAttempts = failure.remainingAttempts
-      throw error
-    }
+    const stage = await stageRepository.findById(challenge.stage_id)
 
     const document = await documentSignatureRepository.create({
       transaction_id: challenge.transaction_id,
@@ -305,8 +394,6 @@ async function verifyAndPersistSignature ({
     await transactionSigningChallengeRepository.markUsed(challenge, transaction)
 
     await transaction.commit()
-
-    const stage = await stageRepository.findById(challenge.stage_id)
 
     await securityGuardService.recordSuccess({
       userId,
@@ -344,6 +431,17 @@ async function verifyAndPersistSignature ({
 
     throw error
   }
+}
+
+async function verifyAndPersistSignature (params) {
+  const verified = await verifySignatureForComplete(params)
+
+  return persistVerifiedSignature({
+    challengeId: params.challengeId,
+    signature: params.signature,
+    userId: params.userId,
+    clientMeta: params.clientMeta
+  })
 }
 
 function parseStageIdFromDocumentPath (filePath) {
@@ -422,6 +520,8 @@ module.exports = {
   loadTaskContext,
   requiresDigitalSignature,
   createSigningChallenge,
+  verifySignatureForComplete,
+  persistVerifiedSignature,
   verifyAndPersistSignature,
   buildTransactionSignatureLedger,
   appendSignatureToTransactionData

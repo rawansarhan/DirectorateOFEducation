@@ -18,12 +18,13 @@ const ActionStrategyFactory = require('../../actions/ActionStrategyFactory')
 const stageConfigRepository = require('../../repositories/stageConfigRepository')
 const {
   normalizeActionPayload,
-  resolveActionsFromStageConfig
+  resolveActionsForStage
 } = require('../../actions/actionHelpers')
 const { buildStoredFileEntry } = require('../../../../core/utils/filePath')
 const {
   requiresDigitalSignature,
-  verifyAndPersistSignature,
+  verifySignatureForComplete,
+  persistVerifiedSignature,
   buildTransactionSignatureLedger,
   appendSignatureToTransactionData
 } = require('./transactionSigningService')
@@ -93,7 +94,7 @@ async function runServiceTaskActions ({
     const stageConfig =
       await stageConfigRepository.findByStageId(serviceStage.id)
 
-    const actions = resolveActionsFromStageConfig(stageConfig?.config_json)
+    const actions = resolveActionsForStage(serviceStage, stageConfig)
 
     if (!actions.length) {
       executedServiceTasks.add(taskKey)
@@ -139,6 +140,124 @@ async function completeTask ({
 }) {
   await securityGuardService.assertAccountNotLocked(userId)
 
+  const idempotencyKey =
+    clientMeta.idempotencyKey || payload?.idempotency_key || null
+
+  let guardContext = null
+
+  if (!isAutoComplete && idempotencyKey) {
+    const replay = operationGuardService.getReplay({
+      scope: 'complete_task',
+      userId,
+      idempotencyKey
+    })
+
+    if (replay) {
+      return replay
+    }
+  }
+
+  try {
+    const result = await completeTaskCore({
+      taskId,
+      userId,
+      payload,
+      clientMeta,
+      isAutoComplete,
+      idempotencyKey,
+      async acquireOperationGuard () {
+        if (isAutoComplete) {
+          return null
+        }
+
+        const guard = operationGuardService.begin({
+          scope: 'complete_task',
+          userId,
+          resourceId: taskId,
+          idempotencyKey
+        })
+
+        if (guard.replay) {
+          const error = new Error('Idempotent replay')
+          error.code = 'IDEMPOTENT_REPLAY'
+          error.result = guard.result
+          throw error
+        }
+
+        guardContext = guard.context
+        return guardContext
+      }
+    })
+
+    if (guardContext) {
+      return operationGuardService.commit(guardContext, result)
+    }
+
+    return {
+      ...result,
+      idempotent_replay: false
+    }
+  } catch (error) {
+    if (error.code === 'IDEMPOTENT_REPLAY') {
+      return error.result
+    }
+
+    operationGuardService.release(guardContext)
+    throw error
+  }
+}
+
+function toPublicSignatureRecord (record) {
+  if (!record) {
+    return null
+  }
+
+  const {
+    challenge,
+    digitalSignature,
+    userKey,
+    signed_message: signedMessage,
+    ...publicRecord
+  } = record
+
+  return publicRecord
+}
+
+function buildCompleteTaskResponseData ({
+  stageName,
+  stageSnapshot,
+  payload,
+  idempotencyKey
+}) {
+  const response = {
+    stage_name: stageName,
+    fields: stageSnapshot.fields,
+    files: stageSnapshot.files,
+    templates: stageSnapshot.templates,
+    variables: payload.variables || {},
+    decision: payload.decision || null,
+    idempotency_key: idempotencyKey || payload.idempotency_key || null
+  }
+
+  if (payload.signature) {
+    response.signature = {
+      challenge_id: payload.signature.challenge_id,
+      signature: payload.signature.signature
+    }
+  }
+
+  return response
+}
+
+async function completeTaskCore ({
+  taskId,
+  userId,
+  payload,
+  clientMeta = {},
+  isAutoComplete = false,
+  idempotencyKey = null,
+  acquireOperationGuard = null
+}) {
   /**
    * ====================================================
    * SUPPORTED PAYLOAD
@@ -160,25 +279,14 @@ async function completeTask ({
    *
    * {
    *   variables: {
-   *     action: 'approve'
+   *     decision: 'over_50'
    *   }
    * }
    *
    * ----------------------------------------------------
    * actions:
-   * BUSINESS / SERVICE EXECUTION
-   *
-   * Example:
-   *
-   * {
-   *   actions: [
-   *     {
-   *       name: 'SEND_Not',
-   *       payload: {
-   *         to: 'x@gmail.com'
-   *       }
-   *     }
-   *   ]
+   * - USER_TASK: body فقط (لا actions من الإعداد)
+   * - SERVICE_TASK: stage_configs.config_json.actions (تنفَّذ تلقائياً)
    * }
    *
    * ====================================================
@@ -242,10 +350,17 @@ async function completeTask ({
   }
 
   const stageConfig = await stageConfigRepository.findByStageId(stage.id)
-  let digitalSignatureRecord = null
+  const needsSignature = requiresDigitalSignature(
+    stage,
+    payload,
+    stageConfig,
+    { isAutoComplete }
+  )
 
-  if (requiresDigitalSignature(stage, payload, stageConfig, { isAutoComplete })) {
-    const signingId = payload.signature?.signing_id
+  let signingRequest = null
+
+  if (needsSignature) {
+    const challengeId = payload.signature?.challenge_id
     const signature = payload.signature?.signature
 
     if (!signingId || !signature) {
@@ -254,10 +369,23 @@ async function completeTask ({
       )
     }
 
-    digitalSignatureRecord = await verifyAndPersistSignature({
-      signingId,
+    if (!payload.decision) {
+      throw new Error(
+        'decision is required when completing a task with digital signature'
+      )
+    }
+
+    signingRequest = {
+      challengeId,
+      signature,
+      decision: payload.decision
+    }
+
+    await verifySignatureForComplete({
+      challengeId,
       signature,
       userId,
+      decision: payload.decision,
       clientMeta
     })
   }
@@ -288,10 +416,6 @@ async function completeTask ({
     files: [],
     templates: [],
     actions: []
-  }
-
-  if (digitalSignatureRecord) {
-    stageSnapshot.digital_signature = digitalSignatureRecord
   }
 
   // ====================================================
@@ -361,6 +485,14 @@ async function completeTask ({
     }
   }
 
+  if (payload.variables && Object.keys(payload.variables).length) {
+    stageSnapshot.variables = payload.variables
+  }
+
+  if (payload.decision) {
+    stageSnapshot.decision = payload.decision
+  }
+
   // ====================================================
   // HANDLE ACTIONS
   // ====================================================
@@ -404,7 +536,7 @@ async function completeTask ({
 
     stageSnapshot.actions.push(...actionResults)
   } else if (stage.type === 'SERVICE_TASK') {
-    const autoActions = resolveActionsFromStageConfig(stageConfig?.config_json)
+    const autoActions = resolveActionsForStage(stage, stageConfig)
 
     if (autoActions.length) {
       const actionResults = await executeActions(autoActions, {
@@ -432,16 +564,49 @@ async function completeTask ({
    * }
    */
 
+  // ====================================================
+  // PREPARE CAMUNDA VARIABLES
+  // ====================================================
+
+  const variables = {}
+
+  if (payload.variables) {
+    Object.entries(payload.variables).forEach(([key, value]) => {
+      variables[key] = {
+        value
+      }
+    })
+  }
+
+  // ====================================================
+  // COMPLETE TASK IN CAMUNDA (before any DB persist)
+  // ====================================================
+
+  await camundaClient.completeTask(task.id, variables)
+
+  // ====================================================
+  // PERSIST STAGE + SIGNATURE (only after Camunda succeeds)
+  // ====================================================
+
+  let digitalSignatureRecord = null
+
+  if (signingRequest) {
+    digitalSignatureRecord = await persistVerifiedSignature({
+      challengeId: signingRequest.challengeId,
+      signature: signingRequest.signature,
+      userId,
+      clientMeta
+    })
+
+    stageSnapshot.digital_signature =
+      toPublicSignatureRecord(digitalSignatureRecord)
+  }
+
   let transactionData = {
     ...(transaction.data || {})
   }
 
-  // ====================================================
-  // SAVE STAGE SNAPSHOT UNDER STAGE CODE
-  // ====================================================
-
   transactionData[stage.code] = {
-    ...(transactionData[stage.code] || {}),
     ...stageSnapshot,
     completed_by: userId,
     completed_at: new Date()
@@ -451,9 +616,13 @@ async function completeTask ({
     appendSignatureToTransactionData(transactionData, digitalSignatureRecord)
   }
 
-  // ====================================================
-  // UPDATE TRANSACTION DATA
-  // ====================================================
+  transactionData = await runServiceTaskActions({
+    processInstance,
+    transaction,
+    transactionData,
+    task,
+    userId
+  })
 
   const updatedTransaction = await transactionClient.updateData(
     transaction.id,
@@ -462,10 +631,6 @@ async function completeTask ({
   )
 
   currentVersion = updatedTransaction.version
-
-  // ====================================================
-  // SAVE STAGE EVENT
-  // ====================================================
 
   await outboxRepository.create({
     event_type: EVENTS.PROCESSINSTANCESTAGE_CREATED,
@@ -490,54 +655,6 @@ async function completeTask ({
       data: transactionData[stage.code]
     }
   })
-
-  // ====================================================
-  // PREPARE CAMUNDA VARIABLES
-  // ====================================================
-
-  /**
-   * Example:
-   *
-   * {
-   *   variables: {
-   *     action: 'approve'
-   *   }
-   * }
-   */
-
-  const variables = {}
-
-  if (payload.variables) {
-    Object.entries(payload.variables).forEach(([key, value]) => {
-      variables[key] = {
-        value
-      }
-    })
-  }
-
-  // ====================================================
-  // COMPLETE TASK IN CAMUNDA
-  // ====================================================
-
-  await camundaClient.completeTask(task.id, variables)
-
-  transactionData = await runServiceTaskActions({
-    processInstance,
-    transaction,
-    transactionData,
-    task,
-    userId
-  })
-
-  if (transactionData._executedServiceTasks?.length) {
-    const serviceTaskUpdate = await transactionClient.updateData(
-      transaction.id,
-      transactionData,
-      currentVersion
-    )
-
-    currentVersion = serviceTaskUpdate.version
-  }
 
   // ====================================================
   // GET NEXT TASK
