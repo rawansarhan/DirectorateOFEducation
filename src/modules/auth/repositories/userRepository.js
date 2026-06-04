@@ -22,6 +22,13 @@ class UserRepository {
     })
   }
 
+  async findByNationalId (nationalId, options = {}) {
+    return User.findOne({
+      where: { national_id: nationalId },
+      ...options
+    })
+  }
+
   async findActiveByUserName (userName) {
     return User.findOne({
       where: {

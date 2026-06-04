@@ -139,6 +139,14 @@ async function registerEmployee (userData) {
     )
   }
 
+  const existingNationalId = await userRepository.findByNationalId(
+    userData.national_id
+  )
+
+  if (existingNationalId) {
+    throw new Error('الرقم الوطني مسجّل مسبقاً')
+  }
+
   const orgDeptRole =
     await orgDeptRoleRepository.findByOrgDeptRole(
       userData.organization_id,
@@ -170,6 +178,11 @@ async function registerEmployee (userData) {
     userName: userData.userName,
     email: userData.email,
     phone_number: userData.phone_number,
+    first_name: userData.first_name,
+    last_name: userData.last_name,
+    father_name: userData.father_name,
+    mother_name: userData.mother_name,
+    national_id: userData.national_id,
     password: hashedPassword,
     pin_hash: pinHash,
     is_active: true,
@@ -190,6 +203,11 @@ async function registerEmployee (userData) {
 
   return {
     userName: userData.userName,
+    first_name: user.first_name,
+    last_name: user.last_name,
+    father_name: user.father_name,
+    mother_name: user.mother_name,
+    national_id: user.national_id,
     key_fingerprint: keyFingerprint,
     organization_department_roles_id: orgDeptRole.id,
     message:

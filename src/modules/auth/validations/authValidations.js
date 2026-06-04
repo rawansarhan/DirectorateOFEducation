@@ -41,11 +41,69 @@ const idMessages = (label) => ({
   'any.required': `${label} مطلوب`
 })
 
+const ARABIC_NAME_PATTERN = /^[\u0600-\u06FFa-zA-Z][\u0600-\u06FFa-zA-Z\s.'-]{1,49}$/
+
+const personNameMessages = (label) => ({
+  'string.base': `${label} يجب أن يكون نصاً`,
+  'string.empty': `${label} مطلوب`,
+  'string.min': `${label} يجب أن يكون حرفين على الأقل`,
+  'string.max': `${label} يجب ألا يتجاوز 50 حرفاً`,
+  'string.pattern.base': `${label} يجب أن يحتوي على أحرف عربية أو لاتينية فقط`,
+  'any.required': `${label} مطلوب`
+})
+
+const nationalIdMessages = {
+  'string.base': 'الرقم الوطني يجب أن يكون نصاً',
+  'string.empty': 'الرقم الوطني مطلوب',
+  'string.length': 'الرقم الوطني يجب أن يتكون من 11 رقماً',
+  'string.pattern.base': 'الرقم الوطني يجب أن يحتوي على أرقام فقط',
+  'any.required': 'الرقم الوطني مطلوب'
+}
+
 // =======================================
 // validate register employee
 // =======================================
 function validateRegisterEmp (data) {
   const schema = Joi.object({
+    first_name: Joi.string()
+      .trim()
+      .min(2)
+      .max(50)
+      .pattern(ARABIC_NAME_PATTERN)
+      .required()
+      .messages(personNameMessages('الاسم الأول')),
+
+    last_name: Joi.string()
+      .trim()
+      .min(2)
+      .max(50)
+      .pattern(ARABIC_NAME_PATTERN)
+      .required()
+      .messages(personNameMessages('الاسم الأخير')),
+
+    father_name: Joi.string()
+      .trim()
+      .min(2)
+      .max(50)
+      .pattern(ARABIC_NAME_PATTERN)
+      .required()
+      .messages(personNameMessages('اسم الأب')),
+
+    mother_name: Joi.string()
+      .trim()
+      .min(2)
+      .max(50)
+      .pattern(ARABIC_NAME_PATTERN)
+      .required()
+      .messages(personNameMessages('اسم الأم')),
+
+    national_id: Joi.string()
+      .trim()
+      .length(11)
+      .pattern(/^\d{11}$/)
+      .required()
+      .messages(nationalIdMessages),
+
     userName: Joi.string()
       .trim()
       .min(3)

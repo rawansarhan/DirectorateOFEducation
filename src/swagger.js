@@ -86,6 +86,11 @@ const swaggerOptions = {
         RegisterEmployeeRequest: {
           type: 'object',
           required: [
+            'first_name',
+            'last_name',
+            'father_name',
+            'mother_name',
+            'national_id',
             'userName',
             'email',
             'phone_number',
@@ -96,6 +101,38 @@ const swaggerOptions = {
             'public_key'
           ],
           properties: {
+            first_name: {
+              type: 'string',
+              minLength: 2,
+              maxLength: 50,
+              example: 'أحمد'
+            },
+            last_name: {
+              type: 'string',
+              minLength: 2,
+              maxLength: 50,
+              example: 'الحسن'
+            },
+            father_name: {
+              type: 'string',
+              minLength: 2,
+              maxLength: 50,
+              example: 'محمد'
+            },
+            mother_name: {
+              type: 'string',
+              minLength: 2,
+              maxLength: 50,
+              example: 'فاطمة'
+            },
+            national_id: {
+              type: 'string',
+              minLength: 11,
+              maxLength: 11,
+              pattern: '^\\d{11}$',
+              example: '01234567890',
+              description: '11 رقماً — فريد في النظام'
+            },
             userName: {
               type: 'string',
               minLength: 3,
@@ -158,6 +195,11 @@ const swaggerOptions = {
               type: 'object',
               properties: {
                 userName: { type: 'string', example: 'john_doe' },
+                first_name: { type: 'string', example: 'أحمد' },
+                last_name: { type: 'string', example: 'الحسن' },
+                father_name: { type: 'string', example: 'محمد' },
+                mother_name: { type: 'string', example: 'فاطمة' },
+                national_id: { type: 'string', example: '01234567890' },
                 key_fingerprint: {
                   type: 'string',
                   example: 'a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456',
