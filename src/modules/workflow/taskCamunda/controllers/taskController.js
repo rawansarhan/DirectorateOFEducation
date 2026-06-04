@@ -72,14 +72,6 @@ function handleWorkflowError (res, error, defaultStatus = 400) {
 }
 
 
-const {
-  sendWorkflowSuccess,
-  sendWorkflowError,
-  workflowValidationError
-} = require('../../../../core/utils/workflowResponseHelper')
-const { validateCompleteTaskPayload } = require('../../schemas/completeTaskSchema')
-const { parsePaginationQuery } = require('../../../../core/utils/pagination')
-
 async function startWorkflowController (req, res) {
 
   try {
