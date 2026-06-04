@@ -9,7 +9,7 @@ const {
   validateSubmissionRequest,
   validateSubmissionAgainstConfig,
   buildStoredSubmissionData,
-  loadAuthStageConfigByProcessCode,
+  loadAuthStageConfigBundleByProcessCode,
   SUBMISSION_SCHEMA_VERSION
 } = require('../../workflow/services/stageSubmissionService')
 
@@ -211,15 +211,17 @@ async function submitTransaction (transactionId, data, userId, clientMeta = {}) 
   const guardContext = guard.context
 
   try {
-    const configJson = await loadAuthStageConfigByProcessCode(transaction.code)
+    const { config_json: configJson, ui_json: uiJson } =
+      await loadAuthStageConfigBundleByProcessCode(transaction.code)
 
     const normalized = await validateSubmissionAgainstConfig(
       data,
       configJson,
       {
         mode: 'submit',
+        uiJson,
         requireVariables: Boolean(
-          (configJson.ui?.actions || []).length ||
+          (uiJson.actions || []).length ||
           data?.variables?.action
         )
       }

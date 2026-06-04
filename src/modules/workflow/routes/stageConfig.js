@@ -41,9 +41,35 @@ const { createStageConfig , getJsonProcess} = require('../controllers/stageConfi
  *
  *                     config_json:
  *                       type: object
+ *                       description: |
+ *                         عقد workflow (حقول/ملفات/قوالب/متغيرات).
+ *                         لمرحلة SERVICE_TASK أضف actions هنا (GENERATE_PDF، SEND_EMAIL، …).
  *                       example:
- *                         sla: 24
- *                         action: SEND_EMAIL
+ *                         fields:
+ *                           - key: citizen_name
+ *                             type: text
+ *                             required: true
+ *                         files:
+ *                           - key: criminal_record
+ *                             type: pdf
+ *                             required: true
+ *                         templates:
+ *                           - template_id: 1
+ *                         variables:
+ *                           decision: over_50
+ *                         requires_digital_signature: true
+ *                         actions:
+ *                           - name: GENERATE_PDF
+ *                             payload:
+ *                               template_id: 1
+ *                           - name: SEND_EMAIL
+ *                             payload:
+ *                               message: "تم إصدار المستند"
+ *
+ *                     ui_json:
+ *                       type: object
+ *                       description: محجوز لاحقاً — يُرسل فارغاً
+ *                       example: {}
  *
  *                     assignments:
  *                       type: array
@@ -112,10 +138,9 @@ const { createStageConfig , getJsonProcess} = require('../controllers/stageConfi
  *                         example: [5, 7]
  *
  *       400:
- *         description: خطأ في البيانات
- *
- *       500:
- *         description: خطأ داخلي في السيرفر
+ *         description: بيانات غير صالحة (JSON، Joi، ui_json غير فارغ، …)
+ *       409:
+ *         description: إعدادات المرحلة موجودة مسبقاً
  */
 router.post(
   '/create',
@@ -127,7 +152,7 @@ router.post(
  * @swagger
  * /api/stage_config/config/{id}:
  *   get:
- *     summary: Get config_json for process (AUTH stage) => (مواطن او موظف لانها تعرض الاوراق المطلوبة من المواطن )
+ *     summary: Get ui_json for process (AUTH stage) — عرض الأوراق/الحقول المطلوبة من المواطن (مواطن أو موظف)
  *     tags: [Stage Config]
  *     security:
  *       - bearerAuth: []
@@ -147,14 +172,31 @@ router.post(
  *             schema:
  *               type: object
  *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 status_code:
+ *                   type: integer
+ *                   example: 200
  *                 message:
  *                   type: string
- *                   example: تم جلب إعدادات العملية بنجاح !
+ *                   example: تم جلب إعدادات العملية بنجاح
  *                 data:
  *                   type: object
- *                   example:
- *                     sla: 24
- *                     action: SEND_EMAIL
+ *                   properties:
+ *                     ui_json:
+ *                       type: object
+ *                       example:
+ *                         fields:
+ *                           - key: citizen_name
+ *                             type: text
+ *                             required: true
+ *                         files:
+ *                           - key: criminal_record
+ *                             type: pdf
+ *                             required: true
+ *                         templates:
+ *                           - template_id: 1
  *       400:
  *         description: خطأ في الطلب (ID غير صحيح أو مفقود)
  *       404:

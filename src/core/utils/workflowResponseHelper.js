@@ -17,9 +17,8 @@ function normalizeWorkflowError (error) {
 
   if (error && typeof error === 'object') {
     return {
-      message: error.message || 'Error',
-      code: error.code || null,
-      ...error
+      message: error.message || 'خطأ في الطلب',
+      code: error.code || null
     }
   }
 
@@ -75,7 +74,11 @@ function sendWorkflowError (res, error, defaultStatus = HTTP_STATUS.BAD_REQUEST)
   }
 
   const statusCode = resolveWorkflowStatusCode(normalized, defaultStatus)
-  const errorField = normalized.code || normalized.message
+  const errorField =
+    normalized.code ||
+    (statusCode < HTTP_STATUS.INTERNAL_SERVER_ERROR
+      ? 'REQUEST_ERROR'
+      : 'INTERNAL_ERROR')
 
   return ApiResponder.errorResponse(
     res,
@@ -85,9 +88,14 @@ function sendWorkflowError (res, error, defaultStatus = HTTP_STATUS.BAD_REQUEST)
   )
 }
 
+function workflowValidationError (message) {
+  return { message, code: 'VALIDATION_ERROR' }
+}
+
 module.exports = {
   sendWorkflowSuccess,
   sendWorkflowError,
+  workflowValidationError,
   normalizeWorkflowError,
   resolveWorkflowStatusCode,
   HTTP_STATUS

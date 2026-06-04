@@ -196,7 +196,8 @@ async findProcessDetails(processId) {
             as: 'stage_config',
 
             attributes: [
-              'config_json'
+              'config_json',
+              'ui_json'
             ]
           },
 

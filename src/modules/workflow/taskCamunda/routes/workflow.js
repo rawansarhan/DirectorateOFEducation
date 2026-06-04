@@ -21,15 +21,94 @@ const {
  * @swagger
  * /api/workflow/tasks:
  *   get:
- *     summary: Get all employee tasks
+ *     summary: Get all employee tasks (paginated)
  *     tags: [Workflow]
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           default: 1
+ *         description: رقم الصفحة (يبدأ من 1)
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 70
+ *           default: 3
+ *         description: عدد المهام في الصفحة
  *     responses:
  *       200:
- *         description: Tasks fetched successfully
- *       500:
- *         description: Internal server error
+ *         description: تم جلب المهام بنجاح
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 status_code:
+ *                   type: integer
+ *                   example: 200
+ *                 message:
+ *                   type: string
+ *                   example: تم جلب المهام بنجاح
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     items:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                     pagination:
+ *                       type: object
+ *                       properties:
+ *                         page:
+ *                           type: integer
+ *                           example: 1
+ *                         limit:
+ *                           type: integer
+ *                           example: 10
+ *                         total:
+ *                           type: integer
+ *                           example: 45
+ *                         total_pages:
+ *                           type: integer
+ *                           example: 5
+ *                         has_next:
+ *                           type: boolean
+ *                           example: true
+ *                         has_prev:
+ *                           type: boolean
+ *                           example: false
+ *       400:
+ *         description: خطأ في الطلب
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 status_code:
+ *                   type: integer
+ *                   example: 400
+ *                 message:
+ *                   type: string
+ *                   example: limit يجب أن يكون رقماً صحيحاً بين 1 و 100
+ *                 error:
+ *                   type: string
+ *                   example: VALIDATION_ERROR
+ *                 data:
+ *                   type: object
+ *                   nullable: true
+ *                   example: null
  */
 router.get('/tasks', authMiddleware, getAllTasksController)
 

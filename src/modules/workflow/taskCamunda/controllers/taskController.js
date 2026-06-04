@@ -6,19 +6,21 @@ const { createSigningChallenge } = require('../services/transactionSigningServic
 const { getClientMeta } = require('../../../../core/security/securityConfig')
 const {
   sendWorkflowSuccess,
-  sendWorkflowError
+  sendWorkflowError,
+  workflowValidationError
 } = require('../../../../core/utils/workflowResponseHelper')
 const { validateCompleteTaskPayload } = require('../../schemas/completeTaskSchema')
+const { parsePaginationQuery } = require('../../../../core/utils/pagination')
 
 async function startWorkflowController (req, res) {
   try {
     const { transactionId, processCode } = req.body
 
     if (!transactionId || !processCode) {
-      return sendWorkflowError(res, {
-        message: 'transactionId and processCode are required',
-        code: 'VALIDATION_ERROR'
-      })
+      return sendWorkflowError(
+        res,
+        workflowValidationError('transactionId و processCode مطلوبان')
+      )
     }
 
     const result = await startWorkflow({ transactionId, processCode })
@@ -26,7 +28,7 @@ async function startWorkflowController (req, res) {
     return sendWorkflowSuccess(
       res,
       result.data,
-      result.message || 'Workflow started successfully'
+      result.message || 'تم بدء سير العمل بنجاح'
     )
   } catch (error) {
     return sendWorkflowError(res, error)
@@ -45,7 +47,7 @@ async function createSigningChallengeController (req, res) {
     return sendWorkflowSuccess(
       res,
       result,
-      'Signing challenge created successfully'
+      'تم إنشاء تحدي التوقيع بنجاح'
     )
   } catch (error) {
     return sendWorkflowError(res, error)
@@ -58,10 +60,10 @@ async function completeTaskController (req, res) {
       validateCompleteTaskPayload(req.body || {})
 
     if (validationError) {
-      return sendWorkflowError(res, {
-        message: validationError,
-        code: 'VALIDATION_ERROR'
-      })
+      return sendWorkflowError(
+        res,
+        workflowValidationError(validationError)
+      )
     }
 
     const result = await completeTaskService.completeTask({
@@ -88,11 +90,20 @@ async function completeTaskController (req, res) {
 
 async function getAllTasksController (req, res) {
   try {
+    const { page, limit, offset } = parsePaginationQuery(req.query)
+
     const result = await getAllTasksService.getAllTasks({
-      userId: req.user.id
+      userId: req.user.id,
+      page,
+      limit,
+      offset
     })
 
-    return sendWorkflowSuccess(res, result.data, result.message)
+    return sendWorkflowSuccess(
+      res,
+      result.data,
+      result.message || 'تم جلب المهام بنجاح'
+    )
   } catch (error) {
     return sendWorkflowError(res, error)
   }
@@ -105,7 +116,11 @@ async function getTaskDetailsController (req, res) {
       userId: req.user.id
     })
 
-    return sendWorkflowSuccess(res, result.data, result.message)
+    return sendWorkflowSuccess(
+      res,
+      result.data,
+      result.message || 'تم جلب تفاصيل المهمة بنجاح'
+    )
   } catch (error) {
     return sendWorkflowError(res, error)
   }

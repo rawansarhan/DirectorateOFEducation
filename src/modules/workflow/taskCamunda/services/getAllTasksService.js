@@ -1,12 +1,17 @@
 const employeeTaskRepository = require('../repositories/employeeTaskRepository')
 const camundaClient = require('../../../../core/shared/clients/camunda/camundaClient')
-
+const {
+  paginateArray,
+  emptyPaginatedResult
+} = require('../../../../core/utils/pagination')
 
 // ======================================================
-// GET ALL TASKS
+// GET ALL TASKS (paginated)
 // ======================================================
 
-async function getAllTasks ({ userId }) {
+async function getAllTasks ({ userId, page, limit, offset }) {
+  const paginationInput = { page, limit, offset }
+
   // ====================================================
   // USER ROLES
   // ====================================================
@@ -15,9 +20,8 @@ async function getAllTasks ({ userId }) {
 
   if (!roleIds.length) {
     return {
-      message: 'No tasks found',
-
-      data: []
+      message: 'لا توجد مهام',
+      data: emptyPaginatedResult(paginationInput)
     }
   }
 
@@ -29,9 +33,8 @@ async function getAllTasks ({ userId }) {
 
   if (!stageIds.length) {
     return {
-      message: 'No tasks found',
-
-      data: []
+      message: 'لا توجد مهام',
+      data: emptyPaginatedResult(paginationInput)
     }
   }
 
@@ -50,10 +53,6 @@ async function getAllTasks ({ userId }) {
   const tasks = []
 
   for (const instance of processInstances) {
-    // ==================================================
-    // CAMUNDA TASKS
-    // ==================================================
-
     const activeTasks = await camundaClient.getActiveTasks(
       instance.camunda_process_instance_id
     )
@@ -64,71 +63,39 @@ async function getAllTasks ({ userId }) {
       continue
     }
 
-    // ==================================================
-    // RESPONSE OBJECT
-    // ==================================================
-
     tasks.push({
-
-         // ================================================
-      // PROCESS
-      // ================================================
-
       processName: instance.process_definition?.name,
-      // ================================================
-      // TASK
-      // ================================================
-
+      processPriority: instance.process_definition?.priority ?? 0,
       taskId: activeTask.id,
-
       taskName: activeTask.name,
-
       taskDefinitionKey: activeTask.taskDefinitionKey,
-
-      // ================================================
-      // TRANSACTION
-      // ================================================
-
-      HestoryData: instance.transaction?.data,
-
-   
-
+      createdAt: activeTask.created || instance.created_at,
+      HestoryData: instance.transaction?.data
     })
   }
 
   // ====================================================
-  // FINAL SORT
+  // SORT + PAGINATE
   // ====================================================
 
   tasks.sort((a, b) => {
-    // ==============================================
-    // PRIORITY
-    // ==============================================
-
     if (b.processPriority !== a.processPriority) {
       return b.processPriority - a.processPriority
     }
 
-    // ==============================================
-    // OLDEST FIRST
-    // ==============================================
-
     return new Date(a.createdAt) - new Date(b.createdAt)
   })
 
-  // ====================================================
-  // RESPONSE
-  // ====================================================
+  const { items, pagination } = paginateArray(tasks, paginationInput)
 
   return {
-    message: 'Tasks fetched successfully',
-
-    count: tasks.length,
-
-    data: tasks
+    message: 'تم جلب المهام بنجاح',
+    data: {
+      items,
+      pagination
+    }
   }
 }
-
 
 module.exports = {
   getAllTasks

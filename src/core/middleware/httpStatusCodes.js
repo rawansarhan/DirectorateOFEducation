@@ -122,6 +122,34 @@ function resolveHttpStatusFromError (err, defaultStatus = HTTP_STATUS.BAD_REQUES
     return err.statusCode
   }
 
+  if (err?.status) {
+    return err.status
+  }
+
+  if (err?.isAxiosError && err.response?.status) {
+    return err.response.status >= 500
+      ? HTTP_STATUS.INTERNAL_SERVER_ERROR
+      : HTTP_STATUS.BAD_REQUEST
+  }
+
+  if (
+    err?.name === 'SequelizeUniqueConstraintError' ||
+    err?.name === 'SequelizeForeignKeyConstraintError'
+  ) {
+    return HTTP_STATUS.CONFLICT
+  }
+
+  if (
+    err?.name === 'SequelizeValidationError' ||
+    err?.name === 'SequelizeDatabaseError'
+  ) {
+    return HTTP_STATUS.BAD_REQUEST
+  }
+
+  if (err?.type === 'entity.parse.failed' || err?.name === 'SyntaxError') {
+    return HTTP_STATUS.BAD_REQUEST
+  }
+
   if (err?.code && ERROR_CODE_STATUS[err.code]) {
     return ERROR_CODE_STATUS[err.code]
   }

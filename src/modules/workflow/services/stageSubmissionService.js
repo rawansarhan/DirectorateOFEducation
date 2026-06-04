@@ -34,10 +34,17 @@ function validateSubmissionRequest (payload = {}, options = {}) {
   return normalizeSubmissionPayload(value)
 }
 
-async function validateSubmissionAgainstConfig (payload = {}, configJson = {}, options = {}) {
+async function validateSubmissionAgainstConfig (
+  payload = {},
+  configJson = {},
+  options = {}
+) {
   const normalized = validateSubmissionRequest(payload, options)
 
-  await assertPayloadAgainstStageConfig(normalized, configJson, options)
+  await assertPayloadAgainstStageConfig(normalized, configJson, {
+    ...options,
+    uiJson: options.uiJson || {}
+  })
 
   return normalized
 }
@@ -81,10 +88,36 @@ async function loadAuthStageConfigByProcessCode (processCode) {
   return stageConfig.config_json
 }
 
+async function loadAuthStageConfigBundleByProcessCode (processCode) {
+  const process = await processRepository.findByCode(processCode)
+
+  if (!process) {
+    throw new Error('العملية المرتبطة بالمعاملة غير موجودة')
+  }
+
+  const stage = await stageRepository.findFirstAuthStage(process.id)
+
+  if (!stage) {
+    throw new Error('لا توجد مرحلة AUTH لهذه العملية')
+  }
+
+  const stageConfig = await stageConfigRepository.findByStageId(stage.id)
+
+  if (!stageConfig?.config_json) {
+    throw new Error('إعدادات مرحلة التقديم غير موجودة')
+  }
+
+  return {
+    config_json: stageConfig.config_json,
+    ui_json: stageConfig.ui_json || {}
+  }
+}
+
 module.exports = {
   SUBMISSION_SCHEMA_VERSION,
   validateSubmissionRequest,
   validateSubmissionAgainstConfig,
   buildStoredSubmissionData,
-  loadAuthStageConfigByProcessCode
+  loadAuthStageConfigByProcessCode,
+  loadAuthStageConfigBundleByProcessCode
 }

@@ -11,13 +11,19 @@ class StageConfigRepository {
     )
   }
 
-  async findByStageId(stageId) {
-
+  async findByStageId (stageId) {
     return await StageConfig.findOne({
+      where: { stage_id: stageId }
+    })
+  }
 
-      where: {
-        stage_id: stageId
-      }
+  async findByStageIds (stageIds) {
+    if (!stageIds?.length) {
+      return []
+    }
+
+    return await StageConfig.findAll({
+      where: { stage_id: stageIds }
     })
   }
 }

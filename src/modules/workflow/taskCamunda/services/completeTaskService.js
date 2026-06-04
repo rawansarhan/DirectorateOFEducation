@@ -18,7 +18,7 @@ const ActionStrategyFactory = require('../../actions/ActionStrategyFactory')
 const stageConfigRepository = require('../../repositories/stageConfigRepository')
 const {
   normalizeActionPayload,
-  resolveActionsFromStageConfig
+  resolveActionsForStage
 } = require('../../actions/actionHelpers')
 const { buildStoredFileEntry, normalizeStoredFilePath } = require('../../../../core/utils/filePath')
 const documentTemplateRepository =
@@ -98,7 +98,7 @@ async function runServiceTaskActions ({
     const stageConfig =
       await stageConfigRepository.findByStageId(serviceStage.id)
 
-    const actions = resolveActionsFromStageConfig(stageConfig?.config_json)
+    const actions = resolveActionsForStage(serviceStage, stageConfig)
 
     if (!actions.length) {
       executedServiceTasks.add(taskKey)
@@ -289,19 +289,8 @@ async function completeTaskCore ({
    *
    * ----------------------------------------------------
    * actions:
-   * BUSINESS / SERVICE EXECUTION
-   *
-   * Example:
-   *
-   * {
-   *   actions: [
-   *     {
-   *       name: 'SEND_Not',
-   *       payload: {
-   *         to: 'x@gmail.com'
-   *       }
-   *     }
-   *   ]
+   * - USER_TASK: body فقط (لا actions من الإعداد)
+   * - SERVICE_TASK: stage_configs.config_json.actions (تنفَّذ تلقائياً)
    * }
    *
    * ====================================================
@@ -568,7 +557,7 @@ async function completeTaskCore ({
 
     stageSnapshot.actions.push(...actionResults)
   } else if (stage.type === 'SERVICE_TASK') {
-    const autoActions = resolveActionsFromStageConfig(stageConfig?.config_json)
+    const autoActions = resolveActionsForStage(stage, stageConfig)
 
     if (autoActions.length) {
       const actionResults = await executeActions(autoActions, {

@@ -24,6 +24,12 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false
       },
 
+      ui_json: {
+        type: DataTypes.JSON,
+        allowNull: false,
+        defaultValue: {}
+      },
+
       created_at: {
         type: DataTypes.DATE,
         allowNull: false,
