@@ -22,6 +22,9 @@ function generateEd25519KeyPair () {
   })
 }
 
+const ED25519_SPKI_DER_LENGTH = 44
+const ED25519_SIGNATURE_LENGTH = 64
+
 function computeKeyFingerprint (publicKeyPem) {
   return createHash('sha256').update(publicKeyPem).digest('hex')
 }
@@ -34,7 +37,7 @@ function normalizePublicKeyPem (publicKeyInput) {
   }
 
   if (value.includes('BEGIN PUBLIC KEY')) {
-    return value
+    return value.replace(/\r\n/g, '\n')
   }
 
   const base64Body = value.replace(/\s+/g, '')
@@ -46,20 +49,58 @@ function normalizePublicKeyPem (publicKeyInput) {
   ].join('\n')
 }
 
-function validatePublicKeyPem (publicKeyInput) {
+function assertEd25519SpkiPublicKey (publicKey) {
+  if (publicKey.asymmetricKeyType !== 'ed25519') {
+    throw new Error('public_key must be an Ed25519 key')
+  }
+
+  const der = publicKey.export({ type: 'spki', format: 'der' })
+
+  if (der.length !== ED25519_SPKI_DER_LENGTH) {
+    throw new Error('public_key must be a valid Ed25519 SPKI key')
+  }
+}
+
+function canonicalizePublicKeyPem (publicKeyInput) {
   const publicKeyPem = normalizePublicKeyPem(publicKeyInput)
+  const publicKey = createPublicKey(publicKeyPem)
 
+  assertEd25519SpkiPublicKey(publicKey)
+
+  return publicKey.export({ type: 'spki', format: 'pem' })
+}
+
+function validatePublicKeyPem (publicKeyInput) {
   try {
-    const publicKey = createPublicKey(publicKeyPem)
-
-    if (publicKey.asymmetricKeyType !== 'ed25519') {
-      throw new Error('public_key must be an Ed25519 key')
-    }
-
-    return publicKeyPem
+    return canonicalizePublicKeyPem(publicKeyInput)
   } catch (error) {
     throw new Error('public_key is invalid or unsupported')
   }
+}
+
+function parseChallengeMessage (message) {
+  const parts = String(message || '').split('|')
+
+  // DOE-AUTH-CHALLENGE|v1|challengeId|nonce|expiresAt|userId|keyFingerprint
+  if (
+    parts.length !== 7 ||
+    parts[0] !== 'DOE-AUTH-CHALLENGE' ||
+    parts[1] !== 'v1'
+  ) {
+    throw new Error('Challenge message is invalid')
+  }
+
+  return {
+    challengeId: parts[2],
+    nonce: parts[3],
+    expiresAt: parts[4],
+    userId: parts[5],
+    keyFingerprint: parts[6]
+  }
+}
+
+function extractChallengeFingerprint (message) {
+  return parseChallengeMessage(message).keyFingerprint
 }
 
 function hashValue (value) {
@@ -104,14 +145,23 @@ function verifyChallengeSignature ({
   message,
   signatureBase64
 }) {
-  const publicKey = createPublicKey(publicKeyPem)
+  try {
+    const publicKey = createPublicKey(canonicalizePublicKeyPem(publicKeyPem))
+    const signature = Buffer.from(String(signatureBase64 || ''), 'base64')
 
-  return verify(
-    null,
-    Buffer.from(message, 'utf8'),
-    publicKey,
-    Buffer.from(signatureBase64, 'base64')
-  )
+    if (signature.length !== ED25519_SIGNATURE_LENGTH) {
+      return false
+    }
+
+    return verify(
+      null,
+      Buffer.from(message, 'utf8'),
+      publicKey,
+      signature
+    )
+  } catch (error) {
+    return false
+  }
 }
 
 function getChallengeExpiresAt () {
@@ -160,6 +210,9 @@ module.exports = {
   generateEd25519KeyPair,
   normalizePublicKeyPem,
   validatePublicKeyPem,
+  canonicalizePublicKeyPem,
+  parseChallengeMessage,
+  extractChallengeFingerprint,
   computeKeyFingerprint,
   hashValue,
   hashPin,

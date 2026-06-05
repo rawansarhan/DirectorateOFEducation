@@ -1,6 +1,7 @@
 'use strict'
 
 const { v4: uuidv4 } = require('uuid')
+const bcrypt = require('bcryptjs')
 
 const userRepository = require('../repositories/userRepository')
 const userRoleAssignmentRepository = require('../repositories/userRoleAssignmentRepository')
@@ -18,6 +19,8 @@ const {
   generateNonce,
   buildChallengeMessage,
   verifyChallengeSignature,
+  extractChallengeFingerprint,
+  computeKeyFingerprint,
   hashValue,
   getChallengeExpiresAt,
   getPinSessionExpiresAt,
@@ -206,13 +209,13 @@ async function changePin (userId, { old_pin, new_pin }, clientMeta = {}) {
   }
 }
 
-async function employeeVerifyPin ({ userName, pin, clientMeta = {} }) {
+async function employeeVerifyPin ({ userName, password, clientMeta = {} }) {
   const user = await userRepository.findActiveByUserName(userName)
 
   if (!user) {
     await securityGuardService.recordFailure({
       userId: null,
-      action: 'EMPLOYEE_PIN_VERIFY_FAILED',
+      action: 'EMPLOYEE_PASSWORD_VERIFY_FAILED',
       resourceType: 'auth',
       resourceId: userName,
       ipAddress: clientMeta.ip,
@@ -230,13 +233,16 @@ async function employeeVerifyPin ({ userName, pin, clientMeta = {} }) {
     throw new Error('هذا الحساب ليس حساب موظف')
   }
 
-  const pinValid = await verifyPin(pin, user.pin_hash)
+  const passwordValid = await bcrypt.compare(
+    String(password),
+    user.password
+  )
 
-  if (!pinValid) {
+  if (!passwordValid) {
     await handleSecurityFailure({
       userId: user.id,
-      action: 'EMPLOYEE_PIN_VERIFY_FAILED',
-      message: 'رمز PIN غير صحيح',
+      action: 'EMPLOYEE_PASSWORD_VERIFY_FAILED',
+      message: 'اسم المستخدم أو كلمة المرور غير صحيحة',
       clientMeta,
       resourceType: 'auth',
       resourceId: user.id
@@ -259,7 +265,7 @@ async function employeeVerifyPin ({ userName, pin, clientMeta = {} }) {
 
   await securityGuardService.recordSuccess({
     userId: user.id,
-    action: 'EMPLOYEE_PIN_VERIFIED',
+    action: 'EMPLOYEE_PASSWORD_VERIFIED',
     resourceType: 'auth',
     resourceId: user.id,
     ipAddress: clientMeta.ip,
@@ -271,7 +277,7 @@ async function employeeVerifyPin ({ userName, pin, clientMeta = {} }) {
     key_fingerprint: userKey.key_fingerprint,
     expires_at: pinSession.expires_at,
     expires_in_seconds: Math.floor(PIN_SESSION_TTL_MS / 1000),
-    message: 'تم التحقق من PIN. استخدم challenge + private key لإكمال تسجيل الدخول.'
+    message: 'تم التحقق من كلمة المرور. استخدم challenge + private key لإكمال تسجيل الدخول.'
   }
 }
 
@@ -401,6 +407,18 @@ async function verifyEmployeeSignature ({ challenge_id, signature, clientMeta = 
 
     if (!userKey || !userKey.is_active) {
       throw new Error('المفتاح الرقمي غير نشط')
+    }
+
+    const storedFingerprint = computeKeyFingerprint(userKey.public_key)
+
+    if (storedFingerprint !== userKey.key_fingerprint) {
+      throw new Error('المفتاح الرقمي المخزّن غير متسق. تواصل مع الدعم الفني')
+    }
+
+    const challengeFingerprint = extractChallengeFingerprint(challenge.message)
+
+    if (challengeFingerprint !== userKey.key_fingerprint) {
+      throw new Error('تحدي التوقيع لا يطابق المفتاح المسجّل')
     }
 
     const signatureValid = verifyChallengeSignature({

@@ -3,7 +3,6 @@
 const orgDeptRolesClient = require('../../../core/shared/clients/organization/orgDeptRolesClient')
 
 const bcrypt = require('bcryptjs')
-const crypto = require('crypto')
 
 const { v4: uuidv4 } = require('uuid')
 
@@ -33,7 +32,6 @@ const { sendSms } = require('./smsService')
 const {
   computeKeyFingerprint,
   hashPin,
-  validatePublicKeyPem,
 } = require('./cryptoAuthService')
 
 const OTP_TTL_MINUTES = 5
@@ -102,7 +100,7 @@ async function saveAndSendOtp (userId, phone) {
 // ================== REGISTER EMPLOYEE ==================
 
 async function registerEmployee (userData) {
-  const { error } = validateRegisterEmp(userData)
+  const { error, value } = validateRegisterEmp(userData)
 
   if (error) {
     throw new Error(
@@ -110,7 +108,9 @@ async function registerEmployee (userData) {
     )
   }
 
-  const existingEmail = await userRepository.findByEmail(userData.email)
+  const data = value
+
+  const existingEmail = await userRepository.findByEmail(data.email)
 
   if (existingEmail) {
     throw new Error(
@@ -119,7 +119,7 @@ async function registerEmployee (userData) {
   }
 
   const existingUserName = await userRepository.findByUserName(
-    userData.userName
+    data.userName
   )
 
   if (existingUserName) {
@@ -129,7 +129,7 @@ async function registerEmployee (userData) {
   }
 
   const existingNationalId = await userRepository.findByNationalId(
-    userData.national_id
+    data.national_id
   )
 
   if (existingNationalId) {
@@ -138,9 +138,9 @@ async function registerEmployee (userData) {
 
   const orgDeptRole =
     await orgDeptRolesClient.findOrgDeptRole({
-      organization_id: userData.organization_id,
-      department_id: userData.department_id,
-      role_id: userData.role_id
+      organization_id: data.organization_id,
+      department_id: data.department_id,
+      role_id: data.role_id
     })
 
   if (!orgDeptRole) {
@@ -150,28 +150,26 @@ async function registerEmployee (userData) {
   }
 
   const hashedPassword = await bcrypt.hash(
-    crypto.randomBytes(32).toString('hex'),
+    data.password,
     10
   )
 
-  const pinHash = await hashPin(userData.pin)
+  const pinHash = await hashPin(data.pin)
 
-  const publicKey = validatePublicKeyPem(
-    userData.public_key
-  )
+  const publicKey = data.public_key
 
   const keyFingerprint =
     computeKeyFingerprint(publicKey)
 
   const user = await userRepository.create({
-    userName: userData.userName,
-    email: userData.email,
-    phone_number: userData.phone_number,
-    first_name: userData.first_name,
-    last_name: userData.last_name,
-    father_name: userData.father_name,
-    mother_name: userData.mother_name,
-    national_id: userData.national_id,
+    userName: data.userName,
+    email: data.email,
+    phone_number: data.phone_number,
+    first_name: data.first_name,
+    last_name: data.last_name,
+    father_name: data.father_name,
+    mother_name: data.mother_name,
+    national_id: data.national_id,
     password: hashedPassword,
     pin_hash: pinHash,
     is_active: true,
@@ -191,7 +189,7 @@ async function registerEmployee (userData) {
   })
 
   return {
-    userName: userData.userName,
+    userName: data.userName,
     first_name: user.first_name,
     last_name: user.last_name,
     father_name: user.father_name,

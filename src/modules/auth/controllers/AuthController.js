@@ -166,7 +166,7 @@ const employeeVerifyPinUser = async (req, res) => {
       ...req.body,
       clientMeta: getClientMeta(req)
     })
-    return ApiResponder.okResponse(res, result, 'تم التحقق من رمز الموظف بنجاح')
+    return ApiResponder.okResponse(res, result, 'تم التحقق من كلمة مرور الموظف بنجاح')
   } catch (err) {
     return handleControllerError(res, err, 401)
   }

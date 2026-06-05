@@ -1,4 +1,7 @@
 const Joi = require('joi')
+const { validatePublicKeyPem } = require('../services/cryptoAuthService')
+
+const DEFAULT_EMPLOYEE_PIN = '123456'
 
 // ============================================
 // رسائل عربية مشتركة لكل حقل
@@ -123,11 +126,21 @@ function validateRegisterEmp (data) {
       .required()
       .messages(phoneMessages),
 
-    pin: Joi.string()
-      .length(6)
-      .pattern(/^\d+$/)
+    password: Joi.string()
+      .min(6)
       .required()
       .messages(passwordMessages),
+
+    pin: Joi.string()
+      .empty(['', null])
+      .default(DEFAULT_EMPLOYEE_PIN)
+      .length(6)
+      .pattern(/^\d+$/)
+      .messages({
+        'string.base': 'رمز PIN يجب أن يكون نصاً',
+        'string.length': 'رمز PIN يجب أن يتكون من 6 أرقام',
+        'string.pattern.base': 'رمز PIN يجب أن يحتوي على أرقام فقط'
+      }),
 
     organization_id: Joi.number()
       .integer()
@@ -145,7 +158,26 @@ function validateRegisterEmp (data) {
       .integer()
       .positive()
       .required()
-      .messages(idMessages('معرّف الدور'))
+      .messages(idMessages('معرّف الدور')),
+
+    public_key: Joi.string()
+      .trim()
+      .required()
+      .custom((value, helpers) => {
+        try {
+          return validatePublicKeyPem(value)
+        } catch (error) {
+          return helpers.error('any.custom', {
+            message: error.message || 'المفتاح العام غير صالح'
+          })
+        }
+      })
+      .messages({
+        'string.base': 'المفتاح العام يجب أن يكون نصاً',
+        'string.empty': 'المفتاح العام مطلوب',
+        'any.required': 'المفتاح العام مطلوب',
+        'any.custom': 'المفتاح العام غير صالح — يجب أن يكون Ed25519 PEM صحيحاً ومطابقاً للمفتاح على الفلاشة'
+      })
   }).messages({
     'object.unknown': 'الحقل {#label} غير مسموح به'
   })
@@ -325,11 +357,25 @@ function validateChangePin (data) {
 
 function validateEmployeeVerifyPin (data) {
   const schema = Joi.object({
-    userName: Joi.string().trim().min(3).max(50).required(),
-    pin: Joi.string().length(6).pattern(/^\d+$/).required()
+    userName: Joi.string()
+      .trim()
+      .min(3)
+      .max(50)
+      .required()
+      .messages(userNameMessages),
+
+    password: Joi.string()
+      .min(6)
+      .required()
+      .messages(passwordMessages)
+  }).messages({
+    'object.unknown': 'الحقل {#label} غير مسموح به'
   })
 
-  return schema.validate(data, { abortEarly: false })
+  return schema.validate(data, {
+    abortEarly: false,
+    allowUnknown: false
+  })
 }
 
 function validateCreateChallenge (data) {
@@ -362,6 +408,7 @@ function validateRefreshToken (data) {
 }
 
 module.exports = {
+  DEFAULT_EMPLOYEE_PIN,
   validateRegisterEmp,
   validateRegisterCitizen,
   validateLogin,

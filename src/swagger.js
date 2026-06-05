@@ -85,7 +85,7 @@ const swaggerOptions = {
             'userName',
             'email',
             'phone_number',
-            'pin',
+            'password',
             'organization_id',
             'department_id',
             'role_id',
@@ -143,13 +143,20 @@ const swaggerOptions = {
               example: '0912345678',
               description: '10 أرقام تبدأ بـ 09'
             },
+            password: {
+              type: 'string',
+              minLength: 6,
+              example: 'Test123',
+              description: 'كلمة مرور الموظف — مطلوبة لتسجيل الدخول (الخطوة 1)'
+            },
             pin: {
               type: 'string',
               minLength: 6,
               maxLength: 6,
               pattern: '^\\d{6}$',
+              default: '123456',
               example: '123456',
-              description: 'رمز PIN مكون من 6 أرقام'
+              description: 'رمز PIN لتوقيع المعاملات — اختياري؛ إن لم يُرسل يُخزَّن 123456 تلقائياً'
             },
             organization_id: {
               type: 'integer',
@@ -172,9 +179,24 @@ const swaggerOptions = {
             public_key: {
               type: 'string',
               minLength: 40,
-              example: '-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEA...\n-----END PUBLIC KEY-----',
-              description: 'مفتاح Ed25519 العام يُولَّد في المتصفح (PEM أو base64 SPKI)'
+              example: 'MCowBQYDK2VwAyEA6dCIpX6BrmT8IzG85cIziBnFc2tY/8aBbvmJuTKc9/g=',
+              description: 'مفتاح Ed25519 العام — PEM كامل أو Base64 SPKI فقط'
             }
+          },
+          example: {
+            first_name: 'أحمد',
+            last_name: 'الحسن',
+            father_name: 'محمد',
+            mother_name: 'فاطمة',
+            national_id: '01234567890',
+            userName: 'john_doe',
+            email: 'john@gmail.com',
+            phone_number: '0912345678',
+            password: 'Test123',
+            organization_id: 1,
+            department_id: 5,
+            role_id: 2,
+            public_key: 'MCowBQYDK2VwAyEA6dCIpX6BrmT8IzG85cIziBnFc2tY/8aBbvmJuTKc9/g='
           }
         },
 
@@ -205,6 +227,117 @@ const swaggerOptions = {
                   example: 'تم إنشاء حساب الموظف بنجاح. private_key يبقى في المتصفح/USB ولا يُخزَّن على السيرفر.'
                 }
               }
+            }
+          }
+        },
+
+        EmployeeVerifyPasswordRequest: {
+          type: 'object',
+          required: ['userName', 'password'],
+          properties: {
+            userName: {
+              type: 'string',
+              minLength: 3,
+              maxLength: 50,
+              example: 'john_doe',
+              description: 'اسم مستخدم الموظف'
+            },
+            password: {
+              type: 'string',
+              minLength: 6,
+              example: 'Test123',
+              description: 'كلمة مرور الموظف (الخطوة 1 من تسجيل الدخول)'
+            }
+          },
+          example: {
+            userName: 'john_doe',
+            password: 'Test123'
+          }
+        },
+
+        EmployeeVerifyPasswordResponse: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            status_code: { type: 'integer', example: 200 },
+            message: {
+              type: 'string',
+              example: 'تم التحقق من كلمة مرور الموظف بنجاح'
+            },
+            data: {
+              type: 'object',
+              properties: {
+                pin_session_id: {
+                  type: 'string',
+                  format: 'uuid',
+                  example: '550e8400-e29b-41d4-a716-446655440000'
+                },
+                key_fingerprint: {
+                  type: 'string',
+                  example: 'a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456'
+                },
+                expires_at: {
+                  type: 'string',
+                  format: 'date-time',
+                  example: '2026-06-05T12:05:00.000Z'
+                },
+                expires_in_seconds: { type: 'integer', example: 300 },
+                message: {
+                  type: 'string',
+                  example: 'تم التحقق من كلمة المرور. استخدم challenge + private key لإكمال تسجيل الدخول.'
+                }
+              }
+            }
+          }
+        },
+
+        EmployeeChallengeRequest: {
+          type: 'object',
+          required: ['pin_session_id'],
+          properties: {
+            pin_session_id: {
+              type: 'string',
+              format: 'uuid',
+              example: '550e8400-e29b-41d4-a716-446655440000'
+            }
+          }
+        },
+
+        EmployeeChallengeResponse: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                challenge_id: { type: 'string', format: 'uuid' },
+                pin_session_id: { type: 'string', format: 'uuid' },
+                key_fingerprint: { type: 'string' },
+                message: {
+                  type: 'string',
+                  description: 'النص الذي يُوقَّع بالمفتاح الخاص من الفلاشة'
+                },
+                expires_at: { type: 'string', format: 'date-time' },
+                expires_in_seconds: { type: 'integer', example: 300 }
+              }
+            }
+          }
+        },
+
+        EmployeeVerifySignatureRequest: {
+          type: 'object',
+          required: ['challenge_id', 'signature'],
+          properties: {
+            challenge_id: {
+              type: 'string',
+              format: 'uuid',
+              example: '660e8400-e29b-41d4-a716-446655440001'
+            },
+            signature: {
+              type: 'string',
+              minLength: 20,
+              example: 'base64-signature-from-private-key',
+              description: 'توقيع base64 لنص challenge باستخدام private key من USB'
             }
           }
         },

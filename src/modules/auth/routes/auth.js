@@ -36,7 +36,8 @@ router.use(authSensitiveLimiter)
  *     tags: [Auth]
  *     summary: إنشاء حساب موظف (الفريق التقني فقط)
  *     description: |
- *       ينشئ حساب موظف مع PIN ومفتاح Ed25519.
+ *       ينشئ حساب موظف مع كلمة مرور (مطلوبة) ومفتاح Ed25519.
+ *       pin اختياري — إن لم يُرسل يُخزَّن 123456 تلقائياً (لتوقيع المعاملات).
  *       public_key يُولَّد في المتصفح ويُرسل للسيرفر فقط.
  *       private_key لا يمر عبر السيرفر.
  *     security:
@@ -295,23 +296,24 @@ router.post('/citizen/change-pin', authMiddleware, accountLockMiddleware, change
  * /api/auth/employee/verify-pin:
  *   post:
  *     tags: [Auth]
- *     summary: تحقق PIN للموظف (الخطوة 1)
+ *     summary: تحقق كلمة مرور الموظف (الخطوة 1)
+ *     description: |
+ *       يتحقق من userName + password (وليس PIN).
+ *       يُرجع pin_session_id للخطوة التالية (challenge + توقيع).
  *     security: []
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             required: [userName, pin]
- *             properties:
- *               userName:
- *                 type: string
- *               pin:
- *                 type: string
+ *             $ref: '#/components/schemas/EmployeeVerifyPasswordRequest'
  *     responses:
  *       200:
  *         description: pin_session_id للخطوة التالية
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/EmployeeVerifyPasswordResponse'
  */
 router.post('/employee/verify-pin', authBruteForceLimiter, employeeVerifyPinUser)
 
@@ -327,15 +329,14 @@ router.post('/employee/verify-pin', authBruteForceLimiter, employeeVerifyPinUser
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             required: [pin_session_id]
- *             properties:
- *               pin_session_id:
- *                 type: string
- *                 format: uuid
+ *             $ref: '#/components/schemas/EmployeeChallengeRequest'
  *     responses:
  *       200:
  *         description: challenge للتوقيع بـ private key
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/EmployeeChallengeResponse'
  */
 router.post('/employee/challenge', employeeChallengeUser)
 
@@ -351,18 +352,14 @@ router.post('/employee/challenge', employeeChallengeUser)
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             required: [challenge_id, signature]
- *             properties:
- *               challenge_id:
- *                 type: string
- *                 format: uuid
- *               signature:
- *                 type: string
- *                 description: base64 signature signed with private key from USB
+ *             $ref: '#/components/schemas/EmployeeVerifySignatureRequest'
  *     responses:
  *       200:
  *         description: JWT token
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/VerifyRegisterOtpResponse'
  */
 router.post('/employee/verify-signature', authBruteForceLimiter, employeeVerifySignatureUser)
 
