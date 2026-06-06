@@ -18,49 +18,62 @@ class ProcessRepository {
     return await ProcessDefinition.findByPk(id)
   }
 
-  //================ AUTH optimized query ===
-  async findAuthProcesses(typeTransId, roleIds) {
+  _buildAuthProcessesQuery (typeTransId, roleIds = null) {
+    const assignmentInclude = {
+      model: StageAssignment,
+      as: 'stage_assignments',
+      attributes: ['organization_department_roles_id']
+    }
 
-    return await ProcessDefinition.findAll({
+    if (Array.isArray(roleIds) && roleIds.length > 0) {
+      assignmentInclude.where = {
+        organization_department_roles_id: {
+          [Op.in]: roleIds
+        }
+      }
+      assignmentInclude.required = true
+    } else {
+      assignmentInclude.required = false
+    }
 
-  where: {
-    is_active: true,
-    type_trans_id: typeTransId,
-    status: 'deployed',
-    approval_status: 'APPROVED'
-  },
+    return {
+      where: {
+        is_active: true,
+        type_trans_id: typeTransId,
+        status: 'deployed',
+        approval_status: 'APPROVED'
+      },
 
-  attributes: ['id', 'name', 'code', 'priority'],
-
-  include: [
-    {
-      model: Stage,
-      as: 'stages',
-      attributes: ['id', 'name', 'code', 'type', 'auth_type'],
-      where: { auth_type: 'AUTH' },
-      required: true,
+      attributes: ['id', 'name', 'code', 'priority'],
 
       include: [
         {
-          model: StageAssignment,
-          as: 'stage_assignments',
-          attributes: ['organization_department_roles_id'],
-          where: {
-            organization_department_roles_id: {
-              [Op.in]: roleIds
-            }
-          },
-          required: true
+          model: Stage,
+          as: 'stages',
+          attributes: ['id', 'name', 'code', 'type', 'auth_type'],
+          where: { auth_type: 'AUTH' },
+          required: true,
+          include: [assignmentInclude]
         }
-      ]
+      ],
+
+      subQuery: false,
+      distinct: true
     }
-  ],
+  }
 
-  subQuery: false,
+  //================ AUTH optimized query ===
+  async findAuthProcesses (typeTransId, roleIds) {
+    return ProcessDefinition.findAll(
+      this._buildAuthProcessesQuery(typeTransId, roleIds)
+    )
+  }
 
-  distinct: true,   // 🔥 مهم جدًا
-})
-}
+  async findAuthProcessesForCache (typeTransId) {
+    return ProcessDefinition.findAll(
+      this._buildAuthProcessesQuery(typeTransId, null)
+    )
+  }
 
 ///////////////////////////////////////////////////////////////
 //====================== find process details =================

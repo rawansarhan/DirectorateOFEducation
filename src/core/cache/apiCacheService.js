@@ -25,6 +25,8 @@ const KEYS = {
   checkLists: () => 'check-lists:all',
   datePickers: () => 'date-pickers:all',
   filePickers: () => 'file-pickers:all',
+  authProcessesByType: (typeTransId) => `process:auth:typed:${typeTransId}`,
+  authComplaintProcesses: () => 'process:auth:complaint:all',
   stageConfig: (processId) => `stage-config:process:${processId}`,
   transactionDraft: (userId, processId) => `transaction:draft:${userId}:${processId}`,
   createDraft: (userId, processId) => `transaction:create-draft:${userId}:${processId}`,
@@ -381,6 +383,46 @@ async function invalidateFilePickers () {
   })
 }
 
+async function invalidateAuthProcessesByType (typeTransId = null) {
+  if (typeTransId != null) {
+    const cacheKey = KEYS.authProcessesByType(typeTransId)
+    const deleted = await deleteKey(cacheKey)
+
+    logInvalidate({
+      module: 'ProcessDefinition',
+      fullKey: `${API_CACHE_PREFIX}${cacheKey}`,
+      deleted
+    })
+    return
+  }
+
+  const count = await deleteKeysByPattern('process:auth:typed:*')
+  console.log(
+    `${LOG_PREFIX} invalidate all typed auth process lists (${count} key(s)) — redis: ${redisStatusLabel()}`
+  )
+}
+
+async function invalidateAuthComplaintProcesses () {
+  const cacheKey = KEYS.authComplaintProcesses()
+  const deleted = await deleteKey(cacheKey)
+
+  logInvalidate({
+    module: 'Complaint',
+    fullKey: `${API_CACHE_PREFIX}${cacheKey}`,
+    deleted
+  })
+}
+
+async function invalidateAllAuthProcessCaches () {
+  const typedCount = await deleteKeysByPattern('process:auth:typed:*')
+  const complaintKey = KEYS.authComplaintProcesses()
+  const complaintDeleted = await deleteKey(complaintKey)
+
+  console.log(
+    `${LOG_PREFIX} invalidate all auth process caches — typed: ${typedCount} key(s), complaint: ${complaintDeleted} key(s) — redis: ${redisStatusLabel()}`
+  )
+}
+
 async function invalidateStageConfig (processId = null) {
   if (processId != null) {
     await deleteKey(KEYS.stageConfig(processId))
@@ -449,6 +491,9 @@ module.exports = {
   invalidateCheckLists,
   invalidateDatePickers,
   invalidateFilePickers,
+  invalidateAuthProcessesByType,
+  invalidateAuthComplaintProcesses,
+  invalidateAllAuthProcessCaches,
   invalidateStageConfig,
   invalidateTransactionDraft,
   invalidateTransactionById,

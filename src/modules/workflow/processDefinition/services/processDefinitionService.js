@@ -29,8 +29,16 @@ const {
   isProcessActiveBySchedule
 } = require('../utils/processActivation')
 const {
+  filterAuthProcessesByRoleIds
+} = require('../utils/processAuthFilter')
+const {
   invalidateAllProcessLists
 } = require('../../../../core/cache/processCacheService')
+const {
+  getOrLoad,
+  KEYS
+} = require('../../../../core/cache/apiCacheService')
+const { PROCESS_CACHE_TTL_SECONDS } = require('../../../../core/config/env')
 
 const LOG_PREFIX = '[ProcessDefinition]'
 
@@ -151,61 +159,48 @@ async function setupProcessAfterCreation (processId) {
 
 ///// ============================== AUTH processes (bulk optimized) ====================================
 
-async function getAuthProcesses(
+async function getAuthProcesses (
   typeTransID,
   userId
 ) {
-
-  // validate type transaction
-
   const typeTrans =
-    await typeTransRepository.findById(
-      typeTransID
-    )
+    await typeTransRepository.findById(typeTransID)
 
   if (!typeTrans) {
     throw new Error('لا يوجد هذا النوع')
   }
 
-  // get user role ids from auth-service
-
   const roleIds =
-    await authClient.getUserRoles(
-      userId
-    )
-
-  // no permissions
+    await authClient.getUserRoles(userId)
 
   if (!roleIds || roleIds.length === 0) {
-
     return {
       message: 'لا يوجد صلاحيات للمستخدم',
       data: []
     }
   }
 
-  // optimized repository query
+  const cacheKey = KEYS.authProcessesByType(typeTrans.id)
 
-  const processes =
-    await processRepository.findAuthProcesses(
-      typeTrans.id,
-      roleIds
-    )
+  console.log(
+    `${LOG_PREFIX} GET /api/process_definitions/auth/${typeTransID} — cache key: api:${cacheKey}`
+  )
 
-  // mapping response
+  const cachedProcesses = await getOrLoad(
+    cacheKey,
+    () => processRepository.findAuthProcessesForCache(typeTrans.id),
+    {
+      label: `ProcessDefinition GET /api/process_definitions/auth/${typeTransID}`,
+      ttlSeconds: PROCESS_CACHE_TTL_SECONDS
+    }
+  )
 
+  const processes = filterAuthProcessesByRoleIds(cachedProcesses, roleIds)
 
-
-const result = processes.map(
-  toAuthProcessResponse
-)
-
-  // response
+  const result = processes.map(toAuthProcessResponse)
 
   return {
-
     message: 'تم جلب عمليات AUTH بنجاح',
-
     data: result
   }
 }
@@ -339,6 +334,11 @@ async function reviewProcess(
   }
 
   await processRepository.update(processId, updatePayload)
+
+  console.log(
+    `${LOG_PREFIX} review process id=${processId} decision=${decision} — invalidating auth process caches...`
+  )
+  await invalidateAllProcessLists()
 
   return {
     message:

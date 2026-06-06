@@ -7,6 +7,11 @@ async function findAuthComplaintProcesses (typeTransId, roleIds) {
   return processRepository.findAuthProcesses(typeTransId, roleIds)
 }
 
+async function findAuthComplaintProcessesForCache (typeTransId) {
+  return processRepository.findAuthProcessesForCache(typeTransId)
+}
+
 module.exports = {
-  findAuthComplaintProcesses
+  findAuthComplaintProcesses,
+  findAuthComplaintProcessesForCache
 }
