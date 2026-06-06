@@ -32,7 +32,15 @@ const { sendSms } = require('./smsService')
 const {
   computeKeyFingerprint,
   hashPin,
+  validatePrivateKeyPem,
+  validatePublicKeyPem,
+  assertPrivatePublicKeyPair
 } = require('./cryptoAuthService')
+
+const {
+  encryptPrivateKeyPem,
+  decryptPrivateKeyPem
+} = require('../../../core/crypto/employeeKeyCrypto')
 
 const OTP_TTL_MINUTES = 5
 
@@ -156,10 +164,32 @@ async function registerEmployee (userData) {
 
   const pinHash = await hashPin(data.pin)
 
-  const publicKey = data.public_key
+  const publicKeyPem = data.public_key
 
-  const keyFingerprint =
-    computeKeyFingerprint(publicKey)
+  if (data.private_key) {
+    const privateKeyPem = validatePrivateKeyPem(data.private_key)
+    assertPrivatePublicKeyPair(privateKeyPem, publicKeyPem)
+
+    const encryptedPrivateKey = encryptPrivateKeyPem(
+      privateKeyPem,
+      data.pin,
+      computeKeyFingerprint(publicKeyPem)
+    )
+
+    const decryptedCheck = decryptPrivateKeyPem(
+      {
+        meta: encryptedPrivateKey.meta,
+        ciphertextBase64: encryptedPrivateKey.ciphertext
+      },
+      data.pin
+    )
+
+    if (decryptedCheck !== privateKeyPem) {
+      throw new Error('فشل التحقق من تشفير المفتاح الخاص')
+    }
+  }
+
+  const keyFingerprint = computeKeyFingerprint(publicKeyPem)
 
   const user = await userRepository.create({
     userName: data.userName,
@@ -182,7 +212,7 @@ async function registerEmployee (userData) {
 
   await userKeyRepository.create({
     user_id: user.id,
-    public_key: publicKey,
+    public_key: publicKeyPem,
     key_fingerprint: keyFingerprint,
     algorithm: 'ed25519',
     is_active: true,
@@ -196,9 +226,8 @@ async function registerEmployee (userData) {
     mother_name: user.mother_name,
     national_id: user.national_id,
     key_fingerprint: keyFingerprint,
-    organization_department_roles_id: orgDeptRole.id,
-    message:
-      'تم إنشاء حساب الموظف بنجاح. private_key يبقى في المتصفح/USB ولا يُخزَّن على السيرفر.',
+    public_key: publicKeyPem,
+    organization_department_roles_id: orgDeptRole.id
   }
 }
 

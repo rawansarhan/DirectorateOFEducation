@@ -1,7 +1,9 @@
 const Joi = require('joi')
-const { validatePublicKeyPem } = require('../services/cryptoAuthService')
-
-const DEFAULT_EMPLOYEE_PIN = '123456'
+const {
+  validatePublicKeyPem,
+  validatePrivateKeyPem,
+  assertPrivatePublicKeyPair
+} = require('../services/cryptoAuthService')
 
 // ============================================
 // رسائل عربية مشتركة لكل حقل
@@ -132,14 +134,22 @@ function validateRegisterEmp (data) {
       .messages(passwordMessages),
 
     pin: Joi.string()
-      .empty(['', null])
-      .default(DEFAULT_EMPLOYEE_PIN)
       .length(6)
       .pattern(/^\d+$/)
+      .required()
       .messages({
         'string.base': 'رمز PIN يجب أن يكون نصاً',
         'string.length': 'رمز PIN يجب أن يتكون من 6 أرقام',
-        'string.pattern.base': 'رمز PIN يجب أن يحتوي على أرقام فقط'
+        'string.pattern.base': 'رمز PIN يجب أن يحتوي على أرقام فقط',
+        'any.required': 'رمز PIN مطلوب'
+      }),
+
+    confirm_pin: Joi.string()
+      .valid(Joi.ref('pin'))
+      .required()
+      .messages({
+        'any.only': 'confirm_pin يجب أن يطابق pin',
+        'any.required': 'confirm_pin مطلوب'
       }),
 
     organization_id: Joi.number()
@@ -160,32 +170,60 @@ function validateRegisterEmp (data) {
       .required()
       .messages(idMessages('معرّف الدور')),
 
+    private_key: Joi.string()
+      .trim()
+      .optional()
+      .messages({
+        'string.base': 'المفتاح الخاص يجب أن يكون نصاً'
+      }),
+
     public_key: Joi.string()
       .trim()
       .required()
-      .custom((value, helpers) => {
-        try {
-          return validatePublicKeyPem(value)
-        } catch (error) {
-          return helpers.error('any.custom', {
-            message: error.message || 'المفتاح العام غير صالح'
-          })
-        }
-      })
       .messages({
         'string.base': 'المفتاح العام يجب أن يكون نصاً',
         'string.empty': 'المفتاح العام مطلوب',
-        'any.required': 'المفتاح العام مطلوب',
-        'any.custom': 'المفتاح العام غير صالح — يجب أن يكون Ed25519 PEM صحيحاً ومطابقاً للمفتاح على الفلاشة'
+        'any.required': 'المفتاح العام مطلوب'
       })
   }).messages({
     'object.unknown': 'الحقل {#label} غير مسموح به'
   })
 
-  return schema.validate(data, {
+  const { error, value } = schema.validate(data, {
     abortEarly: false,
     allowUnknown: false
   })
+
+  if (error) {
+    return { error, value: null }
+  }
+
+  try {
+    value.public_key = validatePublicKeyPem(value.public_key)
+  } catch (keyError) {
+    return {
+      error: {
+        details: [{ message: keyError.message }]
+      },
+      value: null
+    }
+  }
+
+  if (value.private_key) {
+    try {
+      validatePrivateKeyPem(value.private_key)
+      assertPrivatePublicKeyPair(value.private_key, value.public_key)
+    } catch (keyError) {
+      return {
+        error: {
+          details: [{ message: keyError.message }]
+        },
+        value: null
+      }
+    }
+  }
+
+  return { error: null, value }
 }
 
 // ===========================================
@@ -408,7 +446,6 @@ function validateRefreshToken (data) {
 }
 
 module.exports = {
-  DEFAULT_EMPLOYEE_PIN,
   validateRegisterEmp,
   validateRegisterCitizen,
   validateLogin,

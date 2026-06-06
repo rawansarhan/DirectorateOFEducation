@@ -1,5 +1,5 @@
 const cron = require('node-cron')
-const { updateProcessActivationStatus } = require('../../modules/workflow/services/processScheduleService')
+const { updateProcessActivationStatus } = require('../../modules/workflow/processDefinition/services/processScheduleService')
 
 // كل دقيقة (تقدر تغيرها)
 cron.schedule('* * * * *', async () => {

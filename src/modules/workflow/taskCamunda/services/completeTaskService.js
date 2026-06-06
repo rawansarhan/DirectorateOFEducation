@@ -4,7 +4,7 @@ const transactionClient = require('../../../../core/shared/clients/transaction/t
 
 const processInstanceRepository = require('../repositories/processInstanceRepository')
 
-const stageRepository = require('../../repositories/stageRepository')
+const stageRepository = require('../../processDefinition/repositories/stageRepository')
 
 const outboxRepository = require('../../../../core/shared/outbox/repositories/OutboxRepository')
 
@@ -15,7 +15,7 @@ const employeeTaskRepository = require('../repositories/employeeTaskRepository')
 
 
 const ActionStrategyFactory = require('../../actions/ActionStrategyFactory')
-const stageConfigRepository = require('../../repositories/stageConfigRepository')
+const stageConfigRepository = require('../../stageConfig/repositories/stageConfigRepository')
 const {
   normalizeActionPayload,
   resolveActionsForStage
@@ -33,6 +33,10 @@ const {
   assertTaskLockHolder,
   releaseTaskLock
 } = require('./taskLockService')
+const {
+  toCompleteTaskResponse,
+  toPublicSignatureRecord
+} = require('../mappers/taskCamundaMapper')
 
 async function executeActions (actions, context) {
   const results = []
@@ -207,48 +211,6 @@ async function completeTask ({
   }
 }
 
-function toPublicSignatureRecord (record) {
-  if (!record) {
-    return null
-  }
-
-  const {
-    challenge,
-    digitalSignature,
-    userKey,
-    signed_message: signedMessage,
-    ...publicRecord
-  } = record
-
-  return publicRecord
-}
-
-function buildCompleteTaskResponseData ({
-  stageName,
-  stageSnapshot,
-  payload,
-  idempotencyKey
-}) {
-  const response = {
-    stage_name: stageName,
-    fields: stageSnapshot.fields,
-    files: stageSnapshot.files,
-    templates: stageSnapshot.templates,
-    variables: payload.variables || {},
-    decision: payload.decision || null,
-    idempotency_key: idempotencyKey || payload.idempotency_key || null
-  }
-
-  if (payload.signature) {
-    response.signature = {
-      challenge_id: payload.signature.challenge_id,
-      signature: payload.signature.signature
-    }
-  }
-
-  return response
-}
-
 async function completeTaskCore ({
   taskId,
   userId,
@@ -363,7 +325,7 @@ async function completeTaskCore ({
     const challengeId = payload.signature?.challenge_id
     const signature = payload.signature?.signature
 
-    if (!signingId || !signature) {
+    if (!challengeId || !signature) {
       throw new Error(
         'Digital signature is required. Call POST /tasks/:taskId/signing-challenge first.'
       )
@@ -736,18 +698,12 @@ async function completeTaskCore ({
 
   return {
     message: 'Task completed successfully',
-
-    data: {
-      taskId: task.id,
-
-      currentStage: stage.name,
-
-      nextTask: nextTask?.name || null,
-
-      workflowStatus: nextTask ? 'running' : 'completed',
-
+    data: toCompleteTaskResponse({
+      task,
+      stage,
+      nextTask,
       transactionData
-    }
+    })
   }
 }
 ////////////////////////////////////////////////////////////////////////////////

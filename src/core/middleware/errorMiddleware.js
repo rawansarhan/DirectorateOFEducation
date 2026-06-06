@@ -17,10 +17,6 @@ function formatSequelizeError(err) {
 
   const parentMsg = err.parent?.message || err.message || '';
 
-  if (parentMsg.includes('ui_json')) {
-    return 'عمود ui_json غير موجود في قاعدة البيانات — نفّذ: npx sequelize-cli db:migrate';
-  }
-
   if (parentMsg.includes('stage_configs')) {
     return 'فشل حفظ إعدادات المرحلة في قاعدة البيانات';
   }

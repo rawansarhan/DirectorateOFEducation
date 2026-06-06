@@ -41,7 +41,8 @@ function handleControllerError (res, err, defaultStatus = 400) {
 
   return ApiResponder.error(res, {
     message: err.message,
-    statusCode: err.statusCode || defaultStatus
+    statusCode: err.statusCode || defaultStatus,
+    data: null
   })
 }
 

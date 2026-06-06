@@ -5,7 +5,7 @@ const EVENTS =
   require('../../../../core/shared/events/types')
 
 const processRepository =
-  require('../../repositories/processRepository')
+  require('../../processDefinition/repositories/processRepository')
 
 const camundaClient =
   require('../../../../core/shared/clients/camunda/camundaClient')
@@ -19,6 +19,7 @@ const outboxRepository =
 const {
   completeTask
 } = require('./completeTaskService')
+const { toStartWorkflow } = require('../mappers/taskCamundaMapper')
 
 // ======================================================
 // START WORKFLOW
@@ -208,27 +209,13 @@ async function startWorkflow({
   // ====================================================
 
   return {
-
-    message:
-      'Workflow started successfully',
-
-    data: {
-
-      transactionId:
-        transaction.id,
-
-      processInstanceId:
-        processInstance.id,
-
-      camundaProcessInstanceId:
-        camundaProcess.id,
-
-      currentTask:
-        result?.data?.nextTask || null,
-
-      workflowStatus:
-        'running'
-    }
+    message: 'Workflow started successfully',
+    data: toStartWorkflow({
+      transaction,
+      processInstance,
+      camundaProcess,
+      completeTaskResult: result
+    })
   }
 }
 

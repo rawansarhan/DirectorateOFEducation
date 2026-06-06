@@ -41,16 +41,28 @@ app.use(
 //==========================================================================
 //=========================== repositories services ========================
 
-const documentTemplateRoutes = require('./modules/requirements/routes/DocTem')
+const documentTemplateRoutes = require('./modules/requirements/DocTemp/routes/docTemp')
 app.use('/api/document-templates', documentTemplateRoutes)
 
-const fieldRoutes = require('./modules/requirements/routes/field')
-app.use('/api/fields', fieldRoutes)
+const textFieldRoutes = require('./modules/requirements/text_field/routes/textField')
+app.use('/api/text-fields', textFieldRoutes)
 
-const fileRoutes = require('./modules/requirements/routes/file')
-app.use('/api/files', fileRoutes)
+const textDropdownRoutes = require('./modules/requirements/text_dropdown/routes/textDropdown')
+app.use('/api/text-dropdowns', textDropdownRoutes)
 
-const typeProcessRoutes = require('./modules/workflow/routes/typeProcess')
+const radioGroupRoutes = require('./modules/requirements/radio_group/routes/radioGroup')
+app.use('/api/radio-groups', radioGroupRoutes)
+
+const checkListRoutes = require('./modules/requirements/check_list/routes/checkList')
+app.use('/api/check-lists', checkListRoutes)
+
+const datePickerRoutes = require('./modules/requirements/date_picker/routes/datePicker')
+app.use('/api/date-pickers', datePickerRoutes)
+
+const filePickerRoutes = require('./modules/requirements/file_picker/routes/filePicker')
+app.use('/api/file-pickers', filePickerRoutes)
+
+const typeProcessRoutes = require('./modules/workflow/typeProcess/routes/typeProcess')
 app.use('/api/typeProcess', typeProcessRoutes)
 
 //==========================================================================
@@ -92,18 +104,18 @@ app.use(
 const workflowRoutes = require('./modules/workflow/taskCamunda/routes/workflow')
 app.use('/api/workflow', workflowRoutes)
 
-const complaintsRoutes = require('./modules/workflow/routes/complaint')
+const complaintsRoutes = require('./modules/workflow/complaint/routes/complaint')
 app.use('/api/complaint', complaintsRoutes)
 
-const stageConfigRoutes = require('./modules/workflow/routes/stageConfig')
+const stageConfigRoutes = require('./modules/workflow/stageConfig/routes/stageConfig')
 app.use('/api/stage_config', stageConfigRoutes)
 
-const processDefinitionsRoutes = require('./modules/workflow/routes/processDefinition')
+const processDefinitionsRoutes = require('./modules/workflow/processDefinition/routes/processDefinition')
 app.use('/api/process_definitions', processDefinitionsRoutes)
 
 //process client
 const internalProcessRoutes =
-  require('./modules/workflow/routes/internal/processClient')
+  require('./modules/workflow/processDefinition/routes/processInternal')
 app.use(
   '/internal/process_definitions',
   internalProcessRoutes
@@ -112,13 +124,11 @@ app.use(
 //===========================================================================
 //============================= transaction services ========================
 
-const transactionRoutes = require('./modules/transaction/routes/Transaction')
+const transactionRoutes = require('./modules/transaction/transaction/routes/transaction')
 app.use('/api/transaction', transactionRoutes)
 
-
-//TransactionClient
 const internalTransactionRoutes =
-  require('./modules/transaction/routes/TransactionClient')
+  require('./modules/transaction/transaction/routes/transactionInternal')
 app.use(
   '/internal/transactions',
   internalTransactionRoutes

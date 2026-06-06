@@ -19,6 +19,12 @@ const KEYS = {
   rolesByDepartment: (departmentId) => `role:by-dept:${departmentId}`,
   locations: () => 'location:all',
   documentTemplates: () => 'document-templates:active',
+  textFields: () => 'text-fields:all',
+  textDropdowns: () => 'text-dropdowns:all',
+  radioGroups: () => 'radio-groups:all',
+  checkLists: () => 'check-lists:all',
+  datePickers: () => 'date-pickers:all',
+  filePickers: () => 'file-pickers:all',
   stageConfig: (processId) => `stage-config:process:${processId}`,
   transactionDraft: (userId, processId) => `transaction:draft:${userId}:${processId}`,
   createDraft: (userId, processId) => `transaction:create-draft:${userId}:${processId}`,
@@ -188,28 +194,59 @@ async function deleteKeysByPattern (pattern) {
   }
 }
 
+function countItems (data) {
+  return Array.isArray(data) ? data.length : null
+}
+
+function redisStatusLabel () {
+  return REDIS_URL ? 'on' : 'off'
+}
+
 async function deleteKey (cacheKey) {
   if (!(await ensureConnected())) {
-    return
+    console.warn(
+      `${LOG_PREFIX} DELETE skipped — Redis unavailable — key: ${API_CACHE_PREFIX}${cacheKey}`
+    )
+    return 0
   }
 
   try {
-    await redisClient.del(`${API_CACHE_PREFIX}${cacheKey}`)
+    const fullKey = `${API_CACHE_PREFIX}${cacheKey}`
+    const deleted = await redisClient.del(fullKey)
+    return deleted
   } catch (err) {
     console.warn(`${LOG_PREFIX} delete failed (${cacheKey}):`, err.message)
+    return 0
   }
 }
 
-function logHit ({ label, fullKey }) {
+function logHit ({ label, fullKey, itemCount }) {
+  const itemsSuffix =
+    itemCount != null ? ` — items: ${itemCount}` : ''
+
   console.log('⚡ data from Redis cache')
-  console.log(`${LOG_PREFIX} CACHE HIT — source: REDIS — ${label} — key: ${fullKey}`)
+  console.log(
+    `${LOG_PREFIX} CACHE HIT — source: REDIS — ${label} — key: ${fullKey}${itemsSuffix} — redis: ${redisStatusLabel()}`
+  )
 }
 
-function logMiss ({ label, fullKey, durationMs, cached }) {
+function logMiss ({ label, fullKey, durationMs, cached, itemCount }) {
+  const itemsSuffix =
+    itemCount != null ? ` — items: ${itemCount}` : ''
+
   console.log('🐢 data from DATABASE')
   console.log(
-    `${LOG_PREFIX} CACHE MISS — source: DATABASE — ${label} — key: ${fullKey} — ${durationMs}ms` +
-    (cached ? ` — saved to Redis (TTL=${DEFAULT_TTL_SECONDS}s)` : ' — Redis unavailable, not cached')
+    `${LOG_PREFIX} CACHE MISS — source: DATABASE — ${label} — key: ${fullKey} — ${durationMs}ms${itemsSuffix}` +
+    (cached
+      ? ` — saved to Redis (TTL=${DEFAULT_TTL_SECONDS}s, redis=${redisStatusLabel()})`
+      : ` — Redis unavailable, not cached (redis=${redisStatusLabel()})`)
+  )
+}
+
+function logInvalidate ({ module, fullKey, deleted }) {
+  console.log('🗑️ cache invalidated')
+  console.log(
+    `${LOG_PREFIX} INVALIDATE — module: ${module} — key: ${fullKey} — deleted: ${deleted} key(s) — redis: ${redisStatusLabel()}`
   )
 }
 
@@ -219,7 +256,11 @@ async function getOrLoad (cacheKey, loader, options = {}) {
   const cached = await getCachedJson(fullKey)
 
   if (cached !== null) {
-    logHit({ label, fullKey })
+    logHit({
+      label,
+      fullKey,
+      itemCount: countItems(cached)
+    })
     return cached
   }
 
@@ -229,7 +270,13 @@ async function getOrLoad (cacheKey, loader, options = {}) {
   const durationMs = Date.now() - start
   const saved = await setCachedJson(fullKey, plain, options.ttlSeconds)
 
-  logMiss({ label, fullKey, durationMs, cached: saved })
+  logMiss({
+    label,
+    fullKey,
+    durationMs,
+    cached: saved,
+    itemCount: countItems(plain)
+  })
 
   return plain
 }
@@ -240,8 +287,14 @@ async function invalidateOrganizations () {
 }
 
 async function invalidateTypeProcesses () {
-  const count = await deleteKey(KEYS.typeProcesses())
-  console.log(`${LOG_PREFIX} invalidate type processes (${count ? 1 : 0} key)`)
+  const cacheKey = KEYS.typeProcesses()
+  const deleted = await deleteKey(cacheKey)
+
+  logInvalidate({
+    module: 'TypeProcess',
+    fullKey: `${API_CACHE_PREFIX}${cacheKey}`,
+    deleted
+  })
 }
 
 async function invalidateDepartmentLeaves (organizationId = null) {
@@ -274,6 +327,58 @@ async function invalidateLocations () {
 async function invalidateDocumentTemplates () {
   const count = await deleteKey(KEYS.documentTemplates())
   console.log(`${LOG_PREFIX} invalidate document templates (${count ? 1 : 0} key)`)
+}
+
+async function invalidateWidgetListCache ({ module, cacheKey }) {
+  const deleted = await deleteKey(cacheKey)
+
+  logInvalidate({
+    module,
+    fullKey: `${API_CACHE_PREFIX}${cacheKey}`,
+    deleted
+  })
+}
+
+async function invalidateTextFields () {
+  await invalidateWidgetListCache({
+    module: 'TextField',
+    cacheKey: KEYS.textFields()
+  })
+}
+
+async function invalidateTextDropdowns () {
+  await invalidateWidgetListCache({
+    module: 'TextDropdown',
+    cacheKey: KEYS.textDropdowns()
+  })
+}
+
+async function invalidateRadioGroups () {
+  await invalidateWidgetListCache({
+    module: 'RadioGroup',
+    cacheKey: KEYS.radioGroups()
+  })
+}
+
+async function invalidateCheckLists () {
+  await invalidateWidgetListCache({
+    module: 'CheckList',
+    cacheKey: KEYS.checkLists()
+  })
+}
+
+async function invalidateDatePickers () {
+  await invalidateWidgetListCache({
+    module: 'DatePicker',
+    cacheKey: KEYS.datePickers()
+  })
+}
+
+async function invalidateFilePickers () {
+  await invalidateWidgetListCache({
+    module: 'FilePicker',
+    cacheKey: KEYS.filePickers()
+  })
 }
 
 async function invalidateStageConfig (processId = null) {
@@ -338,6 +443,12 @@ module.exports = {
   invalidateRolesByDepartment,
   invalidateLocations,
   invalidateDocumentTemplates,
+  invalidateTextFields,
+  invalidateTextDropdowns,
+  invalidateRadioGroups,
+  invalidateCheckLists,
+  invalidateDatePickers,
+  invalidateFilePickers,
   invalidateStageConfig,
   invalidateTransactionDraft,
   invalidateTransactionById,

@@ -45,7 +45,7 @@ async function findProcessInstanceByCamundaId(
           {
             model: db.StageConfig,
             as: 'stage_config',
-            attributes: ['id', 'stage_id', 'config_json', 'ui_json']
+            attributes: ['id', 'stage_id', 'config_json']
           }
         ]
       }

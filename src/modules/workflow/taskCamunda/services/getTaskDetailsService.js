@@ -7,6 +7,7 @@ const transactionClient = require('../../../../core/shared/clients/transaction/t
 const { enrichStagesData } = require('../../../../core/utils/filePath')
 
 const { acquireTaskLock } = require('./taskLockService')
+const { toTaskDetails } = require('../mappers/taskCamundaMapper')
 
 
 
@@ -66,72 +67,15 @@ async function getTaskDetails ({ taskId, userId }) {
 
 
 
-  const stageConfigRow = processInstance.current_stage?.stage_config
-
-  const currentStageConfig = stageConfigRow?.config_json || {}
-
-  const currentStageUi = stageConfigRow?.ui_json || {}
-
-
-
   return {
-
     message: 'Task details fetched successfully',
-
-    data: {
-
-      task: {
-
-        id: task.id,
-
-        name: task.name,
-
-        taskDefinitionKey: task.taskDefinitionKey,
-
-        created: task.created
-
-      },
-
-      process: {
-
-        id: processInstance.id,
-
-        processDefinitionId: processInstance.process_definition_id
-
-      },
-
-      transaction: {
-
-        id: transaction?.id,
-
-        code: transaction?.code,
-
-        status: transaction?.status,
-
-        version: transaction?.version
-
-      },
-
+    data: toTaskDetails({
+      task,
+      processInstance,
+      transaction,
       taskLock,
-
-      previousStagesData,
-
-      currentStage: {
-
-        id: processInstance.current_stage?.id,
-
-        name: processInstance.current_stage?.name,
-
-        code: processInstance.current_stage?.code,
-
-        config: currentStageConfig,
-
-        ui: currentStageUi
-
-      }
-
-    }
-
+      previousStagesData
+    })
   }
 
 }

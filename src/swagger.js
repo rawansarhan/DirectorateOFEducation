@@ -19,8 +19,12 @@ const swaggerOptions = {
     tags: [
       { name: 'Auth', description: 'المصادقة وإدارة الحسابات (Authentication)' },
       { name: 'Calculation', description: 'العمليات الحسابية (calculations)' },
-      { name: 'Field', description: 'إدارة الحقول (Fields)' },
-      { name: 'File', description: 'إدارة الملفات (Files)' },
+      { name: 'TextField', description: 'إدارة حقول النص (Text Field Widgets)' },
+      { name: 'TextDropdown', description: 'إدارة القوائم المنسدلة (Text Dropdown Widgets)' },
+      { name: 'RadioGroup', description: 'إدارة مجموعات الاختيار (Radio Group Widgets)' },
+      { name: 'CheckList', description: 'إدارة قوائم الاختيار المتعدد (Check List Widgets)' },
+      { name: 'DatePicker', description: 'إدارة منتقيات التاريخ (Date Picker Widgets)' },
+      { name: 'FilePicker', description: 'إدارة منتقيات الملفات (File Picker Widgets)' },
       { name: 'Tasks', description: 'إدارة المهام (Workflow Tasks)' },
       { name: 'Workflow', description: 'إدارة سير العمل مع Camunda (Workflow Tasks)' },
       {
@@ -86,6 +90,8 @@ const swaggerOptions = {
             'email',
             'phone_number',
             'password',
+            'pin',
+            'confirm_pin',
             'organization_id',
             'department_id',
             'role_id',
@@ -154,9 +160,24 @@ const swaggerOptions = {
               minLength: 6,
               maxLength: 6,
               pattern: '^\\d{6}$',
-              default: '123456',
               example: '123456',
-              description: 'رمز PIN لتوقيع المعاملات — اختياري؛ إن لم يُرسل يُخزَّن 123456 تلقائياً'
+              description: 'رمز PIN (6 أرقام) — يُستخدم لتشفير المفتاح الخاص وفتح قفل التطبيق'
+            },
+            confirm_pin: {
+              type: 'string',
+              minLength: 6,
+              maxLength: 6,
+              pattern: '^\\d{6}$',
+              example: '123456',
+              description: 'تأكيد رمز PIN — يجب أن يطابق pin'
+            },
+            private_key: {
+              type: 'string',
+              description: 'مفتاح Ed25519 الخاص (PEM) — اختياري؛ إن لم يُرسل يُولَّد تلقائياً'
+            },
+            public_key: {
+              type: 'string',
+              description: 'مفتاح Ed25519 العام — PEM (يُولَّد في المتصفح ويُرسل للسيرفر)'
             },
             organization_id: {
               type: 'integer',
@@ -175,12 +196,6 @@ const swaggerOptions = {
               minimum: 1,
               example: 2,
               description: 'معرف الدور (Role)'
-            },
-            public_key: {
-              type: 'string',
-              minLength: 40,
-              example: 'MCowBQYDK2VwAyEA6dCIpX6BrmT8IzG85cIziBnFc2tY/8aBbvmJuTKc9/g=',
-              description: 'مفتاح Ed25519 العام — PEM كامل أو Base64 SPKI فقط'
             }
           },
           example: {
@@ -193,6 +208,8 @@ const swaggerOptions = {
             email: 'john@gmail.com',
             phone_number: '0912345678',
             password: 'Test123',
+            pin: '123456',
+            confirm_pin: '123456',
             organization_id: 1,
             department_id: 5,
             role_id: 2,
@@ -200,34 +217,31 @@ const swaggerOptions = {
           }
         },
 
+        RegisterEmployeeData: {
+          type: 'object',
+          properties: {
+            userName: { type: 'string', example: 'john_doe' },
+            first_name: { type: 'string', example: 'أحمد' },
+            last_name: { type: 'string', example: 'الحسن' },
+            father_name: { type: 'string', example: 'محمد' },
+            mother_name: { type: 'string', example: 'فاطمة' },
+            national_id: { type: 'string', example: '01234567890' },
+            key_fingerprint: {
+              type: 'string',
+              example: 'a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456'
+            },
+            public_key: { type: 'string' },
+            organization_department_roles_id: { type: 'integer', example: 3 }
+          }
+        },
+
         RegisterEmployeeResponse: {
           type: 'object',
           properties: {
             success: { type: 'boolean', example: true },
-            data: {
-              type: 'object',
-              properties: {
-                userName: { type: 'string', example: 'john_doe' },
-                first_name: { type: 'string', example: 'أحمد' },
-                last_name: { type: 'string', example: 'الحسن' },
-                father_name: { type: 'string', example: 'محمد' },
-                mother_name: { type: 'string', example: 'فاطمة' },
-                national_id: { type: 'string', example: '01234567890' },
-                key_fingerprint: {
-                  type: 'string',
-                  example: 'a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456',
-                  description: 'SHA-256 fingerprint للمفتاح العام'
-                },
-                organization_department_roles_id: {
-                  type: 'integer',
-                  example: 3
-                },
-                message: {
-                  type: 'string',
-                  example: 'تم إنشاء حساب الموظف بنجاح. private_key يبقى في المتصفح/USB ولا يُخزَّن على السيرفر.'
-                }
-              }
-            }
+            status_code: { type: 'integer', example: 200 },
+            message: { type: 'string', example: 'تم تسجيل الموظف بنجاح' },
+            data: { $ref: '#/components/schemas/RegisterEmployeeData' }
           }
         },
 
@@ -522,151 +536,135 @@ const swaggerOptions = {
         //   }
         // },
 
-        // ======================== Field ===============================
-
-        FieldCreate: {
-          type: 'object',
-          required: ['field_name', 'field_type'],
-          properties: {
-            field_name: {
-              type: 'string',
-              example: 'student_name'
-            },
-            field_type: {
-              type: 'string',
-              enum: ['string', 'number', 'text', 'date', 'boolean'],
-              example: 'string'
-            },
-            list_json: {
-              type: 'array',
-              items: { type: 'string' },
-              example: ['Option1', 'Option2']
-            }
-          }
-        },
-
-        FieldUpdate: {
-          type: 'object',
-          minProperties: 1,
-          properties: {
-            field_name: { type: 'string', example: 'student_name_updated' },
-            field_type: {
-              type: 'string',
-              enum: ['string', 'number', 'text', 'date', 'boolean']
-            },
-            list_json: {
-              type: 'array',
-              items: { type: 'string' }
-            }
-          }
-        },
-
-        Field: {
+        TextFieldWidget: {
           type: 'object',
           properties: {
             id: { type: 'integer', example: 1 },
-            field_name: { type: 'string', example: 'student_name' },
-            field_type: { type: 'string', example: 'string' },
-            list_json: {
+            id_widget: { type: 'string', example: 'text_field1' },
+            label: { type: 'string', example: 'الاسم الكامل' },
+            is_required: { type: 'boolean', example: true },
+            input_type: {
+              type: 'string',
+              enum: ['text', 'string', 'int', 'phoneNumber', 'email']
+            },
+            regex: { type: 'string', nullable: true },
+            max_length: { type: 'integer', nullable: true },
+            min_length: { type: 'integer', nullable: true },
+            created_at: { type: 'string', format: 'date-time' },
+            updated_at: { type: 'string', format: 'date-time' }
+          }
+        },
+
+        TextDropdownOption: {
+          type: 'object',
+          required: ['key', 'value'],
+          properties: {
+            key: { type: 'string', example: 'DAM' },
+            value: { type: 'string', example: 'دمشق' }
+          }
+        },
+
+        TextDropdownWidget: {
+          type: 'object',
+          properties: {
+            id: { type: 'integer', example: 1 },
+            id_widget: { type: 'string', example: 'dropdown1' },
+            label: { type: 'string', example: 'محافظة الولادة' },
+            is_required: { type: 'boolean', example: true },
+            options: {
               type: 'array',
-              items: { type: 'string' },
-              nullable: true
+              items: { $ref: '#/components/schemas/TextDropdownOption' }
             },
             created_at: { type: 'string', format: 'date-time' },
             updated_at: { type: 'string', format: 'date-time' }
           }
         },
 
-        FieldEnvelope: {
+        RadioGroupOption: {
           type: 'object',
+          required: ['key', 'value'],
           properties: {
-            message: { type: 'string', example: 'تم انشاء الحقل بنجاح !' },
-            data: { $ref: '#/components/schemas/Field' }
+            key: { type: 'string', example: 'single' },
+            value: { type: 'string', example: 'عازب/ة' }
           }
         },
 
-        FieldListEnvelope: {
-          type: 'object',
-          properties: {
-            message: { type: 'string', example: 'عرض كل الحقول بنجاح !' },
-            data: {
-              type: 'array',
-              items: { $ref: '#/components/schemas/Field' }
-            }
-          }
-        },
-        // ======================== File ===============================
-
-        FileCreate: {
-          type: 'object',
-          required: ['file_name', 'file_type', 'type_file'],
-          properties: {
-            file_name: {
-              type: 'string',
-              example: 'هوية شخصية'
-            },
-            file_type: {
-              type: 'string',
-              enum: ['pdf', 'docx', 'jpg', 'png'],
-              example: 'pdf'
-            },
-            type: {
-              type: 'string',
-              enum: ['اضبارة', 'وثائق للمواطن', 'كتاب وزاري'],
-              example: 'وثائق للمواطن'
-            }
-          }
-        },
-
-        FileUpdate: {
-          type: 'object',
-          minProperties: 1,
-          properties: {
-            file_name: {
-              type: 'string',
-              example: 'هوية شخصية محدثة'
-            },
-            file_type: {
-              type: 'string',
-              enum: ['pdf', 'docx', 'jpg', 'png']
-            },
-            type: {
-              type: 'string',
-              enum: ['اضبارة', 'وثائق للمواطن', 'كتاب وزاري']
-            }
-          }
-        },
-
-        File: {
+        RadioGroupWidget: {
           type: 'object',
           properties: {
             id: { type: 'integer', example: 1 },
-            file_name: { type: 'string', example: 'هوية شخصية' },
-            type: { type: 'string', example: 'pdf' },
-            type: { type: 'string', example: 'وثائق للمواطن' },
+            id_widget: { type: 'string', example: 'radio_group1' },
+            label: { type: 'string', example: 'الحالة الاجتماعية' },
+            is_required: { type: 'boolean', example: true },
+            options: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/RadioGroupOption' }
+            },
             created_at: { type: 'string', format: 'date-time' },
             updated_at: { type: 'string', format: 'date-time' }
           }
         },
 
-        FileEnvelope: {
+        CheckListOption: {
           type: 'object',
+          required: ['key', 'value'],
           properties: {
-            message: { type: 'string', example: 'تم انشاء الملف بنجاح !' },
-            data: { $ref: '#/components/schemas/File' }
+            key: { type: 'string', example: 'cycle_1' },
+            value: { type: 'string', example: 'أساسي' }
           }
         },
 
-        FileListEnvelope: {
+        CheckListWidget: {
           type: 'object',
           properties: {
-            message: { type: 'string', example: 'عرض كل الملفات بنجاح !' },
-            data: {
+            id: { type: 'integer', example: 1 },
+            id_widget: { type: 'string', example: 'check_list1' },
+            label: { type: 'string', example: 'حلقات التعليم للتدريس' },
+            is_required: { type: 'boolean', example: false },
+            min_selected: { type: 'integer', example: 1 },
+            max_selected: { type: 'integer', example: 2 },
+            options: {
               type: 'array',
-              items: { $ref: '#/components/schemas/File' }
-            }
+              items: { $ref: '#/components/schemas/CheckListOption' }
+            },
+            created_at: { type: 'string', format: 'date-time' },
+            updated_at: { type: 'string', format: 'date-time' }
           }
         },
+
+        DatePickerWidget: {
+          type: 'object',
+          properties: {
+            id: { type: 'integer', example: 1 },
+            id_widget: { type: 'string', example: 'date_picker1' },
+            label: { type: 'string', example: 'تاريخ الولادة' },
+            is_required: { type: 'boolean', example: true },
+            min_date: { type: 'string', format: 'date', example: '1940-01-01' },
+            max_date: { type: 'string', format: 'date', example: '2026-06-04' },
+            created_at: { type: 'string', format: 'date-time' },
+            updated_at: { type: 'string', format: 'date-time' }
+          }
+        },
+
+        FilePickerWidget: {
+          type: 'object',
+          properties: {
+            id: { type: 'integer', example: 1 },
+            id_widget: { type: 'string', example: 'file_picker1' },
+            label: { type: 'string', example: 'وثائق الهوية الشخصية' },
+            is_required: { type: 'boolean', example: true },
+            max_size_mb: { type: 'integer', example: 5 },
+            allowed_extensions: {
+              type: 'array',
+              items: { type: 'string' },
+              example: ['pdf', 'png', 'jpg']
+            },
+            allow_multiple: { type: 'boolean', example: true },
+            created_at: { type: 'string', format: 'date-time' },
+            updated_at: { type: 'string', format: 'date-time' }
+          }
+        },
+
         // ======================== type Process ==========================
         TypeProcess: {
           type: 'object',
@@ -1688,16 +1686,16 @@ const swaggerOptions = {
             priority: { type: 'integer', example: 1 },
             start_date: {
               type: 'string',
-              format: 'date',
-              example: '2026-01-01',
-              description: 'تاريخ البداية — يُقبل تاريخ اليوم أو أي تاريخ سابق؛ العملية تصبح active بعد الموافقة إذا start_date ≤ اليوم'
+              pattern: '^\\d{1,2}-\\d{1,2}$',
+              example: '03-15',
+              description: 'تاريخ البداية (شهر-يوم فقط، بدون سنة). السنة تُضاف تلقائياً كسنة الحالية. يُقبل أي شهر ويوم صالحين.'
             },
             end_date: {
               type: 'string',
-              format: 'date',
+              pattern: '^\\d{1,2}-\\d{1,2}$',
               nullable: true,
-              example: '2026-06-30',
-              description: 'تاريخ النهاية اختياري — يجب أن يكون أكبر من start_date (يُقبل تاريخ سابق إذا كان بعد start_date)'
+              example: '06-30',
+              description: 'تاريخ النهاية اختياري (شهر-يوم، السنة = سنة الحالية). يجب أن يكون أكبر من start_date.'
             }
           }
         },

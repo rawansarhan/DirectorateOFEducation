@@ -157,23 +157,21 @@ router.get('/tasks/:taskId', authMiddleware, getTaskDetailsController)
  *         schema:
  *           type: string
  *     requestBody:
+ *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
+ *             required: [pin, decision]
  *             properties:
- *               variables:
- *                 type: object
- *                 example:
- *                   action: approve
- *               fields:
- *                 type: array
- *                 items:
- *                   type: object
- *               files:
- *                 type: array
- *                 items:
- *                   type: object
+ *               pin:
+ *                 type: string
+ *                 example: "123456"
+ *                 description: رمز PIN (6 أرقام) — يُتحقق منه على السيرفر قبل إصدار challenge
+ *               decision:
+ *                 type: string
+ *                 example: approve
+ *                 description: قرار التوقيع (approve / reject) — يجب أن يطابق complete
  *     responses:
  *       200:
  *         description: Signing challenge created
