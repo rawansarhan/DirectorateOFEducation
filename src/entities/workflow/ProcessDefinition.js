@@ -1,6 +1,6 @@
 'use strict'
 
-const { buildProcessDefinitionCode } = require('../../modules/workflow/utils/processDefinitionCode')
+const { buildProcessDefinitionCode } = require('../../modules/workflow/processDefinition/utils/processDefinitionCode')
 
 module.exports = (sequelize, DataTypes) => {
   class ProcessDefinition extends sequelize.Sequelize.Model {

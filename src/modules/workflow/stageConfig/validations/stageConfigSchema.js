@@ -1,0 +1,243 @@
+'use strict'
+
+const Joi = require('joi')
+
+const WIDGET_TYPES = [
+  'text_field',
+  'date_picker',
+  'dropdown',
+  'radio_group',
+  'check_list',
+  'file_picker'
+]
+
+const TEXT_FIELD_INPUT_TYPES = [
+  'text',
+  'string',
+  'int',
+  'phone',
+  'phoneNumber',
+  'email'
+]
+
+const STAGE_ACTION_NAMES = [
+  'SEND_EMAIL',
+  'SEND_NOTIFICATION',
+  'GENERATE_PDF'
+]
+
+const widgetOptionSchema = Joi.object({
+  key: Joi.string().trim().min(1).max(64).required(),
+  value: Joi.string().trim().min(1).max(255).required()
+})
+
+const dateOnlySchema = Joi.string()
+  .trim()
+  .pattern(/^\d{4}-\d{2}-\d{2}$/)
+  .messages({
+    'string.pattern.base': 'التاريخ يجب أن يكون بصيغة YYYY-MM-DD'
+  })
+
+const widgetIdSchema = Joi.string().trim().min(1).max(128).required()
+const widgetLabelSchema = Joi.string().trim().min(1).max(255).required()
+
+const textFieldDataSchema = Joi.object({
+  id: widgetIdSchema,
+  label: widgetLabelSchema,
+  is_required: Joi.boolean().default(false),
+  input_type: Joi.string()
+    .valid(...TEXT_FIELD_INPUT_TYPES)
+    .required(),
+  regex: Joi.string().trim().max(500).allow(null, '').optional(),
+  max_length: Joi.number().integer().min(1).allow(null).optional(),
+  min_length: Joi.number().integer().min(0).allow(null).optional()
+}).unknown(false)
+
+const datePickerDataSchema = Joi.object({
+  id: widgetIdSchema,
+  label: widgetLabelSchema,
+  is_required: Joi.boolean().default(false),
+  min_date: dateOnlySchema.required(),
+  max_date: dateOnlySchema.required()
+}).unknown(false)
+
+const dropdownDataSchema = Joi.object({
+  id: widgetIdSchema,
+  label: widgetLabelSchema,
+  is_required: Joi.boolean().default(false),
+  options: Joi.array().items(widgetOptionSchema).min(1).required()
+}).unknown(false)
+
+const radioGroupDataSchema = dropdownDataSchema
+
+const checkListDataSchema = Joi.object({
+  id: widgetIdSchema,
+  label: widgetLabelSchema,
+  is_required: Joi.boolean().default(false),
+  min_selected: Joi.number().integer().min(0).required(),
+  max_selected: Joi.number().integer().min(1).required(),
+  options: Joi.array().items(widgetOptionSchema).min(1).required()
+}).unknown(false)
+
+const filePickerDataSchema = Joi.object({
+  id: widgetIdSchema,
+  label: widgetLabelSchema,
+  is_required: Joi.boolean().default(false),
+  max_size_mb: Joi.number().integer().min(1).max(100).required(),
+  allowed_extensions: Joi.array()
+    .items(
+      Joi.string()
+        .trim()
+        .lowercase()
+        .pattern(/^[a-z0-9]{1,10}$/)
+    )
+    .min(1)
+    .required(),
+  allow_multiple: Joi.boolean().default(false)
+}).unknown(false)
+
+const widgetSchema = Joi.object({
+  widget_type: Joi.string().valid(...WIDGET_TYPES).required(),
+  data: Joi.alternatives().conditional('widget_type', {
+    switch: [
+      { is: 'text_field', then: textFieldDataSchema },
+      { is: 'date_picker', then: datePickerDataSchema },
+      { is: 'dropdown', then: dropdownDataSchema },
+      { is: 'radio_group', then: radioGroupDataSchema },
+      { is: 'check_list', then: checkListDataSchema },
+      { is: 'file_picker', then: filePickerDataSchema }
+    ],
+    otherwise: Joi.forbidden()
+  })
+}).unknown(false)
+
+const templateItemSchema = Joi.object({
+  template_id: Joi.number().integer().positive().required()
+}).unknown(false)
+
+const stageActionSchema = Joi.object({
+  name: Joi.string().valid(...STAGE_ACTION_NAMES).required(),
+  payload: Joi.object().default({})
+}).unknown(true)
+
+const stageConfigJsonSchema = Joi.object({
+  form_id: Joi.string().trim().min(1).max(128).required(),
+  form_name: Joi.string().trim().min(1).max(255).required(),
+  widgets: Joi.array().items(widgetSchema).default([]),
+  template: Joi.array().items(templateItemSchema).default([]),
+  actions: Joi.array().items(stageActionSchema).optional(),
+  requires_digital_signature: Joi.boolean().optional()
+}).unknown(false)
+
+function assertValidRegex (regex) {
+  if (regex === null || regex === undefined || regex === '') {
+    return null
+  }
+
+  try {
+    // eslint-disable-next-line no-new
+    new RegExp(regex)
+    return String(regex)
+  } catch (error) {
+    return null
+  }
+}
+
+function validateUniqueOptionKeys (options = []) {
+  const keys = options.map(option => option.key)
+  return new Set(keys).size === keys.length
+}
+
+function validateWidgetsBusinessRules (widgets = []) {
+  const seenIds = new Set()
+
+  for (const widget of widgets) {
+    const data = widget.data || {}
+    const widgetId = data.id
+
+    if (seenIds.has(widgetId)) {
+      return `معرّف الودجت "${widgetId}" مكرر داخل widgets`
+    }
+
+    seenIds.add(widgetId)
+
+    if (widget.widget_type === 'text_field') {
+      if (data.regex && !assertValidRegex(data.regex)) {
+        return `regex غير صالح للودجت "${widgetId}"`
+      }
+
+      if (
+        data.min_length != null &&
+        data.max_length != null &&
+        Number(data.min_length) > Number(data.max_length)
+      ) {
+        return `min_length يجب أن يكون أقل من أو يساوي max_length للودجت "${widgetId}"`
+      }
+    }
+
+    if (widget.widget_type === 'date_picker') {
+      const min = new Date(`${data.min_date}T00:00:00Z`)
+      const max = new Date(`${data.max_date}T00:00:00Z`)
+
+      if (min > max) {
+        return `min_date يجب أن يكون قبل أو يساوي max_date للودجت "${widgetId}"`
+      }
+    }
+
+    if (
+      widget.widget_type === 'dropdown' ||
+      widget.widget_type === 'radio_group' ||
+      widget.widget_type === 'check_list'
+    ) {
+      if (!validateUniqueOptionKeys(data.options)) {
+        return `مفاتيح الخيارات (key) يجب أن تكون فريدة للودجت "${widgetId}"`
+      }
+    }
+
+    if (widget.widget_type === 'check_list') {
+      if (data.min_selected > data.max_selected) {
+        return `min_selected يجب أن يكون أقل من أو يساوي max_selected للودجت "${widgetId}"`
+      }
+
+      if (data.max_selected > data.options.length) {
+        return `max_selected لا يمكن أن يتجاوز عدد الخيارات للودجت "${widgetId}"`
+      }
+    }
+  }
+
+  return null
+}
+
+function validateStageConfigJson (value) {
+  const { error, value: validated } = stageConfigJsonSchema.validate(value, {
+    abortEarly: false,
+    stripUnknown: true
+  })
+
+  if (error) {
+    return { error, value: null }
+  }
+
+  const widgetsError = validateWidgetsBusinessRules(validated.widgets)
+
+  if (widgetsError) {
+    return {
+      error: {
+        details: [{ message: widgetsError }]
+      },
+      value: null
+    }
+  }
+
+  return { error: null, value: validated }
+}
+
+module.exports = {
+  WIDGET_TYPES,
+  TEXT_FIELD_INPUT_TYPES,
+  STAGE_ACTION_NAMES,
+  stageActionSchema,
+  stageConfigJsonSchema,
+  widgetSchema,
+  validateStageConfigJson
+}

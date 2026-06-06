@@ -7,6 +7,6 @@ module.exports = () => {
 
   // TRANSACTION
   require(
-    '../../../modules/transaction/listeners/processInstanceStage'
+    '../../../modules/transaction/process_instance_stage/listeners/processInstanceStageListener'
   )
 }

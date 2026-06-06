@@ -7,9 +7,11 @@ const transactionClient = require('../../../../core/shared/clients/transaction/t
 const securityGuardService = require('../../../../core/security/securityGuardService')
 
 const processInstanceRepository = require('../repositories/processInstanceRepository')
-const stageRepository = require('../../repositories/stageRepository')
-const stageConfigRepository = require('../../repositories/stageConfigRepository')
+const stageRepository = require('../../processDefinition/repositories/stageRepository')
+const stageConfigRepository = require('../../stageConfig/repositories/stageConfigRepository')
+const userRepository = require('../../../auth/repositories/userRepository')
 const userKeyRepository = require('../../../auth/repositories/userKeyRepository')
+const { validateSigningChallengePayload } = require('../../schemas/signingChallengeSchema')
 const transactionSigningChallengeRepository =
   require('../repositories/transactionSigningChallengeRepository')
 const documentSignatureRepository =
@@ -22,10 +24,17 @@ const {
   buildCanonicalPayloadHash,
   hashValue,
   verifyChallengeSignature,
+  verifyPin,
   getTransactionSignExpiresAt,
   TX_SIGN_TTL_MS
 } = require('../../../auth/services/cryptoAuthService')
 const { assertTaskLockHolder } = require('./taskLockService')
+const {
+  toSigningChallenge,
+  toDigitalSignatureRecord,
+  toSignatureLedgerEntry,
+  toSignatureLedger
+} = require('../mappers/taskCamundaMapper')
 /////////////////////////////////////////////////////////////
 async function loadTaskContext (taskId) {
   const task = await camundaClient.getTaskById(taskId)
@@ -110,6 +119,48 @@ function buildSigningPayload ({
   }
 }
 
+async function assertValidPinForSigning ({
+  userId,
+  pin,
+  clientMeta = {},
+  taskId
+}) {
+  const user = await userRepository.findById(userId)
+
+  if (!user || !user.is_active) {
+    throw new Error('المستخدم غير موجود أو غير مفعّل')
+  }
+
+  if (!user.pin_hash) {
+    throw new Error('لم يتم إعداد PIN بعد')
+  }
+
+  const pinValid = await verifyPin(pin, user.pin_hash)
+
+  if (!pinValid) {
+    const failure = await securityGuardService.recordFailure({
+      userId,
+      action: 'TX_SIGN_PIN_FAILED',
+      resourceType: 'task',
+      resourceId: taskId,
+      ipAddress: clientMeta.ip,
+      userAgent: clientMeta.userAgent,
+      details: { message: 'رمز PIN غير صحيح' }
+    })
+
+    if (failure.locked) {
+      const error = new Error('الحساب مقفل مؤقتاً بسبب محاولات فاشلة متكررة')
+      error.code = 'ACCOUNT_LOCKED'
+      error.lockedUntil = failure.lockedUntil
+      throw error
+    }
+
+    const error = new Error('رمز PIN غير صحيح')
+    error.remainingAttempts = failure.remainingAttempts
+    throw error
+  }
+}
+
 async function createSigningChallenge ({
   taskId,
   userId,
@@ -130,6 +181,20 @@ async function createSigningChallenge ({
     throw new Error('Digital signature is not required for this task')
   }
 
+  const { error: validationError, value: validatedPayload } =
+    validateSigningChallengePayload(payload)
+
+  if (validationError) {
+    throw new Error(validationError)
+  }
+
+  await assertValidPinForSigning({
+    userId,
+    pin: validatedPayload.pin,
+    clientMeta,
+    taskId
+  })
+
   const userKey = await userKeyRepository.findActiveLatestByUserId(userId)
 
   if (!userKey) {
@@ -144,19 +209,6 @@ async function createSigningChallenge ({
   })
 
   const payloadHash = buildCanonicalPayloadHash(signingPayload)
-  const genesisHash = await ensureGenesisHash(context.transaction)
-  const previousLinkHash = await getPreviousLinkHash(context.transaction.id)
-  const preCumulativeHash = computePreSignCumulativeHash(
-    context.transaction.data || {},
-    context.stage.code,
-    { decision: validatedPayload.decision }
-  )
-
-  const stages = await stageRepository.findByProcessId(
-    context.processInstance.process_definition_id
-  )
-  const stageOrderIndex = stages.findIndex(item => item.id === context.stage.id)
-  const stageOrder = stageOrderIndex >= 0 ? stageOrderIndex + 1 : 0
 
   await transactionSigningChallengeRepository.invalidateActiveByTaskAndUser(
     taskId,
@@ -204,17 +256,15 @@ async function createSigningChallenge ({
     }
   })
 
-  return {
-    signing_id: challenge.id,
-    task_id: context.task.id,
-    transaction_id: context.transaction.id,
-    stage_code: context.stage.code,
-    key_fingerprint: userKey.key_fingerprint,
-    message: challenge.message,
-    payload_hash: payloadHash,
-    expires_at: challenge.expires_at,
-    expires_in_seconds: Math.floor(TX_SIGN_TTL_MS / 1000)
-  }
+  return toSigningChallenge({
+    challenge,
+    task: context.task,
+    transaction: context.transaction,
+    stage: context.stage,
+    userKey,
+    payloadHash,
+    expiresInSeconds: Math.floor(TX_SIGN_TTL_MS / 1000)
+  })
 }
 async function assertSigningChallengeReady ({
   challenge,
@@ -336,7 +386,7 @@ async function persistVerifiedSignature ({
 
   try {
     const challenge = await transactionSigningChallengeRepository.findByIdWithLock(
-      signingId,
+      challengeId,
       transaction
     )
 
@@ -403,27 +453,20 @@ async function persistVerifiedSignature ({
       ipAddress: clientMeta.ip,
       userAgent: clientMeta.userAgent,
       details: {
-        signingId,
+        signingId: challengeId,
         digitalSignatureId: digitalSignature.id,
         documentId: document.id,
         stageCode: stage?.code
       }
     })
 
-    return {
-      document_id: document.id,
-      digital_signature_id: digitalSignature.id,
-      signed_hash: digitalSignature.signed_hash,
-      previous_signature_hash: digitalSignature.previous_signature_hash,
-      signature_order: digitalSignature.signature_order,
-      signed_at: digitalSignature.signed_at,
-      stage_id: challenge.stage_id,
-      stage_code: stage?.code || null,
-      task_id: challenge.task_id,
-      user_id: userId,
-      key_fingerprint: userKey.key_fingerprint,
-      payload_hash: challenge.payload_hash
-    }
+    return toDigitalSignatureRecord({
+      document,
+      digitalSignature,
+      challenge,
+      stage,
+      userKey
+    })
   } catch (error) {
     if (!transaction.finished) {
       await transaction.rollback()
@@ -474,28 +517,17 @@ async function buildTransactionSignatureLedger (transactionId) {
     for (const signature of document.signatures || []) {
       order += 1
 
-      signatures.push({
+      signatures.push(toSignatureLedgerEntry({
         order,
-        digital_signature_id: signature.id,
-        document_id: document.id,
-        stage_id: stageId,
-        stage_code: stageId ? stageCodeById.get(stageId) || null : null,
-        user_key_id: signature.user_key_id,
-        key_fingerprint: signature.user_key?.key_fingerprint || null,
-        signed_hash: signature.signed_hash,
-        previous_signature_hash: signature.previous_signature_hash,
-        payload_hash: document.file_hash,
-        signed_at: signature.signed_at
-      })
+        signature,
+        document,
+        stageId,
+        stageCode: stageId ? stageCodeById.get(stageId) || null : null
+      }))
     }
   }
 
-  return {
-    transaction_id: transactionId,
-    total_signatures: signatures.length,
-    signatures,
-    finalized_at: new Date()
-  }
+  return toSignatureLedger(transactionId, signatures)
 }
 
 function appendSignatureToTransactionData (

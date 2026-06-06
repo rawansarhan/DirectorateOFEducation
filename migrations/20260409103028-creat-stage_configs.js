@@ -23,14 +23,7 @@ module.exports = {
         type: Sequelize.JSON,
         allowNull: false,
         comment:
-          'عقد workflow: fields, files, templates, variables; actions لـ SERVICE_TASK'
-      },
-
-      ui_json: {
-        type: Sequelize.JSON,
-        allowNull: false,
-        defaultValue: {},
-        comment: 'محجوز لواجهة الفرونت — يُخزَّن فارغاً {}'
+          'عقد workflow: form_id, form_name, widgets, template, actions'
       },
 
       created_at: {

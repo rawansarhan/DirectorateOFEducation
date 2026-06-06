@@ -1,5 +1,6 @@
 const employeeTaskRepository = require('../repositories/employeeTaskRepository')
 const camundaClient = require('../../../../core/shared/clients/camunda/camundaClient')
+const { toEmployeeTaskItem } = require('../mappers/taskCamundaMapper')
 const {
   paginateArray,
   emptyPaginatedResult
@@ -63,15 +64,7 @@ async function getAllTasks ({ userId, page, limit, offset }) {
       continue
     }
 
-    tasks.push({
-      processName: instance.process_definition?.name,
-      processPriority: instance.process_definition?.priority ?? 0,
-      taskId: activeTask.id,
-      taskName: activeTask.name,
-      taskDefinitionKey: activeTask.taskDefinitionKey,
-      createdAt: activeTask.created || instance.created_at,
-      HestoryData: instance.transaction?.data
-    })
+    tasks.push(toEmployeeTaskItem(instance, activeTask))
   }
 
   // ====================================================

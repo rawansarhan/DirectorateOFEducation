@@ -117,22 +117,47 @@ function normalizeSubmissionPayload (value = {}) {
   }
 }
 
+const FIELD_WIDGET_TYPES = new Set([
+  'text_field',
+  'date_picker',
+  'dropdown',
+  'radio_group',
+  'check_list'
+])
+
 function buildSubmitContract (configJson = {}) {
+  const fields = []
+  const files = []
+
+  for (const widget of configJson.widgets || []) {
+    const widgetId = widget?.data?.id
+
+    if (!widgetId) {
+      continue
+    }
+
+    if (widget.widget_type === 'file_picker') {
+      files.push({ key: widgetId, path: '' })
+      continue
+    }
+
+    if (FIELD_WIDGET_TYPES.has(widget.widget_type)) {
+      fields.push({ key: widgetId, value: null })
+    }
+  }
+
   return {
     schema_version: SUBMISSION_SCHEMA_VERSION,
     envelope: {
       schema_version: SUBMISSION_SCHEMA_VERSION,
-      fields: (configJson.fields || []).map(rule => ({
-        key: rule.key,
-        value: null
+      fields,
+      files,
+      templates: (configJson.template || []).map(item => ({
+        template_id: item.template_id,
+        values: {}
       })),
-      files: (configJson.files || []).map(rule => ({
-        key: rule.key,
-        path: ''
-      })),
-      templates: [],
-      actions: [],
-      variables: configJson.variables || {},
+      actions: configJson.actions || [],
+      variables: {},
       notes: null
     }
   }

@@ -5,7 +5,8 @@ const {
   createHash,
   randomBytes,
   verify,
-  createPublicKey
+  createPublicKey,
+  createPrivateKey
 } = require('crypto')
 const bcrypt = require('bcryptjs')
 
@@ -75,6 +76,63 @@ function validatePublicKeyPem (publicKeyInput) {
     return canonicalizePublicKeyPem(publicKeyInput)
   } catch (error) {
     throw new Error('public_key is invalid or unsupported')
+  }
+}
+
+function normalizePrivateKeyPem (privateKeyInput) {
+  const value = String(privateKeyInput || '').trim()
+
+  if (!value) {
+    throw new Error('private_key is required')
+  }
+
+  if (value.includes('BEGIN PRIVATE KEY')) {
+    return value.replace(/\r\n/g, '\n')
+  }
+
+  const base64Body = value.replace(/\s+/g, '')
+
+  return [
+    '-----BEGIN PRIVATE KEY-----',
+    base64Body.match(/.{1,64}/g).join('\n'),
+    '-----END PRIVATE KEY-----'
+  ].join('\n')
+}
+
+function validatePrivateKeyPem (privateKeyInput) {
+  try {
+    const privateKeyPem = normalizePrivateKeyPem(privateKeyInput)
+    const privateKey = createPrivateKey(privateKeyPem)
+
+    if (privateKey.asymmetricKeyType !== 'ed25519') {
+      throw new Error('private_key must be an Ed25519 key')
+    }
+
+    return privateKeyPem
+  } catch (error) {
+    throw new Error('private_key is invalid or unsupported')
+  }
+}
+
+function derivePublicKeyPemFromPrivate (privateKeyInput) {
+  const privateKeyPem = validatePrivateKeyPem(privateKeyInput)
+  const publicKey = createPublicKey(createPrivateKey(privateKeyPem))
+
+  return publicKey.export({ type: 'spki', format: 'pem' })
+}
+
+function assertPrivatePublicKeyPair (privateKeyInput, publicKeyInput) {
+  const privateKeyPem = validatePrivateKeyPem(privateKeyInput)
+  const publicKeyPem = validatePublicKeyPem(publicKeyInput)
+  const derivedPublicKeyPem = derivePublicKeyPemFromPrivate(privateKeyPem)
+
+  if (derivedPublicKeyPem !== publicKeyPem) {
+    throw new Error('private_key does not match public_key')
+  }
+
+  return {
+    privateKeyPem,
+    publicKeyPem
   }
 }
 
@@ -210,6 +268,9 @@ module.exports = {
   generateEd25519KeyPair,
   normalizePublicKeyPem,
   validatePublicKeyPem,
+  validatePrivateKeyPem,
+  derivePublicKeyPemFromPrivate,
+  assertPrivatePublicKeyPair,
   canonicalizePublicKeyPem,
   parseChallengeMessage,
   extractChallengeFingerprint,

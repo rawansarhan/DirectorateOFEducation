@@ -14,38 +14,12 @@ function normalizeActionPayload (action = {}) {
   }
 }
 
-function resolveLegacySingleAction (source = {}) {
-  const actionName = source.action || source.name
-
-  if (actionName !== 'SEND_EMAIL' && actionName !== 'SEND_NOTIFICATION') {
-    return []
-  }
-
-  return [{
-    name: actionName,
-    to_organization_department_roles_id:
-      source.to_organization_department_roles_id,
-    to_organization_department_roles_camunda_group_key:
-      source.to_organization_department_roles_camunda_group_key,
-    subject: source.subject,
-    message: source.message
-  }]
-}
-
 function resolveActionsFromConfigJson (configJson = {}) {
   if (Array.isArray(configJson.actions) && configJson.actions.length) {
     return configJson.actions
   }
 
   return []
-}
-
-function resolveActionsFromUiJson (uiJson = {}) {
-  if (Array.isArray(uiJson.actions) && uiJson.actions.length) {
-    return uiJson.actions
-  }
-
-  return resolveLegacySingleAction(uiJson)
 }
 
 /**
@@ -70,7 +44,6 @@ function resolveActionsFromStageConfig (configJson = {}) {
 module.exports = {
   normalizeActionPayload,
   resolveActionsFromConfigJson,
-  resolveActionsFromUiJson,
   resolveActionsForStage,
   resolveActionsFromStageConfig
 }

@@ -1,124 +1,90 @@
 'use strict'
 
-const { Field, File } = require('../../../entities')
+const FILE_WIDGET_TYPES = new Set(['file_picker'])
 
-const NON_INPUT_WIDGET_TYPES = new Set([
-  'heading',
-  'divider',
-  'info_banner',
-  'hidden',
-  'readonly',
-  'readonly_file',
-  'section_header'
+const FIELD_WIDGET_TYPES = new Set([
+  'text_field',
+  'date_picker',
+  'dropdown',
+  'radio_group',
+  'check_list'
 ])
 
-function collectCurrentWidgets (uiJson = {}) {
-  const ui = uiJson.ui || {}
-
-  if (Array.isArray(ui.widgets) && ui.widgets.length) {
-    return ui.widgets.filter(w => w.key && !NON_INPUT_WIDGET_TYPES.has(w.type))
-  }
-
-  return (ui.sections || [])
-    .filter(section => section.source === 'current' || !section.source)
-    .flatMap(section => section.widgets || [])
-    .filter(widget => widget.key && !NON_INPUT_WIDGET_TYPES.has(widget.type))
+function collectConfigWidgets (configJson = {}) {
+  return (configJson.widgets || []).filter(widget => widget?.data?.id)
 }
 
-function assertConfigFieldRules (configJson, fieldMap) {
-  const rules = configJson.fields || []
-
-  for (const rule of rules) {
-    const value = fieldMap[rule.key]
-
-    if (rule.required && (value === null || value === undefined || value === '')) {
-      throw new Error(`الحقل "${rule.key}" مطلوب`)
-    }
+function normalizeFieldValue (value) {
+  if (Array.isArray(value)) {
+    return value
   }
+
+  if (value === null || value === undefined) {
+    return value
+  }
+
+  return value
 }
 
-function assertConfigFileRules (configJson, fileMap) {
-  const rules = configJson.files || []
+function assertCheckListValue (widget, value) {
+  const data = widget.data || {}
+  const label = data.label || data.id
+  const selected = Array.isArray(value)
+    ? value
+    : (value === null || value === undefined || value === '')
+        ? []
+        : [value]
 
-  for (const rule of rules) {
-    const path = fileMap[rule.key]
-
-    if (rule.required && !path) {
-      throw new Error(`الملف "${rule.key}" مطلوب`)
-    }
-  }
-}
-
-async function assertLegacyFieldRules (configJson, fieldMap) {
-  const rules = configJson.fields || []
-
-  if (!rules.length || rules[0]?.key) {
-    return
+  if (data.is_required && selected.length === 0) {
+    throw new Error(`"${label}" مطلوب`)
   }
 
-  for (const rule of rules) {
-    const field = await Field.findByPk(rule.field_id)
+  if (selected.length < data.min_selected) {
+    throw new Error(
+      `"${label}" يتطلب اختيار ${data.min_selected} عنصر/عناصر على الأقل`
+    )
+  }
 
-    if (!field) {
-      throw new Error(`الحقل غير موجود: ${rule.field_id}`)
-    }
-
-    const value = fieldMap[field.field_name]
-
-    if (rule.required && (value === null || value === undefined || value === '')) {
-      throw new Error(`الحقل "${field.field_name}" مطلوب`)
-    }
+  if (selected.length > data.max_selected) {
+    throw new Error(
+      `"${label}" يسمح باختيار ${data.max_selected} عنصر/عناصر كحد أقصى`
+    )
   }
 }
 
-async function assertLegacyFileRules (configJson, fileMap) {
-  const rules = configJson.files || []
-
-  if (!rules.length || rules[0]?.key) {
-    return
-  }
-
-  for (const rule of rules) {
-    const fileDef = await File.findByPk(rule.file_id)
-
-    if (!fileDef) {
-      throw new Error(`الملف غير موجود: ${rule.file_id}`)
-    }
-
-    const path = fileMap[fileDef.file_name]
-
-    if (rule.required && !path) {
-      throw new Error(`الملف "${fileDef.file_name}" مطلوب`)
-    }
-  }
-}
-
-function assertUiWidgetRules (widgets, fieldMap, fileMap, notes) {
-  const notesKey = widgets.find(w => w.type === 'notes')?.key || 'stage_notes'
-
+function assertWidgetRules (widgets, fieldMap, fileMap) {
   for (const widget of widgets) {
-    if (!widget.required || widget.read_only) {
+    const data = widget.data || {}
+    const widgetId = data.id
+    const label = data.label || widgetId
+
+    if (!data.is_required) {
       continue
     }
 
-    if (widget.type === 'notes' || widget.key === notesKey) {
-      if (!String(notes || fieldMap[notesKey] || '').trim()) {
-        throw new Error(`"${widget.label || widget.key}" مطلوب`)
+    if (FILE_WIDGET_TYPES.has(widget.widget_type)) {
+      if (!fileMap[widgetId]) {
+        throw new Error(`الملف "${label}" مطلوب`)
       }
       continue
     }
 
-    if (widget.type === 'file') {
-      if (!fileMap[widget.key]) {
-        throw new Error(`الملف "${widget.label || widget.key}" مطلوب`)
-      }
+    if (widget.widget_type === 'check_list') {
+      assertCheckListValue(widget, fieldMap[widgetId])
       continue
     }
 
-    const value = fieldMap[widget.key]
+    if (FIELD_WIDGET_TYPES.has(widget.widget_type)) {
+      const value = normalizeFieldValue(fieldMap[widgetId])
 
-    if (value === null || value === undefined || value === '') {
-      throw new Error(`الحقل "${widget.label || widget.key}" مطلوب`)
+      if (
+        value === null ||
+        value === undefined ||
+        value === '' ||
+        (Array.isArray(value) && value.length === 0)
+      ) {
+        throw new Error(`الحقل "${label}" مطلوب`)
+      }
     }
   }
 }
@@ -128,7 +94,7 @@ async function assertPayloadAgainstStageConfig (
   configJson = {},
   options = {}
 ) {
-  const { mode = 'draft', uiJson = {} } = options
+  const { mode = 'draft' } = options
 
   if (mode === 'draft') {
     return
@@ -136,25 +102,16 @@ async function assertPayloadAgainstStageConfig (
 
   const fieldMap = normalizedPayload.field_map || {}
   const fileMap = normalizedPayload.file_map || {}
-  const widgets = collectCurrentWidgets(uiJson)
+  const widgets = collectConfigWidgets(configJson)
 
-  if (widgets.length) {
-    assertUiWidgetRules(
-      widgets,
-      fieldMap,
-      fileMap,
-      normalizedPayload.notes
-    )
+  if (!widgets.length) {
     return
   }
 
-  assertConfigFieldRules(configJson, fieldMap)
-  assertConfigFileRules(configJson, fileMap)
-  await assertLegacyFieldRules(configJson, fieldMap)
-  await assertLegacyFileRules(configJson, fileMap)
+  assertWidgetRules(widgets, fieldMap, fileMap)
 }
 
 module.exports = {
   assertPayloadAgainstStageConfig,
-  collectCurrentWidgets
+  collectConfigWidgets
 }
