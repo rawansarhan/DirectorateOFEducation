@@ -3,12 +3,12 @@
 const processRepository =
   require('../../processDefinition/repositories/processRepository')
 
-async function findAuthComplaintProcesses (typeTransId, roleIds) {
-  return processRepository.findAuthProcesses(typeTransId, roleIds)
+async function findAuthComplaintProcesses (roleIds) {
+  return processRepository.findAuthComplaintProcesses(roleIds)
 }
 
-async function findAuthComplaintProcessesForCache (typeTransId) {
-  return processRepository.findAuthProcessesForCache(typeTransId)
+async function findAuthComplaintProcessesForCache () {
+  return processRepository.findAuthComplaintProcessesForCache()
 }
 
 module.exports = {

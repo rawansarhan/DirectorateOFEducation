@@ -85,6 +85,11 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.INTEGER,
         allowNull: true
       },
+      is_complaint: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false
+      },
       priority: {
         type: DataTypes.INTEGER,
         defaultValue: 1

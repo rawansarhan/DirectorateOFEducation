@@ -18,7 +18,11 @@ class ProcessRepository {
     return await ProcessDefinition.findByPk(id)
   }
 
-  _buildAuthProcessesQuery (typeTransId, roleIds = null) {
+  _buildAuthProcessesQuery ({
+    typeTransId = null,
+    isComplaint = false,
+    roleIds = null
+  } = {}) {
     const assignmentInclude = {
       model: StageAssignment,
       as: 'stage_assignments',
@@ -36,15 +40,23 @@ class ProcessRepository {
       assignmentInclude.required = false
     }
 
-    return {
-      where: {
-        is_active: true,
-        type_trans_id: typeTransId,
-        status: 'deployed',
-        approval_status: 'APPROVED'
-      },
+    const where = {
+      is_active: true,
+      status: 'deployed',
+      approval_status: 'APPROVED'
+    }
 
-      attributes: ['id', 'name', 'code', 'priority'],
+    if (isComplaint) {
+      where.is_complaint = true
+    } else {
+      where.type_trans_id = typeTransId
+      where.is_complaint = false
+    }
+
+    return {
+      where,
+
+      attributes: ['id', 'name', 'code', 'priority', 'is_complaint'],
 
       include: [
         {
@@ -65,13 +77,25 @@ class ProcessRepository {
   //================ AUTH optimized query ===
   async findAuthProcesses (typeTransId, roleIds) {
     return ProcessDefinition.findAll(
-      this._buildAuthProcessesQuery(typeTransId, roleIds)
+      this._buildAuthProcessesQuery({ typeTransId, roleIds })
     )
   }
 
   async findAuthProcessesForCache (typeTransId) {
     return ProcessDefinition.findAll(
-      this._buildAuthProcessesQuery(typeTransId, null)
+      this._buildAuthProcessesQuery({ typeTransId, roleIds: null })
+    )
+  }
+
+  async findAuthComplaintProcesses (roleIds) {
+    return ProcessDefinition.findAll(
+      this._buildAuthProcessesQuery({ isComplaint: true, roleIds })
+    )
+  }
+
+  async findAuthComplaintProcessesForCache () {
+    return ProcessDefinition.findAll(
+      this._buildAuthProcessesQuery({ isComplaint: true, roleIds: null })
     )
   }
 

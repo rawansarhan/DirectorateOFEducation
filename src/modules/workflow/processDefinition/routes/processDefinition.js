@@ -86,6 +86,21 @@ router.post(
  *           type: integer
  *         example: 1
  *         description: type Process ID
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           default: 1
+ *         description: رقم الصفحة (يبدأ من 1)
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 70
+ *           default: 3
+ *         description: عدد العناصر في الصفحة
  *     responses:
  *       200:
  *         description: تم جلب عمليات AUTH بنجاح.
@@ -94,24 +109,56 @@ router.post(
  *             schema:
  *               type: object
  *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 status_code:
+ *                   type: integer
+ *                   example: 200
  *                 message:
  *                   type: string
  *                   example: تم جلب عمليات AUTH بنجاح
  *                 data:
- *                   type: array
- *                   items:
- *                     type: object
- *                     properties:
- *                       process_id:
- *                         type: integer
- *                       name:
- *                         type: string
- *                       code:
- *                         type: string
- *                       priority:
- *                         type: integer
- *                       auth_stage:
+ *                   type: object
+ *                   properties:
+ *                     items:
+ *                       type: array
+ *                       items:
  *                         type: object
+ *                         properties:
+ *                           process_id:
+ *                             type: integer
+ *                           name:
+ *                             type: string
+ *                           code:
+ *                             type: string
+ *                           priority:
+ *                             type: integer
+ *                           auth_stage:
+ *                             type: object
+ *                     pagination:
+ *                       type: object
+ *                       properties:
+ *                         page:
+ *                           type: integer
+ *                           example: 1
+ *                         limit:
+ *                           type: integer
+ *                           example: 3
+ *                         total:
+ *                           type: integer
+ *                           example: 12
+ *                         total_pages:
+ *                           type: integer
+ *                           example: 4
+ *                         has_next:
+ *                           type: boolean
+ *                           example: true
+ *                         has_prev:
+ *                           type: boolean
+ *                           example: false
+ *       400:
+ *         description: خطأ في معاملات page أو limit
  */
 router.get(
   '/auth/:id',

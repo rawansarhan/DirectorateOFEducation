@@ -39,8 +39,16 @@ const {
   KEYS
 } = require('../../../../core/cache/apiCacheService')
 const { PROCESS_CACHE_TTL_SECONDS } = require('../../../../core/config/env')
+const {
+  paginateArray,
+  emptyPaginatedResult
+} = require('../../../../core/utils/pagination')
 
 const LOG_PREFIX = '[ProcessDefinition]'
+
+function sortAuthProcessesByPriority (processes = []) {
+  return [...processes].sort((a, b) => Number(b.priority) - Number(a.priority))
+}
 
 /**
  * - is_complaint=true  → type_trans_id = null (شكوى)
@@ -161,7 +169,8 @@ async function setupProcessAfterCreation (processId) {
 
 async function getAuthProcesses (
   typeTransID,
-  userId
+  userId,
+  paginationInput
 ) {
   const typeTrans =
     await typeTransRepository.findById(typeTransID)
@@ -176,7 +185,7 @@ async function getAuthProcesses (
   if (!roleIds || roleIds.length === 0) {
     return {
       message: 'لا يوجد صلاحيات للمستخدم',
-      data: []
+      data: emptyPaginatedResult(paginationInput)
     }
   }
 
@@ -195,13 +204,19 @@ async function getAuthProcesses (
     }
   )
 
-  const processes = filterAuthProcessesByRoleIds(cachedProcesses, roleIds)
+  const processes = sortAuthProcessesByPriority(
+    filterAuthProcessesByRoleIds(cachedProcesses, roleIds)
+  )
 
   const result = processes.map(toAuthProcessResponse)
+  const { items, pagination } = paginateArray(result, paginationInput)
 
   return {
     message: 'تم جلب عمليات AUTH بنجاح',
-    data: result
+    data: {
+      items,
+      pagination
+    }
   }
 }
 //==================================================================================

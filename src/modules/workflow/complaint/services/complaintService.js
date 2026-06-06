@@ -7,9 +7,6 @@ const {
   filterAuthProcessesByRoleIds
 } = require('../../processDefinition/utils/processAuthFilter')
 
-const typeTransRepository =
-  require('../../typeProcess/repositories/typeTransRepository')
-
 const authClient =
   require('../../../../core/shared/clients/auth/authClient')
 
@@ -19,29 +16,23 @@ const {
 } = require('../../../../core/cache/apiCacheService')
 
 const { PROCESS_CACHE_TTL_SECONDS } = require('../../../../core/config/env')
+const {
+  paginateArray,
+  emptyPaginatedResult
+} = require('../../../../core/utils/pagination')
 
 const LOG_PREFIX = '[Complaint]'
 
-async function loadComplaintAuthProcessesFromDb () {
-  const typeTrans =
-    await typeTransRepository.findOneWhereComplaint()
-
-  if (!typeTrans) {
-    return []
-  }
-
-  return complaintRepository.findAuthComplaintProcessesForCache(typeTrans.id)
+function sortAuthProcessesByPriority (processes = []) {
+  return [...processes].sort((a, b) => Number(b.priority) - Number(a.priority))
 }
 
-async function getAuthProcessesCompaint (userId) {
+async function loadComplaintAuthProcessesFromDb () {
+  return complaintRepository.findAuthComplaintProcessesForCache()
+}
+
+async function getAuthProcessesCompaint (userId, paginationInput) {
   validateComplaintUserId(userId)
-
-  const typeTrans =
-    await typeTransRepository.findOneWhereComplaint()
-
-  if (!typeTrans) {
-    throw new Error('لا يوجد هذا النوع')
-  }
 
   const roleIds =
     await authClient.getUserRoles(userId)
@@ -49,14 +40,14 @@ async function getAuthProcessesCompaint (userId) {
   if (!roleIds || roleIds.length === 0) {
     return {
       message: 'لا يوجد صلاحيات للمستخدم',
-      data: []
+      data: emptyPaginatedResult(paginationInput)
     }
   }
 
   const cacheKey = KEYS.authComplaintProcesses()
 
   console.log(
-    `${LOG_PREFIX} GET /api/complaint/complaints — cache key: api:${cacheKey}`
+    `${LOG_PREFIX} GET /api/complaint/complaints — cache key: api:${cacheKey} (is_complaint=true)`
   )
 
   const cachedProcesses = await getOrLoad(
@@ -68,12 +59,18 @@ async function getAuthProcessesCompaint (userId) {
     }
   )
 
-  const processes = filterAuthProcessesByRoleIds(cachedProcesses, roleIds)
+  const processes = sortAuthProcessesByPriority(
+    filterAuthProcessesByRoleIds(cachedProcesses, roleIds)
+  )
   const result = toDTOList(processes)
+  const { items, pagination } = paginateArray(result, paginationInput)
 
   return {
     message: 'تم جلب معاملات الشكوى بنجاح',
-    data: result
+    data: {
+      items,
+      pagination
+    }
   }
 }
 

@@ -2,6 +2,7 @@
 
 const asyncHandler = require('../../../../core/middleware/asyncHandler')
 const ApiResponder = require('../../../../core/utils/apiResponder')
+const { parsePaginationQuery } = require('../../../../core/utils/pagination')
 
 const {
   createProcessDefinitionService,
@@ -56,9 +57,14 @@ const createProcessDefinition = asyncHandler(async (req, res) => {
 
 const getAuthProcessesController = asyncHandler(async (req, res) => {
   try {
+    const { page, limit, offset } = parsePaginationQuery(req.query)
     const typeTransID = req.params.id
     const userId = req.user.id
-    const result = await getAuthProcesses(typeTransID, userId)
+    const result = await getAuthProcesses(
+      typeTransID,
+      userId,
+      { page, limit, offset }
+    )
 
     return ApiResponder.okResponse(res, result.data, result.message)
   } catch (err) {
