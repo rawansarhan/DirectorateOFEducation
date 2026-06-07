@@ -385,6 +385,22 @@ const swaggerOptions = {
 
         // ======================== OTP ==========================
 
+        ResendOtpRequest: {
+          type: 'object',
+          required: ['session_id'],
+          properties: {
+            session_id: {
+              type: 'string',
+              format: 'uuid',
+              example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+              description: 'معرّف الجلسة المُرجَع من /register/citizen أو /login'
+            }
+          },
+          example: {
+            session_id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890'
+          }
+        },
+
         OtpSendResponse: {
           type: 'object',
           properties: {

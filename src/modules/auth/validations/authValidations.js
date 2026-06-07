@@ -445,6 +445,22 @@ function validateRefreshToken (data) {
   return schema.validate(data, { abortEarly: false })
 }
 
+function validateResendOtp (data) {
+  const schema = Joi.object({
+    session_id: Joi.string()
+      .uuid()
+      .required()
+      .messages({
+        'string.base': 'معرّف الجلسة يجب أن يكون نصاً',
+        'string.empty': 'معرّف الجلسة مطلوب',
+        'string.guid': 'معرّف الجلسة غير صالح',
+        'any.required': 'معرّف الجلسة مطلوب'
+      })
+  })
+
+  return schema.validate(data, { abortEarly: false })
+}
+
 module.exports = {
   validateRegisterEmp,
   validateRegisterCitizen,
@@ -458,5 +474,6 @@ module.exports = {
   validateEmployeeVerifyPin,
   validateCreateChallenge,
   validateVerifySignature,
-  validateRefreshToken
+  validateRefreshToken,
+  validateResendOtp
 }

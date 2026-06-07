@@ -18,6 +18,7 @@ const {
   employeeVerifySignatureUser,
   refreshTokenUser,
   logoutUser,
+  resendOtpUser,
 } = require('../controllers/AuthController')
 
 const { authMiddleware, authorize } = require('../../../core/middleware/authMiddleware')
@@ -415,5 +416,45 @@ router.post('/refresh', authBruteForceLimiter, refreshTokenUser)
  *         description: تم تسجيل الخروج
  */
 router.post('/logout', logoutUser)
+
+/**
+ * @swagger
+ * /api/auth/resend-otp:
+ *   post:
+ *     tags: [Auth]
+ *     summary: إعادة إرسال OTP (عند انتهاء الصلاحية أو عدم الاستلام)
+ *     description: |
+ *       يقبل session_id الحالي ويُرسل OTP جديداً إلى نفس رقم الهاتف.
+ *       يُرجع session_id جديداً يُستخدم في خطوة التحقق — **استبدل القديم بالجديد**.
+ *       يعمل لكلا التدفقين: التسجيل (/verify-otp/register) وتسجيل الدخول (/verify-otp/login).
+ *       محمي بـ rate limiter لمنع الإساءة.
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/ResendOtpRequest'
+ *     responses:
+ *       200:
+ *         description: تم إعادة إرسال OTP بنجاح
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/OtpSendResponse'
+ *       400:
+ *         description: الجلسة غير موجودة أو انتهت صلاحيتها — ابدأ من /register/citizen أو /login مجدداً
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ApiErrorResponse'
+ *       429:
+ *         description: تجاوز عدد المحاولات المسموح بها
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ApiErrorResponse'
+ */
+router.post('/resend-otp', authBruteForceLimiter, resendOtpUser)
 
 module.exports = router
