@@ -1,13 +1,34 @@
 'use strict'
 
-const ApiResponder = require('../../../../core/utils/apiResponder')
 const {
   UpdateDraft,
   createDraft,
+  upsertDraft,
   getUserDraftByProcess,
   getTransactionById,
-  submitTransaction
+  submitTransaction,
+  MESSAGES
 } = require('../services/transactionService')
+const {
+  successResponse,
+  errorResponse
+} = require('../utils/transactionResponse')
+const {
+  mapErrorToArabic,
+  httpStatusForError
+} = require('../utils/transactionErrors')
+const { hasDraftPayload } = require('../validations/transactionValidations')
+
+function handleTransactionError (res, err) {
+  const statusCode = httpStatusForError(err)
+  const message = mapErrorToArabic(err)
+
+  return errorResponse(res, {
+    statusCode,
+    message,
+    error: message
+  })
+}
 
 async function createDraftController (req, res) {
   try {
@@ -16,9 +37,16 @@ async function createDraftController (req, res) {
       processId: req.params.processId
     })
 
-    return ApiResponder.okResponse(res, result, 'تمت العملية بنجاح')
+    const message = result.isNew
+      ? MESSAGES.DRAFT_CREATED
+      : MESSAGES.DRAFT_RETRIEVED
+
+    return successResponse(res, {
+      message,
+      data: result
+    })
   } catch (err) {
-    return ApiResponder.badRequestResponse(res, err.message)
+    return handleTransactionError(res, err)
   }
 }
 
@@ -26,12 +54,43 @@ async function updateDraftController (req, res) {
   try {
     const result = await UpdateDraft({
       transId: req.params.transId,
+      data: req.body,
+      userId: req.user.id
+    })
+
+    return successResponse(res, {
+      message: MESSAGES.DRAFT_UPDATED,
+      data: result
+    })
+  } catch (err) {
+    return handleTransactionError(res, err)
+  }
+}
+
+async function upsertDraftController (req, res) {
+  try {
+    const result = await upsertDraft({
+      userId: req.user.id,
+      processId: req.params.processId,
       data: req.body
     })
 
-    return ApiResponder.okResponse(res, result, 'تم حفظ المسودة بنجاح')
+    let message = MESSAGES.DRAFT_RETRIEVED
+
+    if (result.isNew) {
+      message = hasDraftPayload(req.body)
+        ? MESSAGES.DRAFT_UPSERT_CREATED
+        : MESSAGES.DRAFT_CREATED
+    } else if (hasDraftPayload(req.body)) {
+      message = MESSAGES.DRAFT_UPSERT_UPDATED
+    }
+
+    return successResponse(res, {
+      message,
+      data: result
+    })
   } catch (err) {
-    return ApiResponder.badRequestResponse(res, err.message)
+    return handleTransactionError(res, err)
   }
 }
 
@@ -42,9 +101,12 @@ async function getUserDraftByProcessController (req, res) {
       req.params.processId
     )
 
-    return ApiResponder.okResponse(res, result, 'تم جلب المسودة بنجاح')
+    return successResponse(res, {
+      message: MESSAGES.DRAFT_RETRIEVED,
+      data: result
+    })
   } catch (err) {
-    return ApiResponder.badRequestResponse(res, err.message)
+    return handleTransactionError(res, err)
   }
 }
 
@@ -55,9 +117,12 @@ async function getTransactionController (req, res) {
       req.user.id
     )
 
-    return ApiResponder.okResponse(res, result, 'تمت العملية بنجاح')
+    return successResponse(res, {
+      message: MESSAGES.TRANSACTION_RETRIEVED,
+      data: result
+    })
   } catch (err) {
-    return ApiResponder.badRequestResponse(res, err.message)
+    return handleTransactionError(res, err)
   }
 }
 
@@ -68,15 +133,19 @@ async function submitTransactionController (req, res) {
       req.body
     )
 
-    return ApiResponder.okResponse(res, result, 'تمت العملية بنجاح')
+    return successResponse(res, {
+      message: MESSAGES.TRANSACTION_SUBMITTED,
+      data: result
+    })
   } catch (err) {
-    return ApiResponder.badRequestResponse(res, err.message)
+    return handleTransactionError(res, err)
   }
 }
 
 module.exports = {
   createDraftController,
   updateDraftController,
+  upsertDraftController,
   UpdateDraftController: updateDraftController,
   getUserDraftByProcessController,
   getTransactionController,

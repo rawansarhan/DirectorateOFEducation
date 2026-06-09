@@ -1,27 +1,26 @@
 'use strict'
 
-const Sequelize = require('sequelize')
-
-const Op = Sequelize.Op
-
 const processDefinitionRepository =
   require('../repositories/processRepository')
+const {
+  invalidateAllProcessLists
+} = require('../../../../core/cache/processCacheService')
 
-async function updateProcessActivationStatus() {
-
+async function updateProcessActivationStatus () {
   const now = new Date()
 
-  console.log('NOW:', now)
+  const { activated, deactivated } =
+    await processDefinitionRepository.syncActivationByYearlySchedule(now)
 
-  const [activatedCount] =
-    await processDefinitionRepository.activateProcesses(now)
+  if (activated > 0 || deactivated > 0) {
+    await invalidateAllProcessLists()
+  }
 
-  const [deactivatedCount] =
-    await processDefinitionRepository.deactivateProcesses(now)
+  console.log(
+    `[ProcessSchedule] yearly sync — activated: ${activated}, deactivated: ${deactivated}`
+  )
 
-  console.log('Activated:', activatedCount)
-
-  console.log('Deactivated:', deactivatedCount)
+  return { activated, deactivated }
 }
 
 module.exports = {

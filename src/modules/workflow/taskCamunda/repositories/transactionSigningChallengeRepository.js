@@ -38,6 +38,16 @@ class TransactionSigningChallengeRepository {
   async markUsed (challenge, transaction) {
     return challenge.update({ used_at: new Date() }, { transaction })
   }
+
+  async findUsedByMessageHash (messageHash, transactionId) {
+    return TransactionSigningChallenge.findOne({
+      where: {
+        message_hash: messageHash,
+        transaction_id: transactionId
+      },
+      order: [['used_at', 'DESC']]
+    })
+  }
 }
 
 module.exports = new TransactionSigningChallengeRepository()

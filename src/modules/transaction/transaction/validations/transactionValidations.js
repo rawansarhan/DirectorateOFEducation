@@ -1,6 +1,7 @@
 'use strict'
 
 const Joi = require('joi')
+const { IDENTITY_KEYS } = require('../dto/TransactionDraftInputDTO')
 
 function parsePositiveInt (value, label) {
   const numeric = Number(value)
@@ -12,12 +13,35 @@ function parsePositiveInt (value, label) {
   return numeric
 }
 
-const draftBodySchema = Joi.object()
+const identityFieldSchema = Joi.string()
+  .trim()
+  .max(100)
+  .allow(null, '')
+  .messages({
+    'string.max': 'حقل {#label} يتجاوز الحد المسموح ({#limit} حرف)'
+  })
+
+const nationalIdSchema = Joi.string()
+  .trim()
+  .max(50)
+  .allow(null, '')
+  .messages({
+    'string.max': 'رقم الهوية يتجاوز الحد المسموح ({#limit} حرف)'
+  })
+
+const draftBodySchema = Joi.object({
+  first_name: identityFieldSchema.label('الاسم الأول'),
+  last_name: identityFieldSchema.label('اسم العائلة'),
+  father_name: identityFieldSchema.label('اسم الأب'),
+  mother_name: identityFieldSchema.label('اسم الأم'),
+  national_id: nationalIdSchema
+})
   .unknown(true)
 
 function validateDraftBody (data = {}) {
   const { error, value } = draftBodySchema.validate(data, {
-    abortEarly: false
+    abortEarly: false,
+    stripUnknown: false
   })
 
   if (error) {
@@ -30,7 +54,17 @@ function validateDraftBody (data = {}) {
   return { error: null, value }
 }
 
+function hasDraftPayload (data) {
+  if (!data || typeof data !== 'object') {
+    return false
+  }
+
+  return Object.keys(data).length > 0
+}
+
 module.exports = {
   parsePositiveInt,
-  validateDraftBody
+  validateDraftBody,
+  hasDraftPayload,
+  IDENTITY_KEYS
 }

@@ -2,6 +2,7 @@ const Joi = require('joi')
 const {
   parseMonthDayToCurrentYearDate
 } = require('../utils/processDefinitionDates')
+const { monthDayFromDate } = require('../utils/processActivation')
 
 const monthDayPattern = /^\d{1,2}-\d{1,2}$/
 
@@ -75,9 +76,19 @@ const createProcessDefinitionSchema = Joi.object({
 
   end_date: optionalMonthDaySchema('end_date')
 }).custom((value, helpers) => {
-  if (value.end_date && value.start_date >= value.end_date) {
+  if (!value.end_date || !value.start_date) {
+    return value
+  }
+
+  const start = monthDayFromDate(value.start_date)
+  const end = monthDayFromDate(value.end_date)
+
+  if (
+    start.month === end.month &&
+    start.day === end.day
+  ) {
     return helpers.error('any.custom', {
-      message: 'end_date يجب أن يكون أكبر من start_date'
+      message: 'end_date يجب أن يختلف عن start_date'
     })
   }
 

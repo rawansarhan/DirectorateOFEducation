@@ -12,6 +12,11 @@ class TransactionOutputDTO {
     this.user_id = plain?.user_id
     this.status = plain?.status
     this.data = plain?.data ?? {}
+    this.first_name = plain?.first_name ?? null
+    this.last_name = plain?.last_name ?? null
+    this.father_name = plain?.father_name ?? null
+    this.mother_name = plain?.mother_name ?? null
+    this.national_id = plain?.national_id ?? null
     this.version = plain?.version
     this.is_active = plain?.is_active
     this.created_at = plain?.created_at

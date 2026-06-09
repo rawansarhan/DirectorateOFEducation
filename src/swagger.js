@@ -27,6 +27,7 @@ const swaggerOptions = {
       { name: 'FilePicker', description: 'إدارة منتقيات الملفات (File Picker Widgets)' },
       { name: 'Tasks', description: 'إدارة المهام (Workflow Tasks)' },
       { name: 'Workflow', description: 'إدارة سير العمل مع Camunda (Workflow Tasks)' },
+      { name: 'Transaction', description: 'المعاملات — مسودات، تقديم، وسلسلة التواقيع (Transactions)' },
       {
         name: 'TypeProcess',
         description: 'أنواع العمليات (Type Process)'
@@ -1308,6 +1309,140 @@ const swaggerOptions = {
           }
         },
 
+        TransactionOutput: {
+          type: 'object',
+          properties: {
+            id: { type: 'integer', example: 12 },
+            code: { type: 'string', example: 'process-5-v1' },
+            user_id: { type: 'integer', example: 3 },
+            status: {
+              type: 'string',
+              enum: ['draft', 'submitted', 'in_progress', 'completed', 'rejected', 'cancelled'],
+              example: 'draft'
+            },
+            data: { type: 'object' },
+            first_name: { type: 'string', nullable: true, example: 'أحمد' },
+            last_name: { type: 'string', nullable: true, example: 'محمد' },
+            father_name: { type: 'string', nullable: true, example: 'علي' },
+            mother_name: { type: 'string', nullable: true, example: 'فاطمة' },
+            national_id: { type: 'string', nullable: true, example: '12345678901' },
+            version: { type: 'integer', example: 1 },
+            is_active: { type: 'boolean', example: true },
+            created_at: { type: 'string', format: 'date-time' },
+            updated_at: { type: 'string', format: 'date-time' }
+          }
+        },
+
+        TransactionDraftUpsertInput: {
+          type: 'object',
+          description: 'حقول الهوية تُخزَّن في أعمدة transactions؛ باقي الحقول في transactions.data',
+          properties: {
+            first_name: { type: 'string', nullable: true, example: 'أحمد' },
+            last_name: { type: 'string', nullable: true, example: 'محمد' },
+            father_name: { type: 'string', nullable: true, example: 'علي' },
+            mother_name: { type: 'string', nullable: true, example: 'فاطمة' },
+            national_id: { type: 'string', nullable: true, example: '12345678901' },
+            notes: { type: 'string', example: 'مسودة أولية' }
+          },
+          additionalProperties: true
+        },
+
+        TransactionDraftUpsertResult: {
+          type: 'object',
+          properties: {
+            isNew: { type: 'boolean', example: true },
+            draft: { $ref: '#/components/schemas/TransactionOutput' }
+          }
+        },
+
+        TransactionDraftCreateResult: {
+          type: 'object',
+          properties: {
+            isNew: { type: 'boolean', example: true },
+            draft: { $ref: '#/components/schemas/TransactionOutput' }
+          }
+        },
+
+        TransactionDraftUpdateResult: {
+          type: 'object',
+          properties: {
+            isNew: { type: 'boolean', example: false },
+            draft: { $ref: '#/components/schemas/TransactionOutput' }
+          }
+        },
+
+        IntegrityChainLink: {
+          type: 'object',
+          properties: {
+            signature_order: { type: 'integer', example: 1 },
+            stage_id: { type: 'integer', example: 10 },
+            stage_code: { type: 'string', example: 'AUTH_STAGE' },
+            stage_data_hash: { type: 'string' },
+            cumulative_hash: { type: 'string' },
+            link_hash: { type: 'string' },
+            previous_link_hash: { type: 'string', nullable: true },
+            digital_signature_id: { type: 'integer', example: 4 },
+            signed_at: { type: 'string', format: 'date-time' }
+          }
+        },
+
+        IntegrityChainQrPayload: {
+          type: 'object',
+          properties: {
+            v: { type: 'integer', example: 1 },
+            tx: { type: 'integer', example: 12 },
+            genesis: { type: 'string' },
+            head: { type: 'string', nullable: true },
+            links: { type: 'integer', example: 2 },
+            verify: { type: 'string', example: 'http://localhost:4000/api/transaction/12/integrity-chain/verify' }
+          }
+        },
+
+        IntegrityChainVerifyResult: {
+          type: 'object',
+          properties: {
+            transaction_id: { type: 'integer', example: 12 },
+            transaction_status: { type: 'string', example: 'in_progress' },
+            genesis_hash: { type: 'string', nullable: true },
+            schema_version: { type: 'string', example: '1.0' },
+            chain_status: {
+              type: 'string',
+              enum: ['incomplete', 'valid', 'forged'],
+              example: 'valid'
+            },
+            total_links: { type: 'integer', example: 2 },
+            head_hash: { type: 'string', nullable: true },
+            valid: { type: 'boolean', example: true },
+            issues: {
+              type: 'array',
+              items: { type: 'string' }
+            },
+            verified_at: { type: 'string', format: 'date-time' }
+          }
+        },
+
+        IntegrityChainResponse: {
+          type: 'object',
+          properties: {
+            transaction_id: { type: 'integer', example: 12 },
+            transaction_status: { type: 'string', example: 'completed' },
+            genesis_hash: { type: 'string' },
+            schema_version: { type: 'string', example: '1.0' },
+            chain_status: {
+              type: 'string',
+              enum: ['incomplete', 'valid', 'forged']
+            },
+            total_links: { type: 'integer', example: 2 },
+            head_hash: { type: 'string', nullable: true },
+            qr_payload: { $ref: '#/components/schemas/IntegrityChainQrPayload' },
+            links: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/IntegrityChainLink' }
+            },
+            last_verification: { $ref: '#/components/schemas/IntegrityChainVerifyResult' }
+          }
+        },
+
         CompleteTaskPayload: {
           type: 'object',
           required: ['variables'],
@@ -1688,14 +1823,14 @@ const swaggerOptions = {
               type: 'string',
               pattern: '^\\d{1,2}-\\d{1,2}$',
               example: '03-15',
-              description: 'تاريخ البداية (شهر-يوم فقط، بدون سنة). السنة تُضاف تلقائياً كسنة الحالية. يُقبل أي شهر ويوم صالحين.'
+              description: 'بداية نافذة التفعيل السنوية (شهر-يوم MM-DD). تتكرر كل سنة — لا حاجة لإرسال السنة.'
             },
             end_date: {
               type: 'string',
               pattern: '^\\d{1,2}-\\d{1,2}$',
               nullable: true,
               example: '06-30',
-              description: 'تاريخ النهاية اختياري (شهر-يوم، السنة = سنة الحالية). يجب أن يكون أكبر من start_date.'
+              description: 'نهاية النافذة السنوية (شهر-يوم). اختياري. يمكن أن تكون بعد start_date في نفس السنة (03-15→06-30) أو عابرة للسنة (11-01→02-15).'
             }
           }
         },

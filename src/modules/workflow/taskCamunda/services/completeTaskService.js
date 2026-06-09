@@ -28,6 +28,8 @@ const {
   buildTransactionSignatureLedger,
   appendSignatureToTransactionData
 } = require('./transactionSigningService')
+const { appendIntegrityLink } =
+  require('../../../transaction/integrityChain/services/integrityChainService')
 const securityGuardService = require('../../../../core/security/securityGuardService')
 const {
   assertTaskLockHolder,
@@ -593,6 +595,19 @@ async function completeTaskCore ({
   )
 
   currentVersion = updatedTransaction.version
+
+  if (digitalSignatureRecord) {
+    await appendIntegrityLink({
+      transactionId: transaction.id,
+      digitalSignatureId: digitalSignatureRecord.digital_signature_id,
+      challengeId: signingRequest?.challengeId || null,
+      stageId: stage.id,
+      stageCode: stage.code,
+      stageData: transactionData[stage.code],
+      signatureHash: digitalSignatureRecord.signed_hash,
+      signedAt: digitalSignatureRecord.signed_at
+    })
+  }
 
   await outboxRepository.create({
     event_type: EVENTS.PROCESSINSTANCESTAGE_CREATED,

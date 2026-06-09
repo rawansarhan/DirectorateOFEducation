@@ -1,6 +1,6 @@
 'use strict'
 
-const { DigitalSignature, DocumentSignature } = require('../../../../entities')
+const { DigitalSignature, DocumentSignature, UserKey } = require('../../../../entities')
 
 class DigitalSignatureRepository {
   async create (data, options = {}) {
@@ -40,6 +40,26 @@ class DigitalSignatureRepository {
   async countByDocumentId (documentId) {
     return DigitalSignature.count({
       where: { document_id: documentId }
+    })
+  }
+
+  async findAllByTransactionIdOrdered (transactionId) {
+    return DigitalSignature.findAll({
+      include: [
+        {
+          model: DocumentSignature,
+          as: 'document',
+          where: { transaction_id: transactionId },
+          attributes: ['id', 'transaction_id', 'file_path', 'file_hash'],
+          required: true
+        },
+        {
+          model: UserKey,
+          as: 'user_key',
+          attributes: ['id', 'public_key', 'key_fingerprint']
+        }
+      ],
+      order: [['signature_order', 'ASC']]
     })
   }
 }

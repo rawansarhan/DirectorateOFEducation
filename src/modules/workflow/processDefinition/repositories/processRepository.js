@@ -99,134 +99,115 @@ class ProcessRepository {
     )
   }
 
-///////////////////////////////////////////////////////////////
-//====================== find process details =================
-
-async findProcessDetails(processId) {
-
-  return await ProcessDefinition.findByPk(processId, {
-
-    attributes: [
-      'id',
-      'name',
-      'code',
-      'status',
-      'version',
-      'is_active',
-      'approval_status',
-      'start_date',
-      'end_date'
-    ],
-
-    include: [
-      {
-        model: Stage,
-        as: 'stages',
-
-        attributes: [
-          'id',
-          'name',
-          'type',
-          'auth_type'
-        ],
-
-        include: [
-          {
-            model: StageConfig,
-            as: 'stage_config',
-
-            attributes: [
-              'config_json'
-            ]
-          },
-
-          {
-            model: StageAssignment,
-            as: 'stage_assignments',
-
-            attributes: [
-              'organization_department_roles_id'
-            ]
-          }
-        ]
-      }
-    ],
-
-    order: [
-      [{ model: Stage, as: 'stages' }, 'id', 'ASC']
-    ],
-
-    subQuery: false
-  })
-}
-///////////////////////////////////////////////////////////////////////////////
-//================================  find  by code ============================
-
-async findByCode(code) {
-
-  return await ProcessDefinition.findOne({
-    where: { code }
-  })
-}
-
-//////////////////////////////////////////////////////////////////////////////
-//==============================
-
-async activateProcesses(now) {
-
-  return await ProcessDefinition.update(
-
-    {
-      is_active: true
-    },
-
-    {
-      where: {
-
-        status: 'deployed',
-
-        approval_status: 'APPROVED',
-
-        is_active: false,
-
-        start_date: {
-          [Op.lte]: now
+  async findProcessDetails (processId) {
+    return await ProcessDefinition.findByPk(processId, {
+      attributes: [
+        'id',
+        'name',
+        'code',
+        'status',
+        'version',
+        'is_active',
+        'approval_status',
+        'start_date',
+        'end_date'
+      ],
+      include: [
+        {
+          model: Stage,
+          as: 'stages',
+          attributes: [
+            'id',
+            'name',
+            'type',
+            'auth_type'
+          ],
+          include: [
+            {
+              model: StageConfig,
+              as: 'stage_config',
+              attributes: [
+                'config_json'
+              ]
+            },
+            {
+              model: StageAssignment,
+              as: 'stage_assignments',
+              attributes: [
+                'organization_department_roles_id'
+              ]
+            }
+          ]
         }
+      ],
+      order: [
+        [{ model: Stage, as: 'stages' }, 'id', 'ASC']
+      ],
+      subQuery: false
+    })
+  }
+
+  async findByCode (code) {
+    return await ProcessDefinition.findOne({
+      where: { code }
+    })
+  }
+
+  async syncActivationByYearlySchedule (now = new Date()) {
+    const { isProcessActiveBySchedule } = require('../utils/processActivation')
+
+    const processes = await ProcessDefinition.findAll({
+      where: {
+        status: 'deployed',
+        approval_status: 'APPROVED'
+      },
+      attributes: ['id', 'is_active', 'start_date', 'end_date']
+    })
+
+    let activated = 0
+    let deactivated = 0
+
+    for (const process of processes) {
+      const shouldBeActive = isProcessActiveBySchedule(
+        process.start_date,
+        process.end_date,
+        now
+      )
+
+      if (shouldBeActive && !process.is_active) {
+        await ProcessDefinition.update(
+          { is_active: true },
+          { where: { id: process.id } }
+        )
+        activated += 1
+      } else if (!shouldBeActive && process.is_active) {
+        await ProcessDefinition.update(
+          { is_active: false },
+          { where: { id: process.id } }
+        )
+        deactivated += 1
       }
     }
-  )
-}
 
-async deactivateProcesses(now) {
+    return { activated, deactivated }
+  }
 
-  return await ProcessDefinition.update(
+  /** @deprecated use syncActivationByYearlySchedule */
+  async activateProcesses (now) {
+    const { activated } = await this.syncActivationByYearlySchedule(now)
+    return [activated]
+  }
 
-    {
-      is_active: false
-    },
+  /** @deprecated use syncActivationByYearlySchedule */
+  async deactivateProcesses (now) {
+    const { deactivated } = await this.syncActivationByYearlySchedule(now)
+    return [deactivated]
+  }
 
-    {
-      where: {
-
-        status: 'deployed',
-
-        is_active: true,
-
-        end_date: {
-          [Op.lt]: now
-        }
-      }
-    }
-  )
-}
-
-
-/////////////////////////////////////////////////////////////////////////////
-async update (id, data) {
-  return await ProcessDefinition.update(data, {
-    where: { id }
-  })
-}
-
+  async update (id, data) {
+    return await ProcessDefinition.update(data, {
+      where: { id }
+    })
+  }
 }
 module.exports = new ProcessRepository()

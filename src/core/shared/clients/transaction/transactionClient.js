@@ -1,4 +1,5 @@
 const axios = require('axios')
+const { retryWithBackoff } = require('../../../utils/retryWithBackoff')
 
 const BASE_URL =
   process.env.TRANSACTION_SERVICE_URL ||
@@ -6,49 +7,40 @@ const BASE_URL =
 
 class TransactionClient {
 
-  // =====================================
-  // GET TRANSACTION
-  // =====================================
-
   async getTransactionById (id) {
+    return retryWithBackoff(async () => {
+      const res = await axios.get(
+        `${BASE_URL}/internal/transactions/${id}`
+      )
 
-    const res = await axios.get(
-      `${BASE_URL}/internal/transactions/${id}`
-    )
-
-    return res.data.data
+      return res.data.data
+    }, { label: 'transactionClient.getTransactionById' })
   }
-
-  // =====================================
-  // UPDATE STATUS
-  // =====================================
 
   async updateStatus (id, status) {
+    return retryWithBackoff(async () => {
+      const res = await axios.patch(
+        `${BASE_URL}/internal/transactions/${id}/status`,
+        { status }
+      )
 
-    const res = await axios.patch(
-      `${BASE_URL}/internal/transactions/${id}/status`,
-      { status }
-    )
-
-    return res.data
+      return res.data
+    }, { label: 'transactionClient.updateStatus' })
   }
 
-  // =====================================
-  // UPDATE DATA
-  // =====================================
-
   async updateData (id, data, expectedVersion = null) {
+    return retryWithBackoff(async () => {
+      const body = expectedVersion != null
+        ? { data, expected_version: expectedVersion }
+        : data
 
-    const body = expectedVersion != null
-      ? { data, expected_version: expectedVersion }
-      : data
+      const res = await axios.patch(
+        `${BASE_URL}/internal/transactions/${id}/data`,
+        body
+      )
 
-    const res = await axios.patch(
-      `${BASE_URL}/internal/transactions/${id}/data`,
-      body
-    )
-
-    return res.data.data
+      return res.data.data
+    }, { label: 'transactionClient.updateData' })
   }
 }
 
