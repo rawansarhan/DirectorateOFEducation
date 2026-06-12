@@ -570,8 +570,6 @@ async function verifyRegisterOtp (
   }
 
   if (new Date() > record.expires_at) {
-    await otpCodeRepository.destroyInstance(record)
-
     throw new Error(
       `انتهت صلاحية رمز التحقق (مدة الصلاحية ${OTP_TTL_MINUTES} دقائق). يرجى طلب رمز تحقق جديد`
     )
@@ -656,10 +654,8 @@ async function verifyLoginOtp (
   }
 
   if (new Date() > record.expires_at) {
-    await otpCodeRepository.destroyInstance(record)
-
     throw new Error(
-      `انتهت صلاحية رمز التحقق (مدة الصلاحية ${OTP_TTL_MINUTES} دقائق). يرجى تسجيل الدخول مرة أخرى لإرسال رمز تحقق جديد`
+      `انتهت صلاحية رمز التحقق (مدة الصلاحية ${OTP_TTL_MINUTES} دقائق). يرجى طلب رمز تحقق جديد`
     )
   }
 
@@ -714,6 +710,39 @@ async function verifyLoginOtp (
     ),
     token: accessToken,
     refreshToken,
+  }
+}
+
+// ================== RESEND OTP ==================
+
+async function resendOtp ({ session_id }) {
+  const record = await otpCodeRepository.findBySessionId(session_id)
+
+  if (!record) {
+    throw new Error(
+      'الجلسة غير موجودة أو انتهت صلاحيتها. يرجى البدء من جديد'
+    )
+  }
+
+  const user = await userRepository.findById(record.user_id)
+
+  if (!user) {
+    throw new Error(
+      'الحساب غير موجود. يرجى التواصل مع الدعم الفني'
+    )
+  }
+
+  if (!user.phone_number) {
+    throw new Error(
+      'لا يوجد رقم هاتف مرتبط بهذا الحساب. يرجى التواصل مع الدعم الفني'
+    )
+  }
+
+  const new_session_id = await saveAndSendOtp(user.id, user.phone_number)
+
+  return {
+    session_id: new_session_id,
+    message: `تم إعادة إرسال رمز التحقق على رقم الموبايل. أدخله خلال ${OTP_TTL_MINUTES} دقائق.`,
   }
 }
 
@@ -775,4 +804,5 @@ module.exports = {
   login,
   verifyLoginOtp,
   registerDeviceToken,
+  resendOtp,
 }
