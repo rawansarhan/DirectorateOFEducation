@@ -20,10 +20,10 @@ const {
   verifySignatureValue
 } = require('../utils/integrityChainUtils')
 
-async function ensureGenesisHash (transactionLike) {
+async function ensureGenesisHash (transactionLike, { transaction: dbTransaction } = {}) {
   const transaction = typeof transactionLike?.update === 'function'
     ? transactionLike
-    : await transactionRepository.findById(transactionLike.id)
+    : await transactionRepository.findById(transactionLike.id, dbTransaction)
 
   if (!transaction) {
     throw new Error('Transaction not found')
@@ -39,7 +39,7 @@ async function ensureGenesisHash (transactionLike) {
     createdAt: transaction.created_at
   })
 
-  await transaction.update({ genesis_hash: genesisHash })
+  await transaction.update({ genesis_hash: genesisHash }, { transaction: dbTransaction })
 
   return genesisHash
 }
@@ -61,15 +61,16 @@ async function appendIntegrityLink ({
   stageCode = null,
   stageData = {},
   signatureHash,
-  signedAt = new Date()
+  signedAt = new Date(),
+  dbTransaction = null
 }) {
-  const transaction = await transactionRepository.findById(transactionId)
+  const transaction = await transactionRepository.findById(transactionId, dbTransaction)
 
   if (!transaction) {
     throw new Error('Transaction not found')
   }
 
-  const genesisHash = await ensureGenesisHash(transaction)
+  const genesisHash = await ensureGenesisHash(transaction, { transaction: dbTransaction })
   const previousLink = await transactionSignatureLinkRepository
     .findLatestByTransactionId(transactionId)
 
@@ -99,7 +100,7 @@ async function appendIntegrityLink ({
     previous_link_hash: previousLink?.link_hash || null,
     genesis_hash: genesisHash,
     signed_at: signedAt
-  })
+  }, dbTransaction ? { transaction: dbTransaction } : {})
 }
 
 async function verifyLinksCryptographically (transactionId, links = []) {

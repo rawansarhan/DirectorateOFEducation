@@ -8,8 +8,9 @@ const {
   updateDraftController,
   upsertDraftController,
   getUserDraftByProcessController,
+  getMyTransactionsController,
   getTransactionController,
-  submitTransactionController
+  submitTransactionByProcessController
 } = require('../controllers/transactionController')
 
 const {
@@ -71,11 +72,12 @@ router.post(
  *   post:
  *     summary: Create or update draft (upsert)
  *     description: |
- *       يدمج إنشاء وتحديث المسودة:
- *       - إن وُجدت مسودة للمستخدم على هذه العملية يُعاد سجلها (ويُحدَّث إن وُجد body).
+ *       يدمج إنشاء وتحديث مسودة الاستمارة:
+ *       - إن وُجدت مسودة يُعاد سجلها (ويُحدَّث إن وُجد `data`).
  *       - إن لم توجد مسودة يُنشأ سجل جديد.
- *       يدعم حقول الهوية (first_name, last_name, father_name, mother_name, national_id) وبيانات JSON إضافية.
- *       يُطبَّق retry مع exponential backoff عند الأخطاء العابرة.
+ *       يقبل `{ "data": { form_id, form_name, widgets[] } }` فقط.
+ *       كل ودجت يجب أن يحتوي `widget_type`, `data`, `value`.
+ *       تُتحقق الاستمارة مقابل إعدادات مرحلة AUTH للعملية.
  *     tags: [Transaction]
  *     security:
  *       - bearerAuth: []
@@ -128,10 +130,72 @@ router.post(
 
 /**
  * @swagger
+ * /api/transaction/submit/{processId}:
+ *   post:
+ *     summary: Submit transaction and start workflow
+ *     description: |
+ *       يقدّم المعاملة ويبدأ الـ workflow مباشرة.
+ *
+ *       **التدفق:**
+ *       1. يُمرَّر `processId` (معرّف تعريف العملية — process definition id)
+ *       2. إن وُجدت مسودة draft للمواطن على هذه العملية → يُحدَّث عليها ويُقدَّم
+ *       3. إن لم توجد مسودة → يُنشأ سجل draft جديد ثم يُقدَّم
+ *       4. يُولَّد `id_process` (مثل STUTR-2026-001) ويُبدأ Camunda workflow
+ *
+ *       **قالب الطلب:** `stage_name`, `fields`, `files`, `templates`, `decision`, `note`
+ *       **بيانات الهوية (إلزامي قبل التقديم):** `first_name`, `last_name`, `father_name`, `mother_name`, `national_id` — عبر `POST /updateDraft` أو `upsertDraft`
+ *       **الملفات:** ارفع أولاً عبر `POST /api/transaction/files/upload` (multipart) ثم ضع الناتج في `files[]`.
+ *       - Idempotency تلقائي على مستوى `(user + process)` — لا ترسل Idempotency-Key
+ *
+ *       **Response `data`:** `id`, `id_process`, `status`, `is_new_draft`, `idempotency_key`, ...
+ *     tags: [Transaction]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: processId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *         description: معرّف تعريف العملية (process definition id)
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/SubmitTransactionPayload'
+ *     responses:
+ *       200:
+ *         description: تم تقديم المعاملة بنجاح
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SubmitTransactionResponse'
+ *       400:
+ *         description: خطأ تحقق أو معاملة قيد التنفيذ
+ *       403:
+ *         description: غير مصرّح
+ *       404:
+ *         description: العملية غير موجودة
+ *       502:
+ *         description: فشل بدء workflow
+ */
+router.post(
+  '/submit/:processId',
+  authMiddleware,
+  submitTransactionByProcessController
+)
+
+/**
+ * @swagger
  * /api/transaction/updateDraft/{transId}:
  *   post:
- *     summary: Update existing draft
- *     description: يحدّث بيانات المسودة (`data`) دون تغيير الحالة.
+ *     summary: Update draft identity fields
+ *     description: |
+ *       يحدّث حقول هوية المواطن على المسودة فقط:
+ *       `first_name`, `last_name`, `father_name`, `mother_name`, `national_id`.
+ *       يجب إرسال حقل واحد على الأقل.
  *     tags: [Transaction]
  *     security:
  *       - bearerAuth: []
@@ -147,7 +211,7 @@ router.post(
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/TransactionDraftUpsertInput'
+ *             $ref: '#/components/schemas/TransactionIdentityInput'
  *     responses:
  *       200:
  *         description: تم حفظ المسودة بنجاح
@@ -214,6 +278,60 @@ router.get(
   '/draft/:processId',
   authMiddleware,
   getUserDraftByProcessController
+)
+
+/**
+ * @swagger
+ * /api/transaction/my:
+ *   get:
+ *     summary: List authenticated user's transactions
+ *     description: |
+ *       يعرض كل معاملات المستخدم المسجّل مع اسم العملية، المرحلة الحالية، ونسبة الإنجاز.
+ *
+ *       **نجاح:** `{ success, status_code, message, data }`
+ *       **خطأ:** `{ success, status_code, message, error, data: null }`
+ *     tags: [Transaction]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 100
+ *           default: 10
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [draft, submitted, in_progress, completed, rejected, cancelled]
+ *         description: فلترة حسب حالة المعاملة (اختياري)
+ *     responses:
+ *       200:
+ *         description: تم جلب معاملاتك بنجاح
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/UserTransactionsListResponse'
+ *       400:
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ApiErrorResponse'
+ *       401:
+ *         description: Unauthorized
+ */
+router.get(
+  '/my',
+  authMiddleware,
+  getMyTransactionsController
 )
 
 /**
@@ -350,57 +468,6 @@ router.get(
   '/:transactionId/integrity-chain',
   authMiddleware,
   getIntegrityChainController
-)
-
-/**
- * @swagger
- * /api/transaction/{transactionId}/submit:
- *   post:
- *     summary: Submit transaction and start workflow
- *     description: |
- *       يقدّم المعاملة من `draft` إلى `submitted` ويبدأ الـ workflow عبر outbox.
- *       يتحقق من بيانات مرحلة AUTH حسب `stage_config`.
- *       يُنشئ `genesis_hash` لسلسلة النزاهة.
- *     tags: [Transaction]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: transactionId
- *         required: true
- *         schema:
- *           type: integer
- *           minimum: 1
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/StageSubmissionPayload'
- *     responses:
- *       200:
- *         description: تمت العملية بنجاح
- *         content:
- *           application/json:
- *             schema:
- *               allOf:
- *                 - $ref: '#/components/schemas/ApiSuccessResponse'
- *                 - type: object
- *                   properties:
- *                     data:
- *                       $ref: '#/components/schemas/TransactionOutput'
- *       400:
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ApiErrorResponse'
- *       401:
- *         description: Unauthorized
- */
-router.post(
-  '/:transactionId/submit',
-  authMiddleware,
-  submitTransactionController
 )
 
 /**

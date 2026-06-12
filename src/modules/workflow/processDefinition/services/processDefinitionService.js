@@ -6,6 +6,8 @@ const organizationClient =
   require('../../../../core/shared/clients/organization/organizationClient')
 const {
   toAuthProcessResponse,
+  toUnapprovedOrInactiveProcessItem,
+  toAdminProcessByTypeItem,
   processDetailsMapper
 } = require('../mappers/processMapper')
 const processRepository =
@@ -43,11 +45,21 @@ const {
   paginateArray,
   emptyPaginatedResult
 } = require('../../../../core/utils/pagination')
+const {
+  formatJoiError,
+  joiErrorDetails
+} = require('../../../../core/utils/errorMessageHelper')
+const {
+  createHttpError,
+  HTTP_STATUS
+} = require('../../../../core/middleware/httpStatusCodes')
 
 const LOG_PREFIX = '[ProcessDefinition]'
 
 function sortAuthProcessesByPriority (processes = []) {
-  return [...processes].sort((a, b) => Number(b.priority) - Number(a.priority))
+  return [...processes].sort(
+    (a, b) => Number(a.priority) - Number(b.priority)
+  )
 }
 
 /**
@@ -58,10 +70,19 @@ function sortAuthProcessesByPriority (processes = []) {
 async function createProcessDefinitionService (data) {
   console.log(`${LOG_PREFIX} createProcessDefinition name=${data.name}`)
 
-  const { error } = createProcessDefinitionSchema.validate(data)
+  const { error } = createProcessDefinitionSchema.validate(data, {
+    abortEarly: false
+  })
 
   if (error) {
-    throw new Error(error.details[0].message)
+    const validationError = createHttpError(
+      formatJoiError(error),
+      HTTP_STATUS.BAD_REQUEST,
+      'VALIDATION_ERROR'
+    )
+    validationError.expose = true
+    validationError.details = joiErrorDetails(error)
+    throw validationError
   }
 
   const isComplaint = Boolean(data.is_complaint)
@@ -157,26 +178,40 @@ async function setupProcessAfterCreation (processId) {
   console.log(processId)
   const process = await processRepository.findById(processId)
 
-  if (!process) throw new Error('Process not found')
+  if (!process) throw createHttpError('العملية غير موجودة بعد الإنشاء', HTTP_STATUS.NOT_FOUND, 'NOT_FOUND')
 
   const tasks = await generateStagesFromCamunda(process)
 
-  if (tasks.length === 0) throw new Error('لم يتم انشاء اي مرحلة')
+  if (tasks.length === 0) {
+    throw createHttpError(
+      'لم يتم إنشاء أي مرحلة من ملف BPMN — تأكد أن الملف يحتوي userTask أو serviceTask',
+      HTTP_STATUS.BAD_REQUEST,
+      'VALIDATION_ERROR'
+    )
+  }
   return tasks
 }
 
 ///// ============================== AUTH processes (bulk optimized) ====================================
+
+function isAllAuthTypesRequest (typeTransID) {
+  return Number(typeTransID) === 0
+}
 
 async function getAuthProcesses (
   typeTransID,
   userId,
   paginationInput
 ) {
-  const typeTrans =
-    await typeTransRepository.findById(typeTransID)
+  const allTypes = isAllAuthTypesRequest(typeTransID)
+  let typeTrans = null
 
-  if (!typeTrans) {
-    throw new Error('لا يوجد هذا النوع')
+  if (!allTypes) {
+    typeTrans = await typeTransRepository.findById(typeTransID)
+
+    if (!typeTrans) {
+      throw new Error('لا يوجد هذا النوع')
+    }
   }
 
   const roleIds =
@@ -189,7 +224,9 @@ async function getAuthProcesses (
     }
   }
 
-  const cacheKey = KEYS.authProcessesByType(typeTrans.id)
+  const cacheKey = allTypes
+    ? KEYS.authProcessesAll()
+    : KEYS.authProcessesByType(typeTrans.id)
 
   console.log(
     `${LOG_PREFIX} GET /api/process_definitions/auth/${typeTransID} — cache key: api:${cacheKey}`
@@ -197,7 +234,9 @@ async function getAuthProcesses (
 
   const cachedProcesses = await getOrLoad(
     cacheKey,
-    () => processRepository.findAuthProcessesForCache(typeTrans.id),
+    () => allTypes
+      ? processRepository.findAllAuthProcessesForCache()
+      : processRepository.findAuthProcessesForCache(typeTrans.id),
     {
       label: `ProcessDefinition GET /api/process_definitions/auth/${typeTransID}`,
       ttlSeconds: PROCESS_CACHE_TTL_SECONDS
@@ -215,6 +254,51 @@ async function getAuthProcesses (
     message: 'تم جلب عمليات AUTH بنجاح',
     data: {
       items,
+      pagination
+    }
+  }
+}
+
+async function getUnapprovedOrInactiveProcesses (paginationInput) {
+  const rows = await processRepository.findUnapprovedOrInactiveProcesses()
+  const items = rows.map(toUnapprovedOrInactiveProcessItem)
+  const { items: pageItems, pagination } = paginateArray(items, paginationInput)
+
+  return {
+    message: 'تم جلب العمليات غير الموافق عليها أو غير النشطة',
+    data: {
+      items: pageItems,
+      pagination
+    }
+  }
+}
+
+async function getProcessesByTypeForAdmin (typeTransID, paginationInput) {
+  const allTypes = isAllAuthTypesRequest(typeTransID)
+
+  if (!allTypes) {
+    const typeTrans = await typeTransRepository.findById(typeTransID)
+
+    if (!typeTrans) {
+      throw new Error('لا يوجد هذا النوع')
+    }
+  }
+
+  const processes = allTypes
+    ? await processRepository.findAllProcessesForAdmin()
+    : await processRepository.findProcessesByTypeForAdmin(Number(typeTransID))
+
+  const items = sortAuthProcessesByPriority(processes).map(
+    toAdminProcessByTypeItem
+  )
+  const { items: pageItems, pagination } = paginateArray(items, paginationInput)
+
+  return {
+    message: allTypes
+      ? 'تم جلب كل عمليات الأنواع بنجاح'
+      : 'تم جلب عمليات النوع بنجاح',
+    data: {
+      items: pageItems,
       pagination
     }
   }
@@ -275,30 +359,15 @@ async function getProcessDetailsWithValidation(processId) {
   const validation =
     validateProcess(process)
 
-  if (!validation.is_valid) {
-
-    return {
-      message: 'العملية غير صالحة',
-
-      data: {
-        validation
-      }
-    }
-  }
+  const mappedDetails = processDetailsMapper(process)
 
   return {
-
-    message:
-      'تم جلب تفاصيل العملية بنجاح',
-
+    message: validation.is_valid
+      ? 'تم جلب تفاصيل العملية بنجاح'
+      : 'تم جلب تفاصيل العملية — توجد ملاحظات على الإعداد',
     data: {
-
-      ...processDetailsMapper(process),
-
-      validation: {
-        is_valid: true,
-        errors: []
-      }
+      ...mappedDetails,
+      validation
     }
   }
 }
@@ -370,6 +439,8 @@ module.exports = {
   setupProcessAfterCreation,
   createProcessDefinitionService,
   getAuthProcesses,
+  getUnapprovedOrInactiveProcesses,
+  getProcessesByTypeForAdmin,
   getProcessDetailsWithValidation,
   reviewProcess
 }

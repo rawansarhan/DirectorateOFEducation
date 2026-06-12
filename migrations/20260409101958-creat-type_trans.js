@@ -15,6 +15,13 @@ module.exports = {
         allowNull: false
       },
 
+      code: {
+        type: Sequelize.STRING(20),
+        allowNull: false,
+        unique: true,
+        comment: 'رمز مختصر لنوع المعاملة — يُستخدم في id_process'
+      },
+
       is_active: {
         type: Sequelize.BOOLEAN,
         defaultValue: true

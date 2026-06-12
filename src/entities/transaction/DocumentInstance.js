@@ -1,5 +1,14 @@
 'use strict';
 
+/**
+ * document_instance — نسخة قالب مرتبطة بمعاملة
+ *
+ * USER_TASK:  data_json = values من templates[], generated_pdf_path = null
+ * SERVICE_TASK (GENERATE_PDF): generated_pdf_path = مسار PDF المولّد
+ *
+ * document_template_id → document_templates.id
+ */
+
 module.exports = (sequelize, DataTypes) => {
 
   class DocumentInstance extends sequelize.Sequelize.Model {
@@ -8,8 +17,13 @@ module.exports = (sequelize, DataTypes) => {
       DocumentInstance.belongsTo(models.Transaction, {
         foreignKey: 'transaction_id',
         as: 'transaction',
-        onDelete: 'CASCADE',
-      });
+        onDelete: 'CASCADE'
+      })
+
+      DocumentInstance.belongsTo(models.DocumentTemplate, {
+        foreignKey: 'document_template_id',
+        as: 'document_template'
+      })
 
     }
   }
@@ -21,9 +35,14 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
       },
 
+      document_template_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true
+      },
+
       generated_pdf_path: {
         type: DataTypes.STRING,
-        allowNull: false,
+        allowNull: true
       },
 
       status: {

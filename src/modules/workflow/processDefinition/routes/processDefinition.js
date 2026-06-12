@@ -6,13 +6,16 @@ const router = express.Router()
 const {
   createProcessDefinition,
   getAuthProcessesController,
-  reviewProcessController,
+  getUnapprovedOrInactiveProcessesController,
+  getProcessesByTypeForAdminController,
   getProcessDetails,
+  reviewProcessController,
   processById
 } = require('../controllers/processDefController')
 
 const {uploadBPMN,
-  uploadDocumentTemplate} = require('../../../../core/middleware/upload')
+  uploadDocumentTemplate,
+  runMulterUpload} = require('../../../../core/middleware/upload')
 const { authMiddleware ,authorize } = require('../../../../core/middleware/authMiddleware')
 
 
@@ -38,7 +41,9 @@ const { authMiddleware ,authorize } = require('../../../../core/middleware/authM
  *             schema:
  *               $ref: '#/components/schemas/ProcessDefinitionCreateSuccessResponse'
  *       400:
- *         description: ملف BPMN مطلوب أو خطأ بالبيانات
+ *         description: |
+ *           خطأ في البيانات أو ملف BPMN أو Camunda.
+ *           الحقل message يحتوي السبب بالتفصيل، وقد يُرجع data.errors بقائمة الحقول الخاطئة.
  *         content:
  *           application/json:
  *             schema:
@@ -66,8 +71,90 @@ router.post(
   '/create',
   authMiddleware,
   authorize('PROCESS_CREATE'),
-  uploadBPMN.single('file'),
+  runMulterUpload(uploadBPMN.single('file')),
   createProcessDefinition
+)
+
+/**
+ * @swagger
+ * /api/process_definitions/admin/review-queue:
+ *   get:
+ *     summary: عمليات غير موافق عليها أو غير نشطة => (المسؤول التقني)
+ *     description: |
+ *       يعرض process definitions حيث approval_status ≠ APPROVED أو is_active = false (أو الاثنان).
+ *       الحقول: id, name, status (approval_status), is_approved, is_active
+ *     tags: [Process Definition]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 70
+ *           default: 20
+ *     responses:
+ *       200:
+ *         description: تم الجلب بنجاح
+ *       403:
+ *         description: PROCESS_VIEW مطلوب
+ */
+router.get(
+  '/admin/review-queue',
+  authMiddleware,
+  authorize('PROCESS_VIEW'),
+  getUnapprovedOrInactiveProcessesController
+)
+
+/**
+ * @swagger
+ * /api/process_definitions/admin/type/{id}:
+ *   get:
+ *     summary: كل عمليات نوع معاملة => (المسؤول التقني)
+ *     description: |
+ *       مثل GET /auth/{id} للمواطن/الموظف، لكن بدون شرط أن تكون أول مرحلة AUTH.
+ *       id = type_trans_id. أرسل 0 لجلب كل الأنواع (ما عدا الشكاوى).
+ *     tags: [Process Definition]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         example: 1
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 70
+ *           default: 20
+ *     responses:
+ *       200:
+ *         description: تم الجلب بنجاح
+ *       403:
+ *         description: PROCESS_VIEW مطلوب
+ */
+router.get(
+  '/admin/type/:id',
+  authMiddleware,
+  authorize('PROCESS_VIEW'),
+  getProcessesByTypeForAdminController
 )
 
 /**
@@ -85,7 +172,9 @@ router.post(
  *         schema:
  *           type: integer
  *         example: 1
- *         description: type Process ID
+ *         description: |
+ *           type Process ID (type_trans_id).
+ *           أرسل 0 لجلب كل عمليات AUTH بغض النظر عن نوع المعاملة.
  *       - in: query
  *         name: page
  *         schema:

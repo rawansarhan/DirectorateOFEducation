@@ -10,8 +10,8 @@ class StartWorkflowOutputDTO {
     this.transactionId = transaction.id
     this.processInstanceId = processInstance.id
     this.camundaProcessInstanceId = camundaProcess.id
-    this.currentTask = completeTaskResult?.data?.nextTask || null
-    this.workflowStatus = 'running'
+    this.workflowStatus = completeTaskResult?.data?.workflow_status || 'running'
+    this.currentTask = null
   }
 }
 

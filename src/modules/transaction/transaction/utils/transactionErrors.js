@@ -11,22 +11,34 @@ const MESSAGES = {
   TRANSACTION_NOT_FOUND: 'المعاملة غير موجودة',
   UNAUTHORIZED: 'لا تملك صلاحية الوصول إلى هذه المعاملة',
   SUBMIT_NOT_DRAFT: 'لا يمكن تقديم المعاملة إلا وهي في حالة مسودة',
+  TRANSACTION_IN_PROGRESS: 'لديك معاملة قيد التنفيذ لهذه العملية — لا يمكن إنشاء تقديم جديد',
   VALIDATION_ERROR: 'بيانات الطلب غير صالحة',
   WORKFLOW_UNAVAILABLE: 'تعذّر الاتصال بخدمة سير العمل، حاول لاحقاً',
+  WORKFLOW_START_FAILED: 'فشل بدء سير العمل — لم يُحفظ التقديم، أعد المحاولة',
   INTERNAL_ERROR: 'حدث خطأ أثناء معالجة المعاملة، حاول لاحقاً',
   DRAFT_CREATED: 'تم إنشاء المسودة بنجاح',
-  DRAFT_UPDATED: 'تم تحديث المسودة بنجاح',
+  DRAFT_UPDATED: 'تم تحديث بيانات الهوية للمسودة بنجاح',
   DRAFT_RETRIEVED: 'تم جلب المسودة بنجاح',
   DRAFT_UPSERT_CREATED: 'تم إنشاء مسودة جديدة بنجاح',
   DRAFT_UPSERT_UPDATED: 'تم تحديث المسودة الحالية بنجاح',
   TRANSACTION_RETRIEVED: 'تم جلب المعاملة بنجاح',
-  TRANSACTION_SUBMITTED: 'تم تقديم المعاملة بنجاح'
+  TRANSACTION_SUBMITTED: 'تم تقديم المعاملة بنجاح',
+  TRANSACTIONS_LIST_RETRIEVED: 'تم جلب معاملاتك بنجاح'
 }
 
-function createTransactionError (code, detail) {
+function createTransactionError (code, detail, meta = null) {
   const message = detail || MESSAGES[code] || MESSAGES.INTERNAL_ERROR
   const err = new Error(message)
   err.code = code
+
+  if (meta?.details) {
+    err.details = meta.details
+  }
+
+  if (meta?.validation) {
+    err.validation = meta.validation
+  }
+
   return err
 }
 
@@ -73,6 +85,7 @@ function httpStatusForError (error) {
     error?.code === 'PROCESS_NOT_FOUND' ||
     error?.code === 'DRAFT_NOT_FOUND' ||
     error?.code === 'TRANSACTION_NOT_FOUND' ||
+    error?.code === 'NOT_FOUND' ||
     msg.includes('not found')
   ) {
     return 404
@@ -80,11 +93,16 @@ function httpStatusForError (error) {
   if (
     error?.code === 'PROCESS_INACTIVE' ||
     error?.code === 'SUBMIT_NOT_DRAFT' ||
+    error?.code === 'TRANSACTION_IN_PROGRESS' ||
     error?.code === 'VALIDATION_ERROR' ||
     msg.includes('not active') ||
     msg.includes('Only draft')
   ) {
     return 400
+  }
+
+  if (error?.code === 'WORKFLOW_START_FAILED') {
+    return 502
   }
 
   return 500

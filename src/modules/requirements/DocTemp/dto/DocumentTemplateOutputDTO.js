@@ -10,7 +10,13 @@ class DocumentTemplateOutputDTO {
     this.id = plain?.id
     this.name = plain?.name
     this.file_path = plain?.file_path
-    this.file_type = plain?.file_type
+    this.type_doc_id = plain?.type_doc_id
+    this.type_doc = plain?.type_doc
+      ? {
+          id: plain.type_doc.id,
+          name: plain.type_doc.name
+        }
+      : null
     this.engine_type = plain?.engine_type
     this.config_json = plain?.config_json ?? null
     this.version = plain?.version

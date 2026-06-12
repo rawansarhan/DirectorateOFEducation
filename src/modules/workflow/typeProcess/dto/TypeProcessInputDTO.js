@@ -1,6 +1,7 @@
 class TypeProcessInputDTO {
-  constructor(data) {
+  constructor (data) {
     this.name = data.name
+    this.code = data.code
   }
 }
 

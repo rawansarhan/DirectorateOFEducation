@@ -1,380 +1,185 @@
+'use strict'
+
 const {
-
   User,
-
   UserRoleAssignment,
-
-  UserDeviceToken,
-
   OrgDeptRole
-
 } = require('../../../../entities')
-
-const { sendPushNotification } = require('../../../auth/services/pushNotificationService')
-
-
+const { sendAndPersistNotification } = require('../../../transaction/notification/services/notificationService')
 
 function isAuthNotificationTarget (payload, orgDeptRole) {
-
   const targetKey = payload.to_organization_department_roles_camunda_group_key
 
-
-
   if (targetKey === 'AUTH') {
-
     return true
-
   }
 
-
-
-  const roleKey = orgDeptRole?.camunda_group_key
-
-
-
-  return roleKey === 'AUTH'
-
+  return orgDeptRole?.camunda_group_key === 'AUTH'
 }
-
-
 
 async function resolveNotificationRecipients (payload, context) {
-
   const roleId = payload.to_organization_department_roles_id
-
   let orgDeptRole = null
 
-
-
   if (roleId) {
-
     orgDeptRole = await OrgDeptRole.findByPk(roleId, {
-
       attributes: ['id', 'camunda_group_key']
-
     })
 
+    if (!orgDeptRole) {
+      throw new Error(
+        `organization_department_roles_id ${roleId} not found`
+      )
+    }
   }
-
-
 
   if (isAuthNotificationTarget(payload, orgDeptRole)) {
-
     if (!context.transaction?.user_id) {
-
       throw new Error('Transaction owner not found')
-
     }
-
-
 
     const owner = await User.findOne({
-
       where: {
-
         id: context.transaction.user_id,
-
         is_active: true
-
       },
-
       attributes: ['id', 'userName', 'email']
-
     })
 
-
-
     return {
-
       targetType: 'transaction_owner',
-
       organization_department_roles_id: roleId || null,
-
       camunda_group_key:
-
         payload.to_organization_department_roles_camunda_group_key ||
-
         orgDeptRole?.camunda_group_key ||
-
         'AUTH',
-
       users: owner ? [owner] : []
-
     }
-
   }
-
-
 
   if (!roleId) {
-
     throw new Error(
-
-      'to_organization_department_roles_id or to_organization_department_roles_camunda_group_key is required'
-
+      'SEND_NOTIFICATION payload requires to (organization_department_roles_id) or to_camunda_group_key=AUTH'
     )
-
   }
-
-
 
   const assignments = await UserRoleAssignment.findAll({
-
     where: {
-
       organization_department_roles_id: roleId,
-
       is_active: true
-
     },
-
     include: [{
-
       model: User,
-
       as: 'user',
-
       attributes: ['id', 'userName', 'email'],
-
       where: { is_active: true },
-
       required: true
-
     }]
-
   })
-
-
 
   return {
-
     targetType: 'role_members',
-
     organization_department_roles_id: roleId,
-
     camunda_group_key: orgDeptRole?.camunda_group_key || null,
-
     users: assignments.map(item => item.user).filter(Boolean)
-
   }
-
 }
-
-
-
-async function loadActiveDeviceTokens (userIds) {
-
-  if (!userIds.length) {
-
-    return []
-
-  }
-
-
-
-  return UserDeviceToken.findAll({
-
-    where: {
-
-      user_id: userIds,
-
-      is_active: true
-
-    },
-
-    attributes: ['id', 'user_id', 'fcm_token']
-
-  })
-
-}
-
-
 
 class SendNotificationStrategy {
-
   async execute ({ payload, context }) {
-
-    const message = payload.message
-
-    const title = payload.subject || payload.title || 'إشعار من نظام المعاملات'
-
-
+    const message = String(payload.message || '').trim()
+    const title = payload.title || payload.subject || 'إشعار من نظام المعاملات'
+    const notificationType = payload.type || 'workflow_notification'
 
     if (!message) {
-
-      throw new Error('message is required')
-
+      throw new Error('SEND_NOTIFICATION payload.message is required')
     }
-
-
 
     const target = await resolveNotificationRecipients(payload, context)
 
-
-
     if (!target.users.length) {
-
       return {
-
         type: 'notification',
-
         channel: 'firebase',
-
         status: 'skipped',
-
         reason: 'No active users found for notification target',
-
         targetType: target.targetType,
-
         organization_department_roles_id: target.organization_department_roles_id,
-
         camunda_group_key: target.camunda_group_key,
-
-        sent: 0
-
+        sent: 0,
+        notifications: []
       }
-
     }
 
-
-
-    const userIds = target.users.map(user => user.id)
-
-    const deviceTokens = await loadActiveDeviceTokens(userIds)
-
-
-
-    if (!deviceTokens.length) {
-
-      return {
-
-        type: 'notification',
-
-        channel: 'firebase',
-
-        status: 'skipped',
-
-        reason: 'No active FCM tokens found',
-
-        targetType: target.targetType,
-
-        organization_department_roles_id: target.organization_department_roles_id,
-
-        camunda_group_key: target.camunda_group_key,
-
-        sent: 0
-
-      }
-
+    const pushData = {
+      type: notificationType,
+      transactionId: String(context.transaction?.id || ''),
+      idProcess: context.transaction?.id_process || '',
+      stageCode: context.stage?.code || '',
+      stageName: context.stage?.name || '',
+      targetType: target.targetType,
+      camundaGroupKey: target.camunda_group_key || '',
+      processInstanceId: String(context.processInstance?.id || '')
     }
 
+    const deliveryResults = []
+    let sentTotal = 0
+    let failedTotal = 0
 
-
-    const pushResult = await sendPushNotification({
-
-      tokens: deviceTokens.map(item => item.fcm_token),
-
-      title,
-
-      body: message,
-
-      data: {
-
-        transactionId: context.transaction?.id || '',
-
-        stageCode: context.stage?.code || '',
-
-        targetType: target.targetType,
-
-        camundaGroupKey: target.camunda_group_key || ''
-
-      }
-
-    })
-
-
-
-    if (pushResult.invalidTokens?.length) {
-
-      await UserDeviceToken.update(
-
-        { is_active: false },
-
-        {
-
-          where: {
-
-            fcm_token: pushResult.invalidTokens
-
-          }
-
-        }
-
-      )
-
-    }
-
-
-
-    const recipients = target.users.map(user => {
-
-      const userTokens = deviceTokens.filter(item => item.user_id === user.id)
-
-
-
-      return {
-
+    for (const user of target.users) {
+      const result = await sendAndPersistNotification({
         userId: user.id,
+        sentByUserId: context.userId || null,
+        title,
+        message,
+        type: notificationType,
+        transactionId: context.transaction?.id || null,
+        processInstanceId: context.processInstance?.id || null,
+        data: pushData
+      })
 
+      sentTotal += result.sent || 0
+      failedTotal += result.failed || 0
+
+      deliveryResults.push({
+        userId: user.id,
         userName: user.userName,
+        notificationId: result.notificationId || null,
+        sent: result.sent || 0,
+        failed: result.failed || 0,
+        skipped: Boolean(result.skipped),
+        reason: result.reason || null,
+        status: result.status || (result.skipped ? 'skipped' : 'sent')
+      })
+    }
 
-        tokens: userTokens.length,
+    let status = 'failed'
 
-        status: userTokens.length ? 'sent' : 'skipped'
-
-      }
-
-    })
-
-
+    if (sentTotal > 0 && failedTotal > 0) {
+      status = 'partial'
+    } else if (sentTotal > 0) {
+      status = 'sent'
+    } else if (deliveryResults.every(item => item.skipped)) {
+      status = 'skipped'
+    }
 
     return {
-
       type: 'notification',
-
       channel: 'firebase',
-
-      status: pushResult.sent > 0 ? 'sent' : 'failed',
-
+      status,
       targetType: target.targetType,
-
       organization_department_roles_id: target.organization_department_roles_id,
-
       camunda_group_key: target.camunda_group_key,
-
       title,
-
       message,
-
+      notificationType,
       transactionId: context.transaction?.id || null,
-
       stageCode: context.stage?.code || null,
-
-      sent: pushResult.sent,
-
-      failed: pushResult.failed,
-
-      recipients,
-
-      pushResults: pushResult.results
-
+      sent: sentTotal,
+      failed: failedTotal,
+      recipients: deliveryResults
     }
-
   }
-
 }
 
-
-
 module.exports = SendNotificationStrategy
-

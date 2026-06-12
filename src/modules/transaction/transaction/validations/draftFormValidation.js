@@ -5,6 +5,9 @@ const {
   WIDGET_TYPES,
   validateWidgetsBusinessRules
 } = require('../../../workflow/stageConfig/validations/stageConfigSchema')
+const {
+  buildStageFormSnapshot
+} = require('../../../workflow/services/stageFormSnapshotBuilder')
 
 const FILE_WIDGET_TYPES = new Set(['file_picker'])
 
@@ -309,7 +312,7 @@ function validateDraftFormAgainstConfig (formData, stageConfig = {}) {
     return 'عدد الودجات المرسلة لا يطابق استمارة العملية'
   }
 
-  const normalizedWidgets = []
+  const valueById = new Map()
 
   for (const configWidget of configWidgets) {
     const widgetId = configWidget.data.id
@@ -329,18 +332,10 @@ function validateDraftFormAgainstConfig (formData, stageConfig = {}) {
       return valueError
     }
 
-    normalizedWidgets.push({
-      widget_type: configWidget.widget_type,
-      data: configWidget.data,
-      value: submitted.value
-    })
+    valueById.set(widgetId, submitted.value)
   }
 
-  return {
-    form_id: stageConfig.form_id,
-    form_name: stageConfig.form_name,
-    widgets: normalizedWidgets
-  }
+  return buildStageFormSnapshot(stageConfig, { value_by_id: valueById })
 }
 
 function validateUpsertDraftBody (body = {}) {

@@ -1,40 +1,46 @@
 'use strict'
 
+const {
+  normalizeProcessPriority,
+  formatTransactionDate
+} = require('../utils/employeeTaskFormatters')
+
 class TaskDetailsOutputDTO {
   constructor ({
     task,
     processInstance,
     transaction,
-    taskLock,
     previousStagesData,
-    currentStageConfig
+    currentStageConfig,
+    processDefinition = null
   }) {
-    this.task = {
-      id: task.id,
-      name: task.name,
-      taskDefinitionKey: task.taskDefinitionKey,
-      created: task.created
+    const processDef = processDefinition || processInstance?.process_definition
+    const user = transaction?.user
+    const currentStage = processInstance?.current_stage
+
+    this.process_definition_name = processDef?.name ?? null
+    this.id_task = task?.id ?? null
+    this.name_task = task?.name ?? currentStage?.name ?? null
+
+    this.applicant = {
+      first_name: transaction?.first_name ?? null,
+      father_name: transaction?.father_name ?? null,
+      last_name: transaction?.last_name ?? null,
+      national_id: transaction?.national_id ?? null,
+      phone_number: user?.phone_number ?? null
     }
 
-    this.process = {
-      id: processInstance.id,
-      processDefinitionId: processInstance.process_definition_id
-    }
+    this.submitted_at = formatTransactionDate(transaction?.created_at)
 
-    this.transaction = {
-      id: transaction?.id ?? null,
-      code: transaction?.code ?? null,
-      status: transaction?.status ?? null,
-      version: transaction?.version ?? null
+    this.transaction_history = {
+      id_process: transaction?.id_process ?? null,
+      priority: normalizeProcessPriority(processDef?.priority),
+      data: previousStagesData || {}
     }
-
-    this.taskLock = taskLock
-    this.previousStagesData = previousStagesData
 
     this.currentStage = {
-      id: processInstance.current_stage?.id ?? null,
-      name: processInstance.current_stage?.name ?? null,
-      code: processInstance.current_stage?.code ?? null,
+      id: currentStage?.id ?? null,
+      name: currentStage?.name ?? null,
       config: currentStageConfig || {}
     }
   }

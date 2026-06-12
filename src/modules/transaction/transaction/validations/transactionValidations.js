@@ -1,7 +1,51 @@
 'use strict'
 
 const Joi = require('joi')
-const { IDENTITY_KEYS } = require('../dto/TransactionDraftInputDTO')
+
+const IDENTITY_KEYS = [
+  'first_name',
+  'last_name',
+  'father_name',
+  'mother_name',
+  'national_id'
+]
+
+const IDENTITY_LABELS = {
+  first_name: 'الاسم الأول',
+  last_name: 'الاسم الأخير',
+  father_name: 'اسم الأب',
+  mother_name: 'اسم الأم',
+  national_id: 'رقم الهوية'
+}
+
+function isNonEmptyIdentityValue (value) {
+  if (value == null) {
+    return false
+  }
+
+  if (typeof value === 'string') {
+    return value.trim().length > 0
+  }
+
+  return String(value).trim().length > 0
+}
+
+function validateIdentityCompleteForSubmit (transaction = {}) {
+  const missingKeys = IDENTITY_KEYS.filter(
+    key => !isNonEmptyIdentityValue(transaction[key])
+  )
+
+  if (!missingKeys.length) {
+    return { error: null, missing_keys: [] }
+  }
+
+  const labels = missingKeys.map(key => IDENTITY_LABELS[key]).join('، ')
+
+  return {
+    error: `يجب إكمال بيانات الهوية قبل التقديم — ${labels}`,
+    missing_keys: missingKeys
+  }
+}
 
 function parsePositiveInt (value, label) {
   const numeric = Number(value)
@@ -25,23 +69,28 @@ const nationalIdSchema = Joi.string()
   .trim()
   .max(50)
   .allow(null, '')
+  .pattern(/^[0-9]*$/)
   .messages({
-    'string.max': 'رقم الهوية يتجاوز الحد المسموح ({#limit} حرف)'
+    'string.max': 'رقم الهوية يتجاوز الحد المسموح ({#limit} حرف)',
+    'string.pattern.base': 'رقم الهوية يجب أن يحتوي أرقاماً فقط'
   })
 
-const draftBodySchema = Joi.object({
+const identityBodySchema = Joi.object({
   first_name: identityFieldSchema.label('الاسم الأول'),
   last_name: identityFieldSchema.label('اسم العائلة'),
   father_name: identityFieldSchema.label('اسم الأب'),
   mother_name: identityFieldSchema.label('اسم الأم'),
   national_id: nationalIdSchema
 })
-  .unknown(true)
+  .min(1)
+  .messages({
+    'object.min': 'يجب إرسال حقل هوية واحد على الأقل'
+  })
 
-function validateDraftBody (data = {}) {
-  const { error, value } = draftBodySchema.validate(data, {
+function validateIdentityBody (data = {}) {
+  const { error, value } = identityBodySchema.validate(data, {
     abortEarly: false,
-    stripUnknown: false
+    stripUnknown: true
   })
 
   if (error) {
@@ -51,20 +100,21 @@ function validateDraftBody (data = {}) {
     }
   }
 
-  return { error: null, value }
-}
+  const normalized = {}
 
-function hasDraftPayload (data) {
-  if (!data || typeof data !== 'object') {
-    return false
+  for (const key of IDENTITY_KEYS) {
+    if (Object.prototype.hasOwnProperty.call(value, key)) {
+      normalized[key] = value[key] === '' ? null : value[key]
+    }
   }
 
-  return Object.keys(data).length > 0
+  return { error: null, value: normalized }
 }
 
 module.exports = {
   parsePositiveInt,
-  validateDraftBody,
-  hasDraftPayload,
-  IDENTITY_KEYS
+  validateIdentityBody,
+  validateIdentityCompleteForSubmit,
+  IDENTITY_KEYS,
+  IDENTITY_LABELS
 }

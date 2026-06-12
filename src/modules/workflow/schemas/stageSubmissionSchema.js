@@ -1,6 +1,13 @@
 'use strict'
 
 const Joi = require('joi')
+const { submissionFileItemSchema } = require('./submissionFileSchema')
+const { sanitizeOptionalSubmissionPayload } = require('./submissionPayloadSanitizer')
+const {
+  submitFieldItemMessages,
+  submitPayloadRootMessages,
+  formatSubmitTransactionJoiError
+} = require('./submitTransactionPayloadMessages')
 
 const SUBMISSION_SCHEMA_VERSION = '1.0'
 
@@ -9,12 +16,14 @@ const fieldItemSchema = Joi.object({
   value: Joi.any().allow(null, '')
 })
 
-const fileItemSchema = Joi.object({
-  key: Joi.string().max(128).required(),
-  path: Joi.string().max(1024).required(),
-  original_name: Joi.string().max(256).optional(),
-  mime_type: Joi.string().max(128).optional()
+const submitFieldItemSchema = Joi.object({
+  key: Joi.string().max(128).required().messages(submitFieldItemMessages),
+  value: Joi.any().allow(null, '').messages({
+    'any.required': 'fields[].value مطلوب'
+  })
 })
+
+const fileItemSchema = submissionFileItemSchema
 
 const templateItemSchema = Joi.object({
   template_id: Joi.number().integer().positive().required(),
@@ -50,6 +59,9 @@ function buildStageSubmissionSchema (options = {}) {
     variables: requireVariables
       ? Joi.object().min(1).required()
       : Joi.object().default({}),
+    stage_name: Joi.string().max(256).optional(),
+    decision: Joi.string().max(64).optional(),
+    note: Joi.string().max(10000).allow('', null).optional(),
     notes: Joi.string().max(10000).allow('', null).optional(),
     signature: requireSignature
       ? signatureSchema.required()
@@ -57,9 +69,33 @@ function buildStageSubmissionSchema (options = {}) {
   }).unknown(false)
 }
 
+const submitTransactionPayloadSchema = Joi.object({
+  stage_name: Joi.string().max(256).optional().messages({
+    'string.max': 'stage_name أطول من 256 حرفاً'
+  }),
+  fields: Joi.array().items(submitFieldItemSchema).default([]),
+  files: Joi.array().items(fileItemSchema).default([]),
+  templates: Joi.array().items(templateItemSchema).default([]),
+  decision: Joi.string().max(64).default('submit').messages({
+    'string.max': 'decision أطول من 64 حرفاً'
+  }),
+  note: Joi.string().max(10000).allow('', null).default('').messages({
+    'string.max': 'note أطول من 10000 حرف'
+  }),
+  expected_version: Joi.number().integer().min(0).optional().messages({
+    'number.base': 'expected_version يجب أن يكون رقماً صحيحاً',
+    'number.integer': 'expected_version يجب أن يكون رقماً صحيحاً',
+    'number.min': 'expected_version لا يمكن أن يكون سالباً'
+  })
+})
+  .unknown(false)
+  .messages(submitPayloadRootMessages)
+
 function validateStageSubmissionPayload (payload = {}, options = {}) {
   const schema = buildStageSubmissionSchema(options)
-  const { error, value } = schema.validate(payload, {
+  const sanitizedPayload = sanitizeOptionalSubmissionPayload(payload)
+
+  const { error, value } = schema.validate(sanitizedPayload, {
     abortEarly: false,
     stripUnknown: true
   })
@@ -68,6 +104,30 @@ function validateStageSubmissionPayload (payload = {}, options = {}) {
     return {
       value: null,
       error: error.details.map(d => d.message).join('; ')
+    }
+  }
+
+  return { value, error: null }
+}
+
+function validateSubmitTransactionPayload (payload = {}) {
+  const sanitizedPayload = sanitizeOptionalSubmissionPayload(payload, {
+    includeVariables: false
+  })
+
+  const { error, value } = submitTransactionPayloadSchema.validate(sanitizedPayload, {
+    abortEarly: false,
+    stripUnknown: false
+  })
+
+  if (error) {
+    const formatted = formatSubmitTransactionJoiError(error)
+
+    return {
+      value: null,
+      error: formatted.message,
+      details: formatted.details,
+      allowed_fields: formatted.allowed_fields
     }
   }
 
@@ -105,12 +165,15 @@ function normalizeSubmissionPayload (value = {}) {
   return {
     schema_version: value.schema_version || SUBMISSION_SCHEMA_VERSION,
     expected_version: value.expected_version,
+    stage_name: value.stage_name ?? null,
     fields,
     files,
     templates: value.templates || [],
     actions: value.actions || [],
     variables: value.variables || {},
-    notes: value.notes ?? null,
+    decision: value.decision ?? null,
+    note: value.note ?? value.notes ?? '',
+    notes: value.note ?? value.notes ?? '',
     signature: value.signature,
     field_map: toFieldMap(fields),
     file_map: toFileMap(files)
@@ -137,7 +200,11 @@ function buildSubmitContract (configJson = {}) {
     }
 
     if (widget.widget_type === 'file_picker') {
-      files.push({ key: widgetId, path: '' })
+      files.push({
+        key: widgetId,
+        path: '',
+        type_doc_id: widget.data?.type_doc_id ?? null
+      })
       continue
     }
 
@@ -150,15 +217,15 @@ function buildSubmitContract (configJson = {}) {
     schema_version: SUBMISSION_SCHEMA_VERSION,
     envelope: {
       schema_version: SUBMISSION_SCHEMA_VERSION,
+      stage_name: configJson.stage_name || null,
       fields,
       files,
       templates: (configJson.template || []).map(item => ({
         template_id: item.template_id,
         values: {}
       })),
-      actions: configJson.actions || [],
-      variables: {},
-      notes: null
+      decision: 'submit',
+      note: ''
     }
   }
 }
@@ -166,6 +233,8 @@ function buildSubmitContract (configJson = {}) {
 module.exports = {
   SUBMISSION_SCHEMA_VERSION,
   validateStageSubmissionPayload,
+  validateSubmitTransactionPayload,
+  submitTransactionPayloadSchema,
   normalizeSubmissionPayload,
   buildSubmitContract
 }

@@ -13,7 +13,8 @@ function requiredMonthDaySchema (fieldName) {
     .required()
     .messages({
       'string.pattern.base': `${fieldName} يجب أن يكون بصيغة MM-DD (شهر-يوم)`,
-      'any.required': `${fieldName} مطلوب`
+      'any.required': `${fieldName} مطلوب`,
+      'any.custom': '{{#message}}'
     })
     .custom((value, helpers) => {
       try {
@@ -29,6 +30,9 @@ function optionalMonthDaySchema (fieldName) {
     .trim()
     .allow(null, '')
     .optional()
+    .messages({
+      'any.custom': '{{#message}}'
+    })
     .custom((value, helpers) => {
       if (value === null || value === '') {
         return null
@@ -52,29 +56,61 @@ const createProcessDefinitionSchema = Joi.object({
   name: Joi.string()
     .min(3)
     .max(100)
-    .required(),
+    .required()
+    .messages({
+      'string.min': 'name يجب أن يكون 3 أحرف على الأقل',
+      'string.max': 'name يجب ألا يتجاوز 100 حرف',
+      'any.required': 'name مطلوب',
+      'string.empty': 'name مطلوب'
+    }),
 
-  filePath: Joi.string().required(),
+  filePath: Joi.string()
+    .required()
+    .messages({
+      'any.required': 'filePath مطلوب',
+      'string.empty': 'ملف BPMN مطلوب'
+    }),
 
   is_complaint: Joi.boolean().default(false),
 
   type_trans_id: Joi.when('is_complaint', {
     is: true,
     then: Joi.valid(null).optional(),
-    otherwise: Joi.number().integer().required()
+    otherwise: Joi.number()
+      .integer()
+      .required()
+      .messages({
+        'any.required': 'type_trans_id مطلوب عندما is_complaint = false',
+        'number.base': 'type_trans_id يجب أن يكون رقماً صحيحاً',
+        'number.integer': 'type_trans_id يجب أن يكون رقماً صحيحاً'
+      })
   }),
 
   organization_id: Joi.number()
-    .integer(),
+    .integer()
+    .required()
+    .messages({
+      'any.required': 'organization_id مطلوب',
+      'number.base': 'organization_id يجب أن يكون رقماً صحيحاً',
+      'number.integer': 'organization_id يجب أن يكون رقماً صحيحاً'
+    }),
 
   priority: Joi.number()
     .integer()
-    .min(1)
-    .required(),
+    .valid(1, 2, 3)
+    .required()
+    .messages({
+      'any.required': 'priority مطلوب',
+      'number.base': 'priority يجب أن يكون رقماً صحيحاً',
+      'number.integer': 'priority يجب أن يكون رقماً صحيحاً',
+      'any.only': 'priority يجب أن يكون 1 (عالي) أو 2 (متوسط) أو 3 (منخفض)'
+    }),
 
   start_date: requiredMonthDaySchema('start_date'),
 
   end_date: optionalMonthDaySchema('end_date')
+}).messages({
+  'any.custom': '{{#message}}'
 }).custom((value, helpers) => {
   if (!value.end_date || !value.start_date) {
     return value

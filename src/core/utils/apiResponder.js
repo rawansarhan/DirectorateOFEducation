@@ -32,19 +32,30 @@ class ApiResponder {
 
   static error(
     res,
-    { message = "", statusCode = StatusCodes.INTERNAL_SERVER_ERROR, data = null, extra = {} } = {}
+    {
+      message = "",
+      statusCode = StatusCodes.INTERNAL_SERVER_ERROR,
+      data = null,
+      error = null,
+      extra = {}
+    } = {}
   ) {
     const text =
       typeof message === "string" && message.trim()
         ? message
         : reasonFor(statusCode) || "Something went wrong";
 
+    const errorText =
+      typeof error === "string" && error.trim()
+        ? error
+        : text;
+
     return res.status(statusCode).json({
       success: false,
       status_code: statusCode,
       message: text,
-      error: text,
-      data,
+      error: errorText,
+      data: data ?? null,
       ...extra,
     });
   }
@@ -54,8 +65,14 @@ class ApiResponder {
     return this.success(res, { data, message, statusCode });
   }
 
-  static errorResponse(res, message = "", statusCode = StatusCodes.INTERNAL_SERVER_ERROR, data = null) {
-    return this.error(res, { message, statusCode, data });
+  static errorResponse(
+    res,
+    message = "",
+    statusCode = StatusCodes.INTERNAL_SERVER_ERROR,
+    error = null,
+    data = null
+  ) {
+    return this.error(res, { message, statusCode, error, data });
   }
 
   // ============ اختصارات النجاح ============

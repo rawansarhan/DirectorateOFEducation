@@ -7,8 +7,10 @@ const {
   getUserDraftByProcess,
   getTransactionById,
   submitTransaction,
+  submitTransactionByProcess,
   MESSAGES
 } = require('../services/transactionService')
+const { getMyTransactions } = require('../services/userTransactionsService')
 const {
   successResponse,
   errorResponse
@@ -17,16 +19,28 @@ const {
   mapErrorToArabic,
   httpStatusForError
 } = require('../utils/transactionErrors')
-const { hasDraftPayload } = require('../validations/transactionValidations')
+const { hasUpsertFormPayload } = require('../validations/draftFormValidation')
+const { parsePaginationQuery } = require('../../../../core/utils/pagination')
 
 function handleTransactionError (res, err) {
   const statusCode = httpStatusForError(err)
   const message = mapErrorToArabic(err)
+  const errorCode = err.code || 'REQUEST_ERROR'
+
+  let data = null
+
+  if (Array.isArray(err.details) && err.details.length) {
+    data = {
+      details: err.details,
+      ...(err.validation || {})
+    }
+  }
 
   return errorResponse(res, {
     statusCode,
     message,
-    error: message
+    error: errorCode,
+    data
   })
 }
 
@@ -72,16 +86,16 @@ async function upsertDraftController (req, res) {
     const result = await upsertDraft({
       userId: req.user.id,
       processId: req.params.processId,
-      data: req.body
+      body: req.body
     })
 
     let message = MESSAGES.DRAFT_RETRIEVED
 
     if (result.isNew) {
-      message = hasDraftPayload(req.body)
+      message = hasUpsertFormPayload(req.body)
         ? MESSAGES.DRAFT_UPSERT_CREATED
         : MESSAGES.DRAFT_CREATED
-    } else if (hasDraftPayload(req.body)) {
+    } else if (hasUpsertFormPayload(req.body)) {
       message = MESSAGES.DRAFT_UPSERT_UPDATED
     }
 
@@ -110,6 +124,27 @@ async function getUserDraftByProcessController (req, res) {
   }
 }
 
+async function getMyTransactionsController (req, res) {
+  try {
+    const { page, limit, offset } = parsePaginationQuery(req.query)
+
+    const result = await getMyTransactions({
+      userId: req.user.id,
+      page,
+      limit,
+      offset,
+      statusFilter: req.query.status
+    })
+
+    return successResponse(res, {
+      message: result.message,
+      data: result.data
+    })
+  } catch (err) {
+    return handleTransactionError(res, err)
+  }
+}
+
 async function getTransactionController (req, res) {
   try {
     const result = await getTransactionById(
@@ -126,11 +161,12 @@ async function getTransactionController (req, res) {
   }
 }
 
-async function submitTransactionController (req, res) {
+async function submitTransactionByProcessController (req, res) {
   try {
-    const result = await submitTransaction(
-      req.params.transactionId,
-      req.body
+    const result = await submitTransactionByProcess(
+      req.params.processId,
+      req.body,
+      { userId: req.user.id }
     )
 
     return successResponse(res, {
@@ -148,6 +184,7 @@ module.exports = {
   upsertDraftController,
   UpdateDraftController: updateDraftController,
   getUserDraftByProcessController,
+  getMyTransactionsController,
   getTransactionController,
-  submitTransactionController
+  submitTransactionByProcessController
 }

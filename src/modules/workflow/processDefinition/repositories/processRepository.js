@@ -2,7 +2,8 @@ const {
   ProcessDefinition,
   Stage,
   StageAssignment,
-  StageConfig
+  StageConfig,
+  TypeTrans
 } = require('../../../../entities')
 const { Op } = require('sequelize')
 
@@ -21,6 +22,7 @@ class ProcessRepository {
   _buildAuthProcessesQuery ({
     typeTransId = null,
     isComplaint = false,
+    allTypes = false,
     roleIds = null
   } = {}) {
     const assignmentInclude = {
@@ -48,6 +50,8 @@ class ProcessRepository {
 
     if (isComplaint) {
       where.is_complaint = true
+    } else if (allTypes) {
+      where.is_complaint = false
     } else {
       where.type_trans_id = typeTransId
       where.is_complaint = false
@@ -87,6 +91,61 @@ class ProcessRepository {
     )
   }
 
+  async findAllAuthProcessesForCache () {
+    return ProcessDefinition.findAll(
+      this._buildAuthProcessesQuery({ allTypes: true, roleIds: null })
+    )
+  }
+
+  async findUnapprovedOrInactiveProcesses () {
+    return ProcessDefinition.findAll({
+      where: {
+        [Op.or]: [
+          { approval_status: { [Op.ne]: 'APPROVED' } },
+          { is_active: false }
+        ]
+      },
+      attributes: ['id', 'name', 'approval_status', 'is_active'],
+      order: [['updated_at', 'DESC']]
+    })
+  }
+
+  _buildProcessesByTypeAdminQuery ({ typeTransId = null, allTypes = false } = {}) {
+    const where = {
+      is_complaint: false
+    }
+
+    if (!allTypes) {
+      where.type_trans_id = typeTransId
+    }
+
+    return {
+      where,
+      attributes: [
+        'id',
+        'name',
+        'code',
+        'priority',
+        'status',
+        'approval_status',
+        'is_active'
+      ],
+      order: [['priority', 'ASC'], ['id', 'ASC']]
+    }
+  }
+
+  async findProcessesByTypeForAdmin (typeTransId) {
+    return ProcessDefinition.findAll(
+      this._buildProcessesByTypeAdminQuery({ typeTransId })
+    )
+  }
+
+  async findAllProcessesForAdmin () {
+    return ProcessDefinition.findAll(
+      this._buildProcessesByTypeAdminQuery({ allTypes: true })
+    )
+  }
+
   async findAuthComplaintProcesses (roleIds) {
     return ProcessDefinition.findAll(
       this._buildAuthProcessesQuery({ isComplaint: true, roleIds })
@@ -119,6 +178,7 @@ class ProcessRepository {
           attributes: [
             'id',
             'name',
+            'code',
             'type',
             'auth_type'
           ],
@@ -150,6 +210,19 @@ class ProcessRepository {
   async findByCode (code) {
     return await ProcessDefinition.findOne({
       where: { code }
+    })
+  }
+
+  async findByCodeWithType (code) {
+    return await ProcessDefinition.findOne({
+      where: { code },
+      include: [
+        {
+          model: TypeTrans,
+          as: 'type_trans',
+          attributes: ['id', 'name', 'code']
+        }
+      ]
     })
   }
 

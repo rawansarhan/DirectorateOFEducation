@@ -43,6 +43,8 @@ const { createStageConfig , getJsonProcess} = require('../controllers/stageConfi
  *                       type: object
  *                       description: |
  *                         عقد الاستمارة: form_id, form_name, widgets, template, actions.
+ *                         widgets اختياري — [] أو أي عدد (text_field, file_picker, …).
+ *                         type_doc_id مطلوب فقط داخل file_picker.
  *                         لمرحلة SERVICE_TASK أضف actions (GENERATE_PDF، SEND_EMAIL، …).
  *                       example:
  *                         form_id: civil_transaction_55
@@ -65,6 +67,7 @@ const { createStageConfig , getJsonProcess} = require('../controllers/stageConfi
  *                               max_size_mb: 5
  *                               allowed_extensions: ["pdf", "png", "jpg"]
  *                               allow_multiple: true
+ *                               type_doc_id: 1
  *                         template:
  *                           - template_id: 1
  *                         requires_digital_signature: true
@@ -75,6 +78,25 @@ const { createStageConfig , getJsonProcess} = require('../controllers/stageConfi
  *                           - name: SEND_EMAIL
  *                             payload:
  *                               message: تم إصدار المستند
+ *                           - name: SEND_NOTIFICATION
+ *                             payload:
+ *                               title: تم إصدار المستند
+ *                               message: تم إصدار مستند معاملتك بنجاح
+ *                               to: 12
+ *                               type: document_issued
+ *                           - name: SEND_NOTIFICATION
+ *                             payload:
+ *                               title: إشعار للمواطن
+ *                               message: تم تحديث حالة معاملتك
+ *                               to_camunda_group_key: AUTH
+ *                               type: workflow_notification
+ *
+ *                       SEND_NOTIFICATION payload للمسؤول التقني:
+ *                       - message (مطلوب): نص الإشعار
+ *                       - title (اختياري): عنوان الإشعار
+ *                       - type (اختياري): نوع الإشعار في جدول notifications
+ *                       - to (مطلوب أحدها): organization_department_roles_id لإرسال لموظفي الدور
+ *                       - to_camunda_group_key (مطلوب أحدها): AUTH لإرسال لصاحب المعاملة
  *
  *                     assignments:
  *                       type: array

@@ -9,6 +9,7 @@ class TransactionOutputDTO {
 
     this.id = plain?.id
     this.code = plain?.code
+    this.id_process = plain?.id_process ?? null
     this.user_id = plain?.user_id
     this.status = plain?.status
     this.data = plain?.data ?? {}

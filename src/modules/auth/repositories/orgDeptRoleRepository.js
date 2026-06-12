@@ -18,7 +18,12 @@ async function findByCamundaGroupKey(camundaGroupKey, options = {}) {
   })
 }
 
+async function findById (id, options = {}) {
+  return OrgDeptRole.findByPk(id, options)
+}
+
 module.exports = {
   findByOrgDeptRole,
-  findByCamundaGroupKey
+  findByCamundaGroupKey,
+  findById
 }

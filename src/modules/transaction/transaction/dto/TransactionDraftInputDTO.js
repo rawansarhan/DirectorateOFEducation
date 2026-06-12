@@ -1,37 +1,24 @@
 'use strict'
 
-const IDENTITY_KEYS = [
-  'first_name',
-  'last_name',
-  'father_name',
-  'mother_name',
-  'national_id'
-]
+const { IDENTITY_KEYS } = require('../validations/transactionValidations')
 
-class TransactionDraftInputDTO {
+class TransactionIdentityInputDTO {
   constructor (data = {}) {
     this.identity = {}
-    this.data = { ...data }
 
     for (const key of IDENTITY_KEYS) {
       if (Object.prototype.hasOwnProperty.call(data, key)) {
-        const value = data[key]
-        this.identity[key] = value === '' ? null : value
-        delete this.data[key]
+        this.identity[key] = data[key]
       }
     }
   }
 
   getIdentityUpdatePayload () {
-    if (Object.keys(this.identity).length === 0) {
-      return {}
-    }
-
     return { ...this.identity }
   }
 }
 
 module.exports = {
-  TransactionDraftInputDTO,
+  TransactionIdentityInputDTO,
   IDENTITY_KEYS
 }

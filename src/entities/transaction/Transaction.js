@@ -14,6 +14,11 @@ module.exports = (sequelize, DataTypes) => {
         as: 'stages'
       })
 
+      Transaction.hasOne(models.ProcessInstance, {
+        foreignKey: 'transaction_id',
+        as: 'process_instance'
+      })
+
       Transaction.hasMany(models.DocumentInstance, {
         foreignKey: 'transaction_id',
         as: 'documents'
@@ -36,6 +41,12 @@ module.exports = (sequelize, DataTypes) => {
       code: {
         type: DataTypes.STRING,
         allowNull: true
+      },
+
+      id_process: {
+        type: DataTypes.STRING(32),
+        allowNull: true,
+        unique: true
       },
 
       version: {

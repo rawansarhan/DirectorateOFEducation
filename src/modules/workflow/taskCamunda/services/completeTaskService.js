@@ -1,18 +1,12 @@
 const camundaClient = require('../../../../core/shared/clients/camunda/camundaClient')
+const { v4: uuidv4 } = require('uuid')
 
 const transactionClient = require('../../../../core/shared/clients/transaction/transactionClient')
 
 const processInstanceRepository = require('../repositories/processInstanceRepository')
-
-const stageRepository = require('../../processDefinition/repositories/stageRepository')
-
-const outboxRepository = require('../../../../core/shared/outbox/repositories/OutboxRepository')
-
-const EVENTS = require('../../../../core/shared/events/types')
-
 const employeeTaskRepository = require('../repositories/employeeTaskRepository')
 
-
+const stageRepository = require('../../processDefinition/repositories/stageRepository')
 
 const ActionStrategyFactory = require('../../actions/ActionStrategyFactory')
 const stageConfigRepository = require('../../stageConfig/repositories/stageConfigRepository')
@@ -20,7 +14,13 @@ const {
   normalizeActionPayload,
   resolveActionsForStage
 } = require('../../actions/actionHelpers')
-const { buildStoredFileEntry } = require('../../../../core/utils/filePath')
+const { buildStoredStageData } = require('../../services/stageSubmissionService')
+const {
+  registerTransactionFiles
+} = require('../../../transaction/document/services/documentFileService')
+const {
+  registerTemplatesForTransaction
+} = require('../../../transaction/document/services/documentInstanceService')
 const {
   requiresDigitalSignature,
   verifySignatureForComplete,
@@ -30,7 +30,22 @@ const {
 } = require('./transactionSigningService')
 const { appendIntegrityLink } =
   require('../../../transaction/integrityChain/services/integrityChainService')
+const { createProcessStage } =
+  require('../../../transaction/process_instance_stage/services/processInstanceStageService')
+const transactionRepository =
+  require('../../../transaction/transaction/repositories/transactionRepository')
 const securityGuardService = require('../../../../core/security/securityGuardService')
+const {
+  invalidateEmployeeTasksForUser,
+  deleteKeysByPattern,
+  invalidateEmployeeTaskStats
+} = require('../../../../core/cache/apiCacheService')
+const operationGuardService = require('../../../../core/security/operationGuardService')
+const documentTemplateRepository =
+  require('../../../requirements/DocTemp/repositories/documentTemplateRepository')
+const documentInstanceRepository =
+  require('../../../transaction/document/repositories/documentInstanceRepository')
+const { normalizeSigningDecision } = require('../../schemas/signingChallengeSchema')
 const {
   assertTaskLockHolder,
   releaseTaskLock
@@ -39,17 +54,83 @@ const {
   toCompleteTaskResponse,
   toPublicSignatureRecord
 } = require('../mappers/taskCamundaMapper')
+const {
+  notifyTransactionOwnerOnReject
+} = require('../../../transaction/notification/services/transactionRejectNotificationService')
+const { enrichCamundaTaskNotFoundError } = require('../../../../core/utils/errorMessageHelper')
 
+const LOG_PREFIX = '[CompleteTask]'
+
+const ROOT_SUBMISSION_DATA_KEYS = [
+  'stage_name',
+  'form_id',
+  'form_name',
+  'widgets',
+  'templates',
+  'decision',
+  'note',
+  'files',
+  'fields',
+  'completed_by',
+  'completed_at'
+]
+
+function shouldPersistAuthSubmissionAtRoot ({ isAutoComplete, stage }) {
+  return Boolean(isAutoComplete && stage?.auth_type === 'AUTH')
+}
+
+function buildRootSubmissionSnapshot (transactionData = {}) {
+  const snapshot = {}
+
+  for (const key of ROOT_SUBMISSION_DATA_KEYS) {
+    if (Object.prototype.hasOwnProperty.call(transactionData, key)) {
+      snapshot[key] = transactionData[key]
+    }
+  }
+
+  return snapshot
+}
+
+/**
+ * Structured step logger for the complete-task workflow.
+ * Keeps logs grep-friendly: [CompleteTask] STEP | key=value ...
+ */
+function logStep (step, meta = {}) {
+  const details = Object.entries(meta)
+    .filter(([, value]) => value !== undefined && value !== null && value !== '')
+    .map(([key, value]) => `${key}=${value}`)
+    .join(' ')
+
+  console.log(`${LOG_PREFIX} ${step}${details ? ` | ${details}` : ''}`)
+}
+
+/**
+ * Runs workflow actions (email, PDF, notification, etc.) for the current stage.
+ * Each action is resolved through ActionStrategyFactory and executed sequentially.
+ */
 async function executeActions (actions, context) {
+  logStep('ACTIONS_START', {
+    count: actions.length,
+    stageCode: context.stage?.code,
+    transactionId: context.transaction?.id
+  })
+
   const results = []
 
   for (const action of actions) {
+    logStep('ACTION_EXECUTE', { action: action.name })
+
     const strategy = ActionStrategyFactory.make(action.name)
     const actionPayload = normalizeActionPayload(action)
 
     const result = await strategy.execute({
       payload: actionPayload,
       context
+    })
+
+    logStep('ACTION_DONE', {
+      action: action.name,
+      status: result?.status || 'ok'
     })
 
     results.push({
@@ -59,9 +140,85 @@ async function executeActions (actions, context) {
     })
   }
 
+  logStep('ACTIONS_DONE', { count: results.length })
+
   return results
 }
 
+/**
+ * Enriches template snapshots for API response.
+ *
+ * transaction.data[stage].templates shape:
+ *   { id, document_instance_id, values }
+ *
+ * generated_pdf_path: from document_instance after GENERATE_PDF (SERVICE_TASK)
+ */
+async function enrichTemplatesForResponse (templates = []) {
+  const enriched = []
+
+  for (const template of templates) {
+    const templateId = template.id ?? template.template_id
+    const row = templateId
+      ? await documentTemplateRepository.findById(templateId)
+      : null
+
+    let generatedPdfPath = template.generated_pdf_path ?? null
+
+    if (template.document_instance_id && !generatedPdfPath) {
+      const instance = await documentInstanceRepository.findById(
+        template.document_instance_id
+      )
+      generatedPdfPath = instance?.generated_pdf_path ?? null
+    }
+
+    enriched.push({
+      id: templateId,
+      document_instance_id: template.document_instance_id ?? null,
+      values: template.values || {},
+      path: row?.file_path || template.path || null,
+      generated_pdf_path: generatedPdfPath
+    })
+  }
+
+  return enriched
+}
+
+/**
+ * Builds the unified success response returned by POST /tasks/:taskId/complete.
+ */
+function buildCompleteResponse ({
+  stage,
+  stageSnapshot,
+  variables = null,
+  signingRequest,
+  idempotencyKey,
+  idempotentReplay,
+  workflowStatus,
+  templates
+}) {
+  return {
+    message:
+      stageSnapshot.decision === 'reject'
+        ? 'تم رفض المعاملة بنجاح'
+        : 'تم إكمال المهمة بنجاح',
+    data: toCompleteTaskResponse({
+      stage,
+      stageSnapshot,
+      variables,
+      signatureRequest: signingRequest,
+      idempotencyKey,
+      idempotentReplay,
+      workflowStatus,
+      templates
+    })
+  }
+}
+
+/**
+ * After a user task completes, Camunda may advance through SERVICE_TASK nodes.
+ * This function detects newly completed service tasks and runs their configured actions,
+ * storing results under transaction.data[stageCode].
+ */
 async function runServiceTaskActions ({
   processInstance,
   transaction,
@@ -69,6 +226,11 @@ async function runServiceTaskActions ({
   task,
   userId
 }) {
+  logStep('SERVICE_TASKS_CHECK', {
+    processInstanceId: processInstance.id,
+    transactionId: transaction.id
+  })
+
   const executedServiceTasks = new Set(
     transactionData._executedServiceTasks || []
   )
@@ -83,8 +245,13 @@ async function runServiceTaskActions ({
   )
 
   if (!newServiceTaskKeys.length) {
+    logStep('SERVICE_TASKS_NONE')
     return transactionData
   }
+
+  logStep('SERVICE_TASKS_FOUND', {
+    keys: newServiceTaskKeys.join(',')
+  })
 
   for (const taskKey of newServiceTaskKeys) {
     const serviceStage = await stageRepository.findByCodeAndProcess(
@@ -93,6 +260,7 @@ async function runServiceTaskActions ({
     )
 
     if (!serviceStage || serviceStage.type !== 'SERVICE_TASK') {
+      logStep('SERVICE_TASK_SKIP', { taskKey, reason: 'not_service_task' })
       executedServiceTasks.add(taskKey)
       continue
     }
@@ -103,9 +271,16 @@ async function runServiceTaskActions ({
     const actions = resolveActionsForStage(serviceStage, stageConfig)
 
     if (!actions.length) {
+      logStep('SERVICE_TASK_SKIP', { taskKey, reason: 'no_actions' })
       executedServiceTasks.add(taskKey)
       continue
     }
+
+    logStep('SERVICE_TASK_RUN', {
+      taskKey,
+      stageCode: serviceStage.code,
+      actionCount: actions.length
+    })
 
     const actionResults = await executeActions(actions, {
       task,
@@ -130,27 +305,60 @@ async function runServiceTaskActions ({
 
   transactionData._executedServiceTasks = [...executedServiceTasks]
 
+  logStep('SERVICE_TASKS_DONE')
+
   return transactionData
 }
 
-// ======================================================
-// COMPLETE TASK
-// ======================================================
+function buildCompleteTaskGuardKey (taskId) {
+  return `complete:${taskId}`
+}
 
+async function withDbTransaction (sequelize, parentTx, fn) {
+  if (parentTx) {
+    return fn(parentTx)
+  }
+
+  return sequelize.transaction(fn)
+}
+
+/**
+ * Public entry point for completing a Camunda user task.
+ *
+ * Responsibilities:
+ * - Account lock check
+ * - Idempotency / duplicate-submit protection
+ * - Delegates business logic to completeTaskCore
+ * - Commits or releases the operation guard
+ */
 async function completeTask ({
   taskId,
   userId,
   payload,
   clientMeta = {},
-  isAutoComplete = false
+  isAutoComplete = false,
+  requireSignature = false,
+  dbTransaction = null
 }) {
-  await securityGuardService.assertAccountNotLocked(userId)
+  logStep('START', {
+    taskId,
+    userId,
+    isAutoComplete,
+    requireSignature,
+    decision: payload?.decision || payload?.variables?.decision || ''
+  })
 
-  const idempotencyKey =
-    clientMeta.idempotencyKey || payload?.idempotency_key || null
+  // Step 1: Block locked accounts from completing tasks.
+  await securityGuardService.assertAccountNotLocked(userId)
+  logStep('SECURITY_OK', { userId })
+
+  const guardKey = !isAutoComplete ? buildCompleteTaskGuardKey(taskId) : null
+  const issuedIdempotencyKey = !isAutoComplete ? uuidv4() : null
+  const idempotencyKey = guardKey
 
   let guardContext = null
 
+  // Step 2: Return cached response if this request was already processed.
   if (!isAutoComplete && idempotencyKey) {
     const replay = operationGuardService.getReplay({
       scope: 'complete_task',
@@ -159,11 +367,13 @@ async function completeTask ({
     })
 
     if (replay) {
+      logStep('IDEMPOTENT_REPLAY_HIT', { taskId, userId })
       return replay
     }
   }
 
   try {
+    // Step 3: Run the main workflow inside the guard window.
     const result = await completeTaskCore({
       taskId,
       userId,
@@ -171,6 +381,9 @@ async function completeTask ({
       clientMeta,
       isAutoComplete,
       idempotencyKey,
+      requireSignature,
+      issuedIdempotencyKey,
+      dbTransaction,
       async acquireOperationGuard () {
         if (isAutoComplete) {
           return null
@@ -191,28 +404,55 @@ async function completeTask ({
         }
 
         guardContext = guard.context
+        logStep('GUARD_ACQUIRED', { taskId, userId })
         return guardContext
       }
     })
 
+    // Step 4: Persist successful result for idempotent replay.
     if (guardContext) {
+      logStep('GUARD_COMMIT', { taskId, userId })
       return operationGuardService.commit(guardContext, result)
     }
 
-    return {
-      ...result,
-      idempotent_replay: false
-    }
+    logStep('DONE', {
+      taskId,
+      workflowStatus: result?.data?.workflow_status || ''
+    })
+
+    return result
   } catch (error) {
     if (error.code === 'IDEMPOTENT_REPLAY') {
+      logStep('IDEMPOTENT_REPLAY_THROW', { taskId, userId })
       return error.result
     }
+
+    logStep('FAILED', {
+      taskId,
+      userId,
+      error: error.message,
+      code: error.code || ''
+    })
 
     operationGuardService.release(guardContext)
     throw error
   }
 }
 
+/**
+ * Core complete-task pipeline.
+ *
+ * High-level order:
+ * 1. Load task / process / transaction / stage
+ * 2. Validate lock, stage name, signature, and reject payload
+ * 3. Build stage snapshot (fields, files, templates, note)
+ * 4. Execute optional stage actions
+ * 5. Complete Camunda task (must succeed before DB writes)
+ * 6. Persist signature + transaction.data
+ * 7. Persist stage + transaction.data in one DB transaction
+ * 8. Branch: reject → cancel workflow + notify owner | approve → advance or finish
+ * 9. Release lock + invalidate caches
+ */
 async function completeTaskCore ({
   taskId,
   userId,
@@ -220,71 +460,68 @@ async function completeTaskCore ({
   clientMeta = {},
   isAutoComplete = false,
   idempotencyKey = null,
-  acquireOperationGuard = null
+  acquireOperationGuard = null,
+  requireSignature = false,
+  issuedIdempotencyKey = null,
+  dbTransaction = null
 }) {
-  /**
-   * ====================================================
-   * SUPPORTED PAYLOAD
-   * ====================================================
-   *
-   * {
-   *   fields: [],
-   *   files: [],
-   *   templates: [],
-   *   actions: [],
-   *   variables: {}
-   * }
-   *
-   * ----------------------------------------------------
-   * variables:
-   * ONLY FOR CAMUNDA GATEWAY ROUTING
-   *
-   * Example:
-   *
-   * {
-   *   variables: {
-   *     decision: 'over_50'
-   *   }
-   * }
-   *
-   * ----------------------------------------------------
-   * actions:
-   * - USER_TASK: body فقط (لا actions من الإعداد)
-   * - SERVICE_TASK: stage_configs.config_json.actions (تنفَّذ تلقائياً)
-   * }
-   *
-   * ====================================================
-   */
+  // ------------------------------------------------------------------
+  // Phase 1: Load Camunda task
+  // ------------------------------------------------------------------
+  logStep('PHASE_1_LOAD_TASK', { taskId })
 
-  // ====================================================
-  // GET TASK
-  // ====================================================
+  let task
 
-  const task = await camundaClient.getTaskById(taskId)
+  try {
+    task = await camundaClient.getTaskById(taskId)
+  } catch (err) {
+    throw await enrichCamundaTaskNotFoundError(
+      err,
+      taskId,
+      (id) => camundaClient.getTaskNotFoundDiagnostics(id)
+    )
+  }
 
   if (!task) {
     throw new Error('Task not found')
   }
 
-  // ====================================================
-  // GET PROCESS INSTANCE
-  // ====================================================
+  logStep('TASK_LOADED', {
+    taskId: task.id,
+    taskDefinitionKey: task.taskDefinitionKey,
+    processInstanceId: task.processInstanceId
+  })
+
+  // ------------------------------------------------------------------
+  // Phase 2: Load local process instance linked to Camunda
+  // ------------------------------------------------------------------
+  logStep('PHASE_2_LOAD_PROCESS_INSTANCE')
 
   const processInstance = await processInstanceRepository.findByCamundaId(
-    task.processInstanceId
+    task.processInstanceId,
+    dbTransaction
   )
 
   if (!processInstance) {
     throw new Error('Process instance not found')
   }
 
-  // ====================================================
-  // GET TRANSACTION
-  // ====================================================
+  logStep('PROCESS_INSTANCE_LOADED', {
+    processInstanceId: processInstance.id,
+    transactionId: processInstance.transaction_id,
+    status: processInstance.status
+  })
 
-  const transaction = await transactionClient.getTransactionById(
-    processInstance.transaction_id
-  )
+  // ------------------------------------------------------------------
+  // Phase 3: Load transaction (business record owned by the applicant)
+  // ------------------------------------------------------------------
+  logStep('PHASE_3_LOAD_TRANSACTION', {
+    transactionId: processInstance.transaction_id
+  })
+
+  const transaction = dbTransaction
+    ? await transactionRepository.findById(processInstance.transaction_id, dbTransaction)
+    : await transactionClient.getTransactionById(processInstance.transaction_id)
 
   if (!transaction) {
     throw new Error('Transaction not found')
@@ -292,17 +529,34 @@ async function completeTaskCore ({
 
   let currentVersion = payload.expected_version ?? transaction.version
 
+  logStep('TRANSACTION_LOADED', {
+    transactionId: transaction.id,
+    idProcess: transaction.id_process || '',
+    version: currentVersion,
+    status: transaction.status
+  })
+
+  // ------------------------------------------------------------------
+  // Phase 4: Ensure the caller holds the task lock (manual tasks only)
+  // ------------------------------------------------------------------
   if (!isAutoComplete) {
+    logStep('PHASE_4_ASSERT_TASK_LOCK', { taskId: task.id, userId })
+
     await assertTaskLockHolder({
       processInstanceId: processInstance.id,
       taskId: task.id,
       userId
     })
+
+    logStep('TASK_LOCK_OK', { taskId: task.id, userId })
+  } else {
+    logStep('PHASE_4_SKIP_TASK_LOCK', { reason: 'auto_complete' })
   }
 
-  // ====================================================
-  // GET CURRENT STAGE
-  // ====================================================
+  // ------------------------------------------------------------------
+  // Phase 5: Resolve workflow stage from task definition key
+  // ------------------------------------------------------------------
+  logStep('PHASE_5_LOAD_STAGE', { taskDefinitionKey: task.taskDefinitionKey })
 
   const stage = await stageRepository.findByCodeAndProcess(
     processInstance.process_definition_id,
@@ -313,18 +567,59 @@ async function completeTaskCore ({
     throw new Error('Stage not found')
   }
 
+  logStep('STAGE_LOADED', {
+    stageId: stage.id,
+    stageCode: stage.code,
+    stageName: stage.name,
+    stageType: stage.type
+  })
+
+  // Validate optional stage_name sent by the client matches the current stage.
+  if (
+    payload.stage_name &&
+    String(payload.stage_name).trim() !== String(stage.name).trim()
+  ) {
+    const error = new Error('stage_name does not match the current workflow stage')
+    error.code = 'VALIDATION_ERROR'
+    throw error
+  }
+
+  // ------------------------------------------------------------------
+  // Phase 6: Resolve decision (approve / reject) and stage config
+  // ------------------------------------------------------------------
+  logStep('PHASE_6_RESOLVE_DECISION')
+
+  const signingDecision = payload.decision
+    ? normalizeSigningDecision(payload.decision)
+    : null
+  const isReject = signingDecision === 'reject'
+
   const stageConfig = await stageConfigRepository.findByStageId(stage.id)
-  const needsSignature = requiresDigitalSignature(
-    stage,
-    payload,
-    stageConfig,
-    { isAutoComplete }
-  )
+  const needsSignature =
+    requireSignature ||
+    requiresDigitalSignature(
+      stage,
+      payload,
+      stageConfig,
+      { isAutoComplete }
+    )
+
+  logStep('DECISION_RESOLVED', {
+    decision: signingDecision || payload.decision || 'none',
+    isReject,
+    needsSignature
+  })
 
   let signingRequest = null
 
+  // ------------------------------------------------------------------
+  // Phase 7: Verify USB digital signature when required
+  // ------------------------------------------------------------------
   if (needsSignature) {
-    const challengeId = payload.signature?.challenge_id
+    logStep('PHASE_7_VERIFY_SIGNATURE')
+
+    const challengeId =
+      payload.signature?.challenge_id || payload.signature?.signing_id
     const signature = payload.signature?.signature
 
     if (!challengeId || !signature) {
@@ -333,396 +628,558 @@ async function completeTaskCore ({
       )
     }
 
-    if (!payload.decision) {
+    if (!signingDecision) {
       throw new Error(
         'decision is required when completing a task with digital signature'
       )
     }
 
+    if (isReject && !String(payload.rejection_reason || '').trim()) {
+      const error = new Error('rejection_reason is required when decision is reject')
+      error.code = 'VALIDATION_ERROR'
+      throw error
+    }
+
     signingRequest = {
       challengeId,
       signature,
-      decision: payload.decision
+      decision: signingDecision
     }
 
     await verifySignatureForComplete({
       challengeId,
       signature,
       userId,
-      decision: payload.decision,
-      clientMeta
+      decision: signingDecision,
+      clientMeta,
+      expectedTaskId: task.id
     })
+
+    logStep('SIGNATURE_VERIFIED', { challengeId, decision: signingDecision })
+
+    if (typeof acquireOperationGuard === 'function' && idempotencyKey) {
+      await acquireOperationGuard()
+    }
+  } else if (typeof acquireOperationGuard === 'function' && idempotencyKey) {
+    logStep('PHASE_7_SKIP_SIGNATURE', { reason: 'not_required' })
+    await acquireOperationGuard()
   }
 
-  // ====================================================
-  // STAGE SNAPSHOT
-  // ====================================================
+  // ------------------------------------------------------------------
+  // Phase 8: Build stage snapshot to store under transaction.data[stage.code]
+  // ------------------------------------------------------------------
+  logStep('PHASE_8_BUILD_STAGE_SNAPSHOT', { stageCode: stage.code })
 
-  /**
-   * THIS WILL BE SAVED INSIDE:
-   *
-   * transaction.data[stage.code]
-   *
-   * Example:
-   *
-   * {
-   *   SUBMISSION_STAGE: {
-   *     fields: [],
-   *     files: [],
-   *     templates: [],
-   *     actions: []
-   *   }
-   * }
-   */
-
-  const stageSnapshot = {
-    fields: [],
-    files: [],
-    templates: [],
-    actions: []
-  }
-
-  // ====================================================
-  // HANDLE FIELDS
-  // ====================================================
-
-  /**
-   * Example:
-   *
-   * {
-   *   name: 'citizen_name',
-   *   value: 'روان سرحان'
-   * }
-   */
+  const collectedFields = []
+  const collectedFiles = []
+  const collectedTemplates = []
 
   if (Array.isArray(payload.fields)) {
     for (const field of payload.fields) {
-      stageSnapshot.fields.push({
-        name: field.name,
-
-        value: field.value 
+      collectedFields.push({
+        key: field.key || field.name,
+        value: field.value
       })
     }
   }
 
-  // ====================================================
-  // HANDLE FILES
-  // ====================================================
+  if (Array.isArray(payload.files) && payload.files.length) {
+    logStep('FILES_REGISTER', { count: payload.files.length })
 
-  /**
-   * Example:
-   *
-   * {
-   *   name: 'criminal_record',
-   *   path: '/uploads/a.pdf'
-   * }
-   */
+    const registeredFiles = await registerTransactionFiles({
+      transactionId: transaction.id,
+      files: payload.files,
+      userId
+    })
 
-  if (Array.isArray(payload.files)) {
-    for (const file of payload.files) {
-      stageSnapshot.files.push(buildStoredFileEntry(file, userId))
+    collectedFiles.push(...registeredFiles)
+
+    logStep('FILES_REGISTERED', { count: registeredFiles.length })
+  }
+
+  // ------------------------------------------------------------------
+  // templates → document_instance (USER_TASK) — PDF يُولَّد لاحقاً في SERVICE_TASK
+  // مثال body: templates: [{ id: 1, values: { employee: "...", job: "..." } }]
+  // يُخزَّن في history: { id, document_instance_id, values }
+  // ------------------------------------------------------------------
+  if (Array.isArray(payload.templates) && payload.templates.length) {
+    logStep('TEMPLATES_REGISTER', { count: payload.templates.length })
+
+    const registeredTemplates = await registerTemplatesForTransaction({
+      transactionId: transaction.id,
+      templates: payload.templates
+    })
+
+    collectedTemplates.push(...registeredTemplates)
+
+    logStep('TEMPLATES_REGISTERED', { count: registeredTemplates.length })
+  }
+
+  const stageSnapshot = buildStoredStageData(
+    {
+      stage_name: payload.stage_name || stage.name,
+      fields: collectedFields,
+      files: collectedFiles,
+      templates: collectedTemplates,
+      variables: payload.variables || {},
+      decision: signingDecision || payload.decision || null,
+      note: payload.note ?? payload.notes ?? ''
+    },
+    {
+      stageName: stage.name,
+      configJson: stageConfig?.config_json || null
     }
+  )
+
+  if (isReject) {
+    stageSnapshot.rejection_reason = String(payload.rejection_reason).trim()
   }
 
-  // ====================================================
-  // HANDLE TEMPLATES
-  // ====================================================
+  logStep('STAGE_SNAPSHOT_BUILT', {
+    stageCode: stage.code,
+    widgetCount: Array.isArray(stageSnapshot.widgets)
+      ? stageSnapshot.widgets.length
+      : 0,
+    fieldCount: collectedFields.length,
+    fileCount: collectedFiles.length,
+    templateCount: collectedTemplates.length,
+    decision: stageSnapshot.decision || '',
+    hasNote: Boolean(stageSnapshot.note)
+  })
 
-  /**
-   * Example:
-   *
-   * {
-   *   template_id: 1,
-   *   values: {
-   *     full_name: 'روان'
-   *   }
-   * }
-   */
-
-  if (Array.isArray(payload.templates)) {
-    for (const template of payload.templates) {
-      stageSnapshot.templates.push({
-        template_id: template.template_id,
-
-        values: template.values || {}
-      })
-    }
-  }
-
-  if (payload.variables && Object.keys(payload.variables).length) {
-    stageSnapshot.variables = payload.variables
-  }
-
-  if (payload.decision) {
-    stageSnapshot.decision = payload.decision
-  }
-
-  // ====================================================
-  // HANDLE ACTIONS
-  // ====================================================
-
-  /**
-   * Example:
-   *
-   * {
-   *   name: 'SEND_EMAIL',
-   *   to_organization_department_roles_id: 2,
-   *   message: 'hello'
-   * }
-   *
-   * or:
-   *
-   * {
-   *   name: 'SEND_EMAIL',
-   *   payload: {
-   *     to_organization_department_roles_id: 2,
-   *     message: 'hello'
-   *   }
-   * }
-   *
-   * ACTIONS != VARIABLES
-   *
-   * ACTIONS:
-   * execute business logic
-   *
-   * VARIABLES:
-   * route camunda gateway
-   */
+  // ------------------------------------------------------------------
+  // Phase 9: Execute stage actions
+  // USER_TASK: payload.actions (اختياري)
+  // SERVICE_TASK: config_json.actions تلقائياً — مثل GENERATE_PDF, SEND_EMAIL
+  // ------------------------------------------------------------------
+  logStep('PHASE_9_EXECUTE_ACTIONS', { stageType: stage.type })
 
   if (Array.isArray(payload.actions) && payload.actions.length) {
-    const actionResults = await executeActions(payload.actions, {
+    await executeActions(payload.actions, {
       task,
       transaction,
       processInstance,
       stage,
       userId
     })
-
-    stageSnapshot.actions.push(...actionResults)
   } else if (stage.type === 'SERVICE_TASK') {
     const autoActions = resolveActionsForStage(stage, stageConfig)
 
     if (autoActions.length) {
-      const actionResults = await executeActions(autoActions, {
+      await executeActions(autoActions, {
         task,
         transaction,
         processInstance,
         stage,
         userId
       })
+    } else {
+      logStep('ACTIONS_SKIP', { reason: 'no_actions_configured' })
+    }
+  } else {
+    logStep('ACTIONS_SKIP', { reason: 'user_task_no_payload_actions' })
+  }
 
-      stageSnapshot.actions.push(...actionResults)
+  // ------------------------------------------------------------------
+  // Phase 10: Prepare Camunda routing variables (gateway decision)
+  // ------------------------------------------------------------------
+  logStep('PHASE_10_PREPARE_CAMUNDA_VARIABLES')
+
+  const variables = {}
+  const routingDecision = isReject
+    ? 'reject'
+    : (
+      payload.variables?.decision ||
+      signingDecision ||
+      payload.decision ||
+      'approve'
+    )
+
+  if (isReject) {
+    variables.decision = {
+      value: 'reject'
+    }
+  } else if (routingDecision) {
+    variables.decision = {
+      value: routingDecision
     }
   }
 
-  // ====================================================
-  // MERGE INTO TRANSACTION DATA
-  // ====================================================
+  logStep('CAMUNDA_VARIABLES_READY', { decision: routingDecision })
 
-  /**
-   * FINAL RESULT:
-   *
-   * {
-   *   SUBMISSION_STAGE: {},
-   *   APPROVAL_STAGE: {}
-   * }
-   */
+  // ------------------------------------------------------------------
+  // Phase 11: Complete Camunda task BEFORE any DB persistence
+  // (If Camunda fails, nothing is written locally.)
+  // ------------------------------------------------------------------
+  logStep('PHASE_11_ASSERT_TASK_STILL_ACTIVE', { taskId: task.id })
 
-  // ====================================================
-  // PREPARE CAMUNDA VARIABLES
-  // ====================================================
+  try {
+    await camundaClient.getTaskById(task.id)
+  } catch (err) {
+    if (err.expose && err.details && typeof err.details === 'object') {
+      err.details.stage_name = payload?.stage_name || stage?.name || null
+      err.details.stage_code = stage?.code || null
+      err.details.hint =
+        'المهمة كانت نشطة عند بدء الطلب لكن اختفت قبل الإكمال — غالباً إكمال مكرر أو طلب موازٍ.'
+    }
 
-  const variables = {}
-
-  if (payload.variables) {
-    Object.entries(payload.variables).forEach(([key, value]) => {
-      variables[key] = {
-        value
-      }
-    })
+    throw err
   }
 
-  // ====================================================
-  // COMPLETE TASK IN CAMUNDA (before any DB persist)
-  // ====================================================
+  logStep('PHASE_11_COMPLETE_CAMUNDA_TASK', { taskId: task.id })
 
-  await camundaClient.completeTask(task.id, variables)
+  try {
+    await camundaClient.completeTask(task.id, variables)
+  } catch (err) {
+    if (err.expose && err.details && typeof err.details === 'object') {
+      err.details.stage_name = payload?.stage_name || stage?.name || null
+      err.details.stage_code = stage?.code || null
+    }
 
-  // ====================================================
-  // PERSIST STAGE + SIGNATURE (only after Camunda succeeds)
-  // ====================================================
-
-  let digitalSignatureRecord = null
-
-  if (signingRequest) {
-    digitalSignatureRecord = await persistVerifiedSignature({
-      challengeId: signingRequest.challengeId,
-      signature: signingRequest.signature,
-      userId,
-      clientMeta
-    })
-
-    stageSnapshot.digital_signature =
-      toPublicSignatureRecord(digitalSignatureRecord)
+    throw err
   }
+
+  logStep('CAMUNDA_TASK_COMPLETED', { taskId: task.id })
+
+  // ------------------------------------------------------------------
+  // Phase 13: Merge stage snapshot into transaction.data (in memory)
+  // ------------------------------------------------------------------
+  logStep('PHASE_13_MERGE_TRANSACTION_DATA', { stageCode: stage.code })
 
   let transactionData = {
     ...(transaction.data || {})
   }
 
-  transactionData[stage.code] = {
-    ...stageSnapshot,
-    completed_by: userId,
-    completed_at: new Date()
-  }
-
-  if (digitalSignatureRecord) {
-    appendSignatureToTransactionData(transactionData, digitalSignatureRecord)
-  }
-
-  transactionData = await runServiceTaskActions({
-    processInstance,
-    transaction,
-    transactionData,
-    task,
-    userId
+  const completedAt = new Date()
+  const persistAuthSubmissionAtRoot = shouldPersistAuthSubmissionAtRoot({
+    isAutoComplete,
+    stage
   })
 
-  const updatedTransaction = await transactionClient.updateData(
-    transaction.id,
-    transactionData,
-    currentVersion
-  )
-
-  currentVersion = updatedTransaction.version
-
-  if (digitalSignatureRecord) {
-    await appendIntegrityLink({
-      transactionId: transaction.id,
-      digitalSignatureId: digitalSignatureRecord.digital_signature_id,
-      challengeId: signingRequest?.challengeId || null,
-      stageId: stage.id,
+  if (persistAuthSubmissionAtRoot) {
+    logStep('PHASE_13_AUTH_ROOT_ONLY', {
       stageCode: stage.code,
-      stageData: transactionData[stage.code],
-      signatureHash: digitalSignatureRecord.signed_hash,
-      signedAt: digitalSignatureRecord.signed_at
+      reason: 'auth_auto_complete_skip_activity_key'
     })
+
+    transactionData.completed_by = userId
+    transactionData.completed_at = completedAt
+
+    if (Object.prototype.hasOwnProperty.call(transactionData, stage.code)) {
+      delete transactionData[stage.code]
+    }
+  } else {
+    transactionData[stage.code] = {
+      ...stageSnapshot,
+      ...(payload.variables &&
+        typeof payload.variables === 'object' &&
+        Object.keys(payload.variables).length
+        ? { variables: payload.variables }
+        : {}),
+      completed_by: userId,
+      completed_at: completedAt
+    }
   }
 
-  await outboxRepository.create({
-    event_type: EVENTS.PROCESSINSTANCESTAGE_CREATED,
-
-    payload: {
-      transactionId: transaction.id,
-
-      processInstanceId: processInstance.id,
-
-      taskId: task.id,
-
-      stageId: stage.id,
-
-      stageCode: stage.code,
-
-      stageName: stage.name,
-
-      completedBy: userId,
-
-      status: 'completed',
-
-      data: transactionData[stage.code]
-    }
-  })
-
-  // ====================================================
-  // GET NEXT TASK
-  // ====================================================
-
-  const nextTasks = await camundaClient.getActiveTasks(
-    processInstance.camunda_process_instance_id
-  )
-
-  const nextTask = nextTasks?.[0] || null
-
-  // ====================================================
-  // HANDLE NEXT STAGE
-  // ====================================================
-
-  if (nextTask) {
-    const nextStage = await stageRepository.findByCodeAndProcess(
-      processInstance.process_definition_id,
-      nextTask.taskDefinitionKey
-    )
-
-    // ================================================
-    // UPDATE PROCESS INSTANCE
-    // ================================================
-
-    await processInstanceRepository.update(processInstance.id, {
-      current_stage_id: nextStage?.id || null,
-
-      status: 'running'
+  if (!isReject) {
+    transactionData = await runServiceTaskActions({
+      processInstance,
+      transaction,
+      transactionData,
+      task,
+      userId
     })
   } else {
-    // ==================================================
-    // WORKFLOW FINISHED
-    // ==================================================
+    logStep('SERVICE_TASKS_SKIP', { reason: 'reject_path' })
+  }
 
-    await processInstanceRepository.update(processInstance.id, {
-      status: 'completed',
+  // ------------------------------------------------------------------
+  // Phases 12–16: DB persistence — commit together or rollback together
+  // ------------------------------------------------------------------
+  let digitalSignatureRecord = null
+  const sequelize = processInstanceRepository.getSequelize()
+  const stagePersistenceStatus = isReject ? 'rejected' : 'completed'
 
-      current_stage_id: null
+  logStep('PHASE_12_16_DB_TRANSACTION', {
+    transactionId: transaction.id,
+    stageCode: stage.code,
+    status: stagePersistenceStatus
+  })
+
+  await withDbTransaction(sequelize, dbTransaction, async (dbTx) => {
+    if (signingRequest) {
+      logStep('PHASE_12_PERSIST_SIGNATURE', {
+        challengeId: signingRequest.challengeId
+      })
+
+      digitalSignatureRecord = await persistVerifiedSignature({
+        challengeId: signingRequest.challengeId,
+        signature: signingRequest.signature,
+        userId,
+        clientMeta,
+        dbTransaction: dbTx
+      })
+
+      stageSnapshot.digital_signature =
+        toPublicSignatureRecord(digitalSignatureRecord)
+
+      appendSignatureToTransactionData(transactionData, digitalSignatureRecord)
+
+      logStep('SIGNATURE_PERSISTED', {
+        digitalSignatureId: digitalSignatureRecord.digital_signature_id
+      })
+    } else {
+      logStep('PHASE_12_SKIP_SIGNATURE_PERSIST', { reason: 'no_signing_request' })
+    }
+
+    logStep('PHASE_14_SAVE_TRANSACTION_DATA', {
+      transactionId: transaction.id,
+      version: currentVersion
     })
 
-    await transactionClient.updateStatus(transaction.id, 'completed')
-
-    transactionData._digital_signatures_ledger =
-      await buildTransactionSignatureLedger(transaction.id)
-
-    await transactionClient.updateData(
+    const updatedTransaction = await transactionRepository.updateDataOptimistic(
       transaction.id,
       transactionData,
-      currentVersion
+      currentVersion,
+      dbTx
     )
 
-    // ================================================
-    // WORKFLOW COMPLETED EVENT
-    // ================================================
+    currentVersion = updatedTransaction.version
 
-    await outboxRepository.create({
-      event_type: EVENTS.WORKFLOW_COMPLETED,
+    logStep('TRANSACTION_DATA_SAVED', {
+      transactionId: transaction.id,
+      version: currentVersion
+    })
 
-      payload: {
+    if (digitalSignatureRecord) {
+      logStep('PHASE_15_APPEND_INTEGRITY_LINK')
+
+      await appendIntegrityLink({
         transactionId: transaction.id,
+        digitalSignatureId: digitalSignatureRecord.digital_signature_id,
+        challengeId: signingRequest?.challengeId || null,
+        stageId: stage.id,
+        stageCode: stage.code,
+        stageData: transactionData[stage.code],
+        signatureHash: digitalSignatureRecord.signed_hash,
+        signedAt: digitalSignatureRecord.signed_at,
+        dbTransaction: dbTx
+      })
 
-        processInstanceId: processInstance.id
+      logStep('INTEGRITY_LINK_APPENDED')
+    }
+
+    logStep('PHASE_16_CREATE_PROCESS_STAGE', { status: stagePersistenceStatus })
+
+    const processStageData = persistAuthSubmissionAtRoot
+      ? buildRootSubmissionSnapshot(transactionData)
+      : transactionData[stage.code]
+
+    await createProcessStage({
+      transactionId: transaction.id,
+      stageCode: stage.code,
+      stageName: stage.name,
+      status: stagePersistenceStatus,
+      data: processStageData,
+      assigned_to: userId
+    }, { transaction: dbTx })
+
+    logStep('PROCESS_STAGE_CREATED', { status: stagePersistenceStatus })
+  })
+
+  if (signingRequest && digitalSignatureRecord) {
+    await securityGuardService.recordSuccess({
+      userId,
+      action: 'TX_SIGN_VERIFIED',
+      resourceType: 'task',
+      resourceId: task.id,
+      ipAddress: clientMeta.ip,
+      userAgent: clientMeta.userAgent,
+      details: {
+        signingId: signingRequest.challengeId,
+        digitalSignatureId: digitalSignatureRecord.digital_signature_id,
+        stageCode: stage.code
       }
     })
   }
 
-  // ====================================================
-  // RESPONSE
-  // ====================================================
+  const responseTemplates = await enrichTemplatesForResponse(stageSnapshot.templates)
 
+  let workflowStatus = 'running'
+  let nextStageId = null
+
+  // ------------------------------------------------------------------
+  // Phase 17: Reject path — cancel Camunda, update status, notify owner
+  // ------------------------------------------------------------------
+  if (isReject) {
+    logStep('PHASE_17_REJECT_FLOW_START', { transactionId: transaction.id })
+
+    let activeTasks = await camundaClient.getActiveTasks(
+      processInstance.camunda_process_instance_id
+    )
+
+    if (activeTasks.length) {
+      logStep('REJECT_CANCEL_CAMUNDA', {
+        camundaProcessInstanceId: processInstance.camunda_process_instance_id,
+        activeTaskCount: activeTasks.length
+      })
+
+      await camundaClient.deleteProcessInstance(
+        processInstance.camunda_process_instance_id
+      )
+      activeTasks = []
+    }
+
+    await withDbTransaction(sequelize, dbTransaction, async (dbTx) => {
+      await processInstanceRepository.update(processInstance.id, {
+        status: 'cancelled',
+        current_stage_id: null
+      }, dbTx)
+
+      await transactionRepository.updateStatus(transaction.id, 'rejected', dbTx)
+
+      transactionData._digital_signatures_ledger =
+        await buildTransactionSignatureLedger(transaction.id)
+
+      await transactionRepository.updateDataOptimistic(
+        transaction.id,
+        transactionData,
+        currentVersion,
+        dbTx
+      )
+    })
+
+    workflowStatus = 'rejected'
+
+    logStep('REJECT_FLOW_DONE', {
+      transactionId: transaction.id,
+      workflowStatus
+    })
+
+    // Fire-and-forget Firebase push to the transaction owner (applicant).
+    notifyTransactionOwnerOnReject({
+      transaction,
+      stage,
+      note: stageSnapshot.note || '',
+      rejectionReason: stageSnapshot.rejection_reason || '',
+      processInstanceId: processInstance.id,
+      sentByUserId: userId
+    }).catch(() => {})
+  } else {
+    // ------------------------------------------------------------------
+    // Phase 17: Approve path — advance to next stage or finish workflow
+    // ------------------------------------------------------------------
+    logStep('PHASE_17_APPROVE_FLOW_START')
+
+    const nextTasks = await camundaClient.getActiveTasks(
+      processInstance.camunda_process_instance_id
+    )
+
+    const nextTask = nextTasks?.[0] || null
+
+    if (nextTask) {
+      const nextStage = await stageRepository.findByCodeAndProcess(
+        processInstance.process_definition_id,
+        nextTask.taskDefinitionKey
+      )
+
+      await processInstanceRepository.update(processInstance.id, {
+        current_stage_id: nextStage?.id || null,
+        status: 'running'
+      }, dbTransaction)
+
+      nextStageId = nextStage?.id || null
+
+      logStep('APPROVE_ADVANCED', {
+        nextTaskId: nextTask.id,
+        nextStageCode: nextStage?.code || '',
+        workflowStatus: 'running'
+      })
+    } else {
+      logStep('APPROVE_WORKFLOW_FINISHING', { transactionId: transaction.id })
+
+      await withDbTransaction(sequelize, dbTransaction, async (dbTx) => {
+        await processInstanceRepository.update(processInstance.id, {
+          status: 'completed',
+          current_stage_id: null
+        }, dbTx)
+
+        await transactionRepository.updateStatus(transaction.id, 'completed', dbTx)
+
+        transactionData._digital_signatures_ledger =
+          await buildTransactionSignatureLedger(transaction.id)
+
+        await transactionRepository.updateDataOptimistic(
+          transaction.id,
+          transactionData,
+          currentVersion,
+          dbTx
+        )
+      })
+
+      workflowStatus = 'completed'
+
+      logStep('WORKFLOW_COMPLETED', {
+        transactionId: transaction.id,
+        processInstanceId: processInstance.id
+      })
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // Phase 18: Release task lock (manual tasks only)
+  // ------------------------------------------------------------------
   if (!isAutoComplete) {
+    logStep('PHASE_18_RELEASE_TASK_LOCK', { taskId: task.id, userId })
+
     await releaseTaskLock({
       processInstanceId: processInstance.id,
       taskId: task.id,
       userId
     })
+
+    logStep('TASK_LOCK_RELEASED', { taskId: task.id, userId })
   }
 
-  return {
-    message: 'Task completed successfully',
-    data: toCompleteTaskResponse({
-      task,
-      stage,
-      nextTask,
-      transactionData
-    })
+  // ------------------------------------------------------------------
+  // Phase 19: Invalidate employee task caches
+  // ------------------------------------------------------------------
+  logStep('PHASE_19_INVALIDATE_CACHES', { userId, workflowStatus })
+
+  const stageIdsToInvalidate = [stage.id, nextStageId].filter(Boolean)
+  const affectedUserIds = await employeeTaskRepository.getUserIdsForStageIds(
+    stageIdsToInvalidate
+  )
+  const userIdsToInvalidate = new Set([userId, ...affectedUserIds])
+
+  for (const affectedUserId of userIdsToInvalidate) {
+    invalidateEmployeeTasksForUser(affectedUserId).catch(() => {})
   }
+
+  invalidateEmployeeTaskStats().catch(() => {})
+
+  if (workflowStatus === 'completed' || isReject) {
+    deleteKeysByPattern('employee-tasks:*:depts:*').catch(() => {})
+  }
+
+  logStep('CORE_DONE', {
+    taskId: task.id,
+    transactionId: transaction.id,
+    stageCode: stage.code,
+    workflowStatus
+  })
+
+  return buildCompleteResponse({
+    stage,
+    stageSnapshot,
+    variables: payload.variables || (routingDecision ? { decision: routingDecision } : null),
+    signingRequest,
+    idempotencyKey: issuedIdempotencyKey,
+    idempotentReplay: false,
+    workflowStatus,
+    templates: responseTemplates
+  })
 }
-////////////////////////////////////////////////////////////////////////////////
-
 
 module.exports = {
   completeTask

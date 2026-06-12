@@ -1,14 +1,51 @@
 'use strict'
 
+const {
+  buildApplicantName,
+  resolveDepartmentName
+} = require('../utils/employeeTaskStatus')
+const {
+  normalizeProcessPriority,
+  formatTransactionDate
+} = require('../utils/employeeTaskFormatters')
+
 class EmployeeTaskOutputDTO {
-  constructor (processInstance, activeTask) {
-    this.processName = processInstance?.process_definition?.name ?? null
-    this.processPriority = processInstance?.process_definition?.priority ?? 0
-    this.taskId = activeTask?.id ?? null
-    this.taskName = activeTask?.name ?? null
-    this.taskDefinitionKey = activeTask?.taskDefinitionKey ?? null
-    this.createdAt = activeTask?.created || processInstance?.created_at || null
-    this.HestoryData = processInstance?.transaction?.data ?? null
+  constructor ({
+    processInstance,
+    activeTask,
+    progressPercent,
+    employeeStatus,
+    stageNameOverride = null
+  }) {
+    const transaction = processInstance?.transaction
+    const processDefinition = processInstance?.process_definition
+    const typeTrans = processDefinition?.type_trans
+    const user = transaction?.user
+    const currentStage = processInstance?.current_stage
+
+    const stageName =
+      stageNameOverride ??
+      activeTask?.name ??
+      currentStage?.name ??
+      null
+
+    const departmentName = resolveDepartmentName(currentStage)
+    const processDefinitionName = processDefinition?.name ?? null
+
+    this.transaction_id = transaction?.id ?? null
+    this.transaction_number = transaction?.id_process ?? null
+    this.type = typeTrans?.name ?? processDefinitionName
+    this.type_code = typeTrans?.code ?? null
+    this.applicant_name = buildApplicantName(transaction, user)
+    this.department = departmentName || processDefinitionName || null
+    this.date = formatTransactionDate(transaction?.created_at)
+    this.progress_percent = progressPercent ?? 0
+    this.status = employeeStatus?.status ?? null
+    this.status_label = employeeStatus?.status_label ?? null
+    this.task_id = activeTask?.id ?? null
+    this.task_name = stageName
+    this.process_name = processDefinitionName
+    this.process_priority = normalizeProcessPriority(processDefinition?.priority)
   }
 }
 

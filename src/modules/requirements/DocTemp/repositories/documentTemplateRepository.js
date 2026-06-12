@@ -1,4 +1,4 @@
-const { DocumentTemplate } = require('../../../../entities')
+const { DocumentTemplate, TypeDoc } = require('../../../../entities')
 
 async function findById (id) {
   return DocumentTemplate.findByPk(id)
@@ -6,13 +6,27 @@ async function findById (id) {
 
 async function findOneActiveById (id) {
   return DocumentTemplate.findOne({
-    where: { id, is_active: true }
+    where: { id, is_active: true },
+    include: [
+      {
+        model: TypeDoc,
+        as: 'type_doc',
+        attributes: ['id', 'name']
+      }
+    ]
   })
 }
 
 async function findAllActive () {
   return DocumentTemplate.findAll({
     where: { is_active: true },
+    include: [
+      {
+        model: TypeDoc,
+        as: 'type_doc',
+        attributes: ['id', 'name']
+      }
+    ],
     order: [['id', 'DESC']]
   })
 }

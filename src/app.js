@@ -62,6 +62,9 @@ app.use('/api/date-pickers', datePickerRoutes)
 const filePickerRoutes = require('./modules/requirements/file_picker/routes/filePicker')
 app.use('/api/file-pickers', filePickerRoutes)
 
+const typeDocRoutes = require('./modules/requirements/typeDoc/routes/typeDoc')
+app.use('/api/typeDoc', typeDocRoutes)
+
 const typeProcessRoutes = require('./modules/workflow/typeProcess/routes/typeProcess')
 app.use('/api/typeProcess', typeProcessRoutes)
 
@@ -126,6 +129,13 @@ app.use(
 
 const transactionRoutes = require('./modules/transaction/transaction/routes/transaction')
 app.use('/api/transaction', transactionRoutes)
+
+const documentUploadRoutes =
+  require('./modules/transaction/document/routes/documentUpload')
+app.use('/api/transaction/files', documentUploadRoutes)
+
+const notificationRoutes = require('./modules/transaction/notification/routes/notification')
+app.use('/api/notifications', notificationRoutes)
 
 const internalTransactionRoutes =
   require('./modules/transaction/transaction/routes/transactionInternal')

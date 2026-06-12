@@ -50,7 +50,7 @@ class DigitalSignatureRepository {
           model: DocumentSignature,
           as: 'document',
           where: { transaction_id: transactionId },
-          attributes: ['id', 'transaction_id', 'file_path', 'file_hash'],
+          attributes: ['id', 'transaction_id', 'file_path', 'type_doc_id'],
           required: true
         },
         {

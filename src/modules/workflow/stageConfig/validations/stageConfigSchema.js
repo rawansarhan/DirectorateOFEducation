@@ -1,6 +1,7 @@
 'use strict'
 
 const Joi = require('joi')
+const { pickTypeDocIdFromObject } = require('../../../../core/utils/typeDocId')
 
 const WIDGET_TYPES = [
   'text_field',
@@ -93,7 +94,14 @@ const filePickerDataSchema = Joi.object({
     )
     .min(1)
     .required(),
-  allow_multiple: Joi.boolean().default(false)
+  allow_multiple: Joi.boolean().default(false),
+  type_doc_id: Joi.number().integer().positive().required().messages({
+    'any.required': 'type_doc_id مطلوب في file_picker',
+    'number.base': 'type_doc_id في file_picker يجب أن يكون رقماً صحيحاً',
+    'number.positive': 'type_doc_id في file_picker يجب أن يكون رقماً موجباً'
+  }),
+  type_Doc_id: Joi.any().strip(),
+  TypeDoc_id: Joi.any().strip()
 }).unknown(false)
 
 const widgetSchema = Joi.object({
@@ -117,7 +125,30 @@ const templateItemSchema = Joi.object({
 
 const stageActionSchema = Joi.object({
   name: Joi.string().valid(...STAGE_ACTION_NAMES).required(),
-  payload: Joi.object().default({})
+  payload: Joi.when('name', {
+    is: 'SEND_NOTIFICATION',
+    then: Joi.object({
+      message: Joi.string().trim().min(1).max(2000).required(),
+      title: Joi.string().trim().max(255).allow('', null).optional(),
+      subject: Joi.string().trim().max(255).allow('', null).optional(),
+      type: Joi.string().trim().max(100).default('workflow_notification'),
+      to: Joi.number().integer().positive().optional(),
+      to_organization_department_roles_id: Joi.number().integer().positive().optional(),
+      to_camunda_group_key: Joi.string().trim().max(64).optional(),
+      to_organization_department_roles_camunda_group_key: Joi.string().trim().max(64).optional()
+    })
+      .or(
+        'to',
+        'to_organization_department_roles_id',
+        'to_camunda_group_key',
+        'to_organization_department_roles_camunda_group_key'
+      )
+      .messages({
+        'object.missing':
+          'SEND_NOTIFICATION يحتاج to أو to_camunda_group_key (مثل AUTH لصاحب المعاملة)'
+      }),
+    otherwise: Joi.object().default({})
+  }).default({})
 }).unknown(true)
 
 const stageConfigJsonSchema = Joi.object({
@@ -208,8 +239,63 @@ function validateWidgetsBusinessRules (widgets = []) {
   return null
 }
 
+function normalizeFilePickerWidgetData (widgets = []) {
+  return widgets.map(widget => {
+    if (widget?.widget_type !== 'file_picker' || !widget.data) {
+      return widget
+    }
+
+    const typeDocId = pickTypeDocIdFromObject(widget.data)
+
+    return {
+      ...widget,
+      data: {
+        ...widget.data,
+        type_doc_id: typeDocId,
+        type_Doc_id: undefined,
+        TypeDoc_id: undefined
+      }
+    }
+  })
+}
+
 function validateStageConfigJson (value) {
-  const { error, value: validated } = stageConfigJsonSchema.validate(value, {
+  const normalizedInput = {
+    ...value,
+    widgets: normalizeFilePickerWidgetData(value?.widgets || [])
+  }
+
+  const { error, value: validated } = stageConfigJsonSchema.validate(normalizedInput, {
+    abortEarly: false,
+    stripUnknown: true
+  })
+
+  if (error) {
+    return { error, value: null }
+  }
+
+  const widgetsError = validateWidgetsBusinessRules(validated.widgets)
+
+  if (widgetsError) {
+    return {
+      error: {
+        details: [{ message: widgetsError }]
+      },
+      value: null
+    }
+  }
+
+  return { error: null, value: validated }
+}
+
+const documentFormConfigJsonSchema = Joi.object({
+  form_id: Joi.string().trim().min(1).max(128).required(),
+  form_name: Joi.string().trim().min(1).max(255).required(),
+  widgets: Joi.array().items(widgetSchema).default([])
+}).unknown(false)
+
+function validateDocumentFormConfigJson (value) {
+  const { error, value: validated } = documentFormConfigJsonSchema.validate(value, {
     abortEarly: false,
     stripUnknown: true
   })
@@ -238,6 +324,9 @@ module.exports = {
   STAGE_ACTION_NAMES,
   stageActionSchema,
   stageConfigJsonSchema,
+  documentFormConfigJsonSchema,
   widgetSchema,
-  validateStageConfigJson
+  validateStageConfigJson,
+  validateDocumentFormConfigJson,
+  validateWidgetsBusinessRules
 }

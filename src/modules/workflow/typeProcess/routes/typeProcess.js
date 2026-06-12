@@ -14,6 +14,9 @@ const { authMiddleware ,authorize } = require('../../../../core/middleware/authM
  * /api/typeProcess:
  *   post:
  *     summary: إنشاء نوع عملية جديد
+ *     description: |
+ *       ينشئ نوع معاملة جديد. يجب إرسال `name` و `code`.
+ *       `code`: 2-20 حرف (A-Z, 0-9, _) — يُستخدم لاحقاً في `id_process`.
  *     tags: [TypeProcess]
  *     security:
  *       - bearerAuth: []

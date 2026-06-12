@@ -16,14 +16,15 @@ function successResponse (res, {
 function errorResponse (res, {
   statusCode = 400,
   message,
-  error
+  error,
+  data = null
 }) {
   return res.status(statusCode).json({
     success: false,
     status_code: statusCode,
     message,
     error: error || message,
-    data: null
+    data
   })
 }
 
