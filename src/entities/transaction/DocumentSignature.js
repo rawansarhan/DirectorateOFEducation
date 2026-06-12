@@ -1,21 +1,24 @@
-'use strict';
+'use strict'
 
 module.exports = (sequelize, DataTypes) => {
-
   class DocumentSignature extends sequelize.Sequelize.Model {
-    static associate(models) {
-
+    static associate (models) {
       DocumentSignature.belongsTo(models.Transaction, {
         foreignKey: 'transaction_id',
         as: 'transaction',
-        onDelete: 'CASCADE',
-      });
+        onDelete: 'CASCADE'
+      })
+
+      DocumentSignature.belongsTo(models.TypeDoc, {
+        foreignKey: 'type_doc_id',
+        as: 'type_doc',
+        onDelete: 'RESTRICT'
+      })
 
       DocumentSignature.hasMany(models.DigitalSignature, {
         foreignKey: 'document_id',
-        as: 'signatures',
-      });
-
+        as: 'signatures'
+      })
     }
   }
 
@@ -23,35 +26,26 @@ module.exports = (sequelize, DataTypes) => {
     {
       transaction_id: {
         type: DataTypes.INTEGER,
-        allowNull: false,
+        allowNull: false
       },
-
       file_path: {
         type: DataTypes.STRING,
-        allowNull: false,
+        allowNull: false
       },
-
-      file_hash: {
-        type: DataTypes.STRING,
-        allowNull: false,
+      type_doc_id: {
+        type: DataTypes.INTEGER,
+        allowNull: false
       },
-
-      file_type: {
-        type: DataTypes.ENUM('generated','signed','stamped'),
-        allowNull: false,
-      },
-
       created_at: {
         type: DataTypes.DATE,
         allowNull: false,
-        defaultValue: DataTypes.NOW,
+        defaultValue: DataTypes.NOW
       },
-
       updated_at: {
         type: DataTypes.DATE,
         allowNull: false,
-        defaultValue: DataTypes.NOW,
-      },
+        defaultValue: DataTypes.NOW
+      }
     },
     {
       sequelize,
@@ -60,9 +54,9 @@ module.exports = (sequelize, DataTypes) => {
       timestamps: true,
       underscored: true,
       createdAt: 'created_at',
-      updatedAt: 'updated_at',
+      updatedAt: 'updated_at'
     }
-  );
+  )
 
-  return DocumentSignature;
-};
+  return DocumentSignature
+}

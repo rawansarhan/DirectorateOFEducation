@@ -15,7 +15,13 @@ const createTypeProcess = asyncHandler(async (req, res) => {
 
     return ApiResponder.createdResponse(res, result, 'تم انشاء نوع العملية بنجاح')
   } catch (err) {
-    return ApiResponder.badRequestResponse(res, err.message)
+    const statusCode = err.statusCode || 400
+    const responder =
+      statusCode === 409
+        ? ApiResponder.conflictResponse.bind(ApiResponder)
+        : ApiResponder.badRequestResponse.bind(ApiResponder)
+
+    return responder(res, err.message)
   }
 })
 

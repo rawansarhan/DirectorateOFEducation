@@ -8,6 +8,12 @@ class TypeTransRepository {
 
     return await TypeTrans.findByPk(id)
   }
+
+  async findByCode (code) {
+    return TypeTrans.findOne({
+      where: { code }
+    })
+  }
 // ================= FIND ONE WHERE COMPLAINT =================
 
  async  findOneWhereComplaint(){

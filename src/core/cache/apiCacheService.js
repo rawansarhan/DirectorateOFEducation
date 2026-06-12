@@ -15,6 +15,8 @@ const DEFAULT_TTL_SECONDS = API_CACHE_TTL_SECONDS
 const KEYS = {
   organizations: () => 'organization:all',
   typeProcesses: () => 'typeProcess:all',
+  typeDocs: () => 'typeDoc:all',
+  typeDocById: (id) => `typeDoc:id:${id}`,
   departmentLeaves: (organizationId) => `department:leaves:${organizationId}`,
   rolesByDepartment: (departmentId) => `role:by-dept:${departmentId}`,
   locations: () => 'location:all',
@@ -26,11 +28,24 @@ const KEYS = {
   datePickers: () => 'date-pickers:all',
   filePickers: () => 'file-pickers:all',
   authProcessesByType: (typeTransId) => `process:auth:typed:${typeTransId}`,
+  authProcessesAll: () => 'process:auth:all',
   authComplaintProcesses: () => 'process:auth:complaint:all',
   stageConfig: (processId) => `stage-config:process:${processId}`,
   transactionDraft: (userId, processId) => `transaction:draft:${userId}:${processId}`,
   createDraft: (userId, processId) => `transaction:create-draft:${userId}:${processId}`,
-  transactionById: (userId, transactionId) => `transaction:by-id:${userId}:${transactionId}`
+  transactionById: (userId, transactionId) => `transaction:by-id:${userId}:${transactionId}`,
+  employeeTasks: (userId, scope, page, limit) =>
+    `employee-tasks:${userId}:${scope}:p${page}:l${limit}`,
+  employeeTasksByDepartments: (userId, departmentIds, status, page, limit, fromDate, toDate) => {
+    const deptKey = [...departmentIds].sort((a, b) => a - b).join('-')
+    const fromKey = fromDate ? fromDate.toISOString().slice(0, 10) : 'all'
+    const toKey = toDate ? toDate.toISOString().slice(0, 10) : 'all'
+    return `employee-tasks:${userId}:depts:${deptKey}:${status}:from${fromKey}:to${toKey}:p${page}:l${limit}`
+  },
+  employeeTaskStats: (userId, scope, departmentIds, periodKey = 'default') => {
+    const deptKey = [...departmentIds].sort((a, b) => a - b).join('-')
+    return `employee-task-stats:${userId}:${scope}:depts:${deptKey}:${periodKey}`
+  }
 }
 
 let redisClient = null
@@ -299,6 +314,11 @@ async function invalidateTypeProcesses () {
   })
 }
 
+async function invalidateTypeDocs () {
+  const count = await deleteKeysByPattern('typeDoc:*')
+  console.log(`${LOG_PREFIX} invalidate type docs (${count} key(s))`)
+}
+
 async function invalidateDepartmentLeaves (organizationId = null) {
   if (organizationId != null) {
     await deleteKey(KEYS.departmentLeaves(organizationId))
@@ -415,11 +435,13 @@ async function invalidateAuthComplaintProcesses () {
 
 async function invalidateAllAuthProcessCaches () {
   const typedCount = await deleteKeysByPattern('process:auth:typed:*')
+  const allKey = KEYS.authProcessesAll()
+  const allDeleted = await deleteKey(allKey)
   const complaintKey = KEYS.authComplaintProcesses()
   const complaintDeleted = await deleteKey(complaintKey)
 
   console.log(
-    `${LOG_PREFIX} invalidate all auth process caches — typed: ${typedCount} key(s), complaint: ${complaintDeleted} key(s) — redis: ${redisStatusLabel()}`
+    `${LOG_PREFIX} invalidate all auth process caches — typed: ${typedCount} key(s), all: ${allDeleted} key(s), complaint: ${complaintDeleted} key(s) — redis: ${redisStatusLabel()}`
   )
 }
 
@@ -475,12 +497,38 @@ async function invalidateAllTransactionsForUser (userId) {
   console.log(`${LOG_PREFIX} invalidate all transactions for user ${userId} (${count} key(s))`)
 }
 
+async function invalidateEmployeeTasksForUser (userId) {
+  if (userId == null) {
+    return
+  }
+
+  const count = await deleteKeysByPattern(`employee-tasks:${userId}:*`)
+  console.log(`${LOG_PREFIX} invalidate employee tasks for user ${userId} (${count} key(s))`)
+}
+
+async function invalidateEmployeeTasksByDepartment (departmentId) {
+  if (departmentId == null) {
+    return
+  }
+
+  const count = await deleteKeysByPattern('employee-tasks:*:depts:*')
+  console.log(
+    `${LOG_PREFIX} invalidate employee tasks for department ${departmentId} (${count} key(s))`
+  )
+}
+
+async function invalidateEmployeeTaskStats () {
+  const count = await deleteKeysByPattern('employee-task-stats:*')
+  console.log(`${LOG_PREFIX} invalidate employee task stats (${count} key(s))`)
+}
+
 module.exports = {
   KEYS,
   deleteKeysByPattern,
   getOrLoad,
   invalidateOrganizations,
   invalidateTypeProcesses,
+  invalidateTypeDocs,
   invalidateDepartmentLeaves,
   invalidateRolesByDepartment,
   invalidateLocations,
@@ -498,5 +546,8 @@ module.exports = {
   invalidateTransactionDraft,
   invalidateTransactionById,
   invalidateUserTransactionDrafts,
-  invalidateAllTransactionsForUser
+  invalidateAllTransactionsForUser,
+  invalidateEmployeeTasksForUser,
+  invalidateEmployeeTasksByDepartment,
+  invalidateEmployeeTaskStats
 }

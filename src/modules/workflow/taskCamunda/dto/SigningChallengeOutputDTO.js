@@ -11,6 +11,7 @@ class SigningChallengeOutputDTO {
     expiresInSeconds
   }) {
     this.signing_id = challenge.id
+    this.challenge_id = challenge.id
     this.task_id = task.id
     this.transaction_id = transaction.id
     this.stage_code = stage.code

@@ -3,8 +3,8 @@
 const { ProcessInstanceStage } = require('../../../../entities')
 
 class ProcessInstanceStageRepository {
-  async create (data) {
-    return ProcessInstanceStage.create(data)
+  async create (data, dbTransaction = null) {
+    return ProcessInstanceStage.create(data, { transaction: dbTransaction })
   }
 }
 

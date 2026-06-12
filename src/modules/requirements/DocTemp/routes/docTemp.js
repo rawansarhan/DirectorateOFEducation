@@ -36,34 +36,47 @@ const { authMiddleware, authorize } = require('../../../../core/middleware/authM
  *             required:
  *               - file
  *               - name
- *               - file_type
+ *               - type_doc_id
+ *               - config_json
  *             properties:
  *               file:
  *                 type: string
  *                 format: binary
- *                 description: Template file
+ *                 description: Template file (pdf, docx, html)
  *
  *               name:
  *                 type: string
- *                 example: Contract Template
+ *                 example: استمارة معاملة المواطن
  *
- *               file_type:
- *                 type: string
- *                 enum: [pdf, docx, html]
- *                 example: pdf
+ *               type_doc_id:
+ *                 type: integer
+ *                 example: 1
+ *                 description: معرّف نوع الوثيقة من جدول type_docs
  *
  *               config_json:
- *                 type: object
- *                 example:
- *                   x: 100
- *                   y: 200
+ *                 type: string
+ *                 description: |
+ *                   نص JSON — راجع schema DocumentTemplateConfigJson.
+ *                   الحالات المدعومة في widgets:
+ *                   1) text_field — حقل نص/هاتف (DocumentTemplateWidgetTextField)
+ *                   2) date_picker — تاريخ (DocumentTemplateWidgetDatePicker)
+ *                   3) dropdown — قائمة منسدلة (DocumentTemplateWidgetDropdown)
+ *                 example: '{"form_id":"civil_transaction_55","form_name":"استمارة معاملة المواطن","widgets":[{"widget_type":"text_field","data":{"id":"citizen_phone","label":"رقم الموبايل","is_required":true,"input_type":"phone","regex":"^09[0-9]{8}$","max_length":10,"min_length":10}},{"widget_type":"date_picker","data":{"id":"birth_date","label":"تاريخ الولادة","is_required":true,"min_date":"1940-01-01","max_date":"2026-06-04"}},{"widget_type":"dropdown","data":{"id":"birth_governorate","label":"محافظة الولادة","is_required":true,"options":[{"key":"DAM","value":"دمشق"},{"key":"ALE","value":"حلب"}]}}]}'
  *
  *     responses:
- *       201:
+ *       200:
  *         description: تم إنشاء القالب بنجاح
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/DocumentTemplateCreateSuccessResponse'
  *
  *       400:
  *         description: خطأ في البيانات
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/DocumentTemplateErrorResponse'
  */
 router.post(
   '/',
@@ -107,17 +120,14 @@ router.post(
  *                 type: string
  *                 example: Updated Template
  *
- *               file_type:
- *                 type: string
- *                 enum: [pdf, docx, html]
- *                 example: docx
+ *               type_doc_id:
+ *                 type: integer
+ *                 example: 1
  *
  *               config_json:
- *                 type: object
- *                 example:
- *                   page: 1
- *                   x: 50
- *                   y: 80
+ *                 type: string
+ *                 description: نص JSON — راجع DocumentTemplateConfigJson (text_field, date_picker, dropdown)
+ *                 example: '{"form_id":"civil_transaction_55","form_name":"استمارة معاملة المواطن","widgets":[{"widget_type":"text_field","data":{"id":"citizen_phone","label":"رقم الموبايل","is_required":true,"input_type":"phone","regex":"^09[0-9]{8}$","max_length":10,"min_length":10}},{"widget_type":"date_picker","data":{"id":"birth_date","label":"تاريخ الولادة","is_required":true,"min_date":"1940-01-01","max_date":"2026-06-04"}},{"widget_type":"dropdown","data":{"id":"birth_governorate","label":"محافظة الولادة","is_required":true,"options":[{"key":"DAM","value":"دمشق"},{"key":"ALE","value":"حلب"}]}}]}'
  *
  *     responses:
  *       200:

@@ -2,100 +2,227 @@
 
 const repo = require('../repositories/transactionRepository')
 const { toDTO } = require('../mappers/transactionMapper')
-const { TransactionDraftInputDTO } = require('../dto/TransactionDraftInputDTO')
-const { parsePositiveInt, validateDraftBody } = require('../validations/transactionValidations')
-
+const { TransactionIdentityInputDTO } = require('../dto/TransactionDraftInputDTO')
+const {
+  parsePositiveInt,
+  validateIdentityBody,
+  validateIdentityCompleteForSubmit
+} = require('../validations/transactionValidations')
+const {
+  validateUpsertDraftBody,
+  validateDraftFormAgainstConfig,
+  hasUpsertFormPayload
+} = require('../validations/draftFormValidation')
+const {
+  createTransactionError,
+  MESSAGES
+} = require('../utils/transactionErrors')
+const { retryWithBackoff } = require('../../../../core/utils/retryWithBackoff')
+const {
+  registerTransactionFiles
+} = require('../../document/services/documentFileService')
 const workflowClient = require('../../../../core/shared/clients/workflow/workflowClient')
-const outboxRepository =
-  require('../../../../core/shared/outbox/repositories/OutboxRepository')
+const { startWorkflow } = require('../../../workflow/taskCamunda/services/startWorkflowService')
+const db = require('../../../../entities')
+const { formatClientErrorMessage } = require('../../../../core/utils/errorMessageHelper')
+
+const { v4: uuidv4 } = require('uuid')
 
 const {
-  validateSubmissionAgainstConfig,
+  validateSubmitTransactionRequest,
   buildStoredSubmissionData,
+  loadAuthStageByProcessCode,
   loadAuthStageConfigByProcessCode
 } = require('../../../workflow/services/stageSubmissionService')
 
-const EVENTS = require('../../../../core/shared/events/types')
+const operationGuardService = require('../../../../core/security/operationGuardService')
 
-async function createDraft ({ userId, processId }) {
+const SUBMIT_IDEMPOTENCY_SCOPE = 'submit_transaction'
+
+function buildSubmitGuardKey (transactionId) {
+  return `txn-${transactionId}`
+}
+
+function buildSubmitGuardKeyForProcess (userId, processCode) {
+  return `submit-${userId}-${processCode}`
+}
+
+function wrapSubmitResult (dto, idempotencyKey, idempotentReplay = false, extra = {}) {
+  return {
+    ...dto,
+    ...extra,
+    idempotency_key: idempotencyKey,
+    idempotent_replay: Boolean(idempotentReplay)
+  }
+}
+
+const { ensureGenesisHash } =
+  require('../../integrityChain/services/integrityChainService')
+const { ensureTransactionIdProcess } =
+  require('../services/transactionIdProcessService')
+
+async function fetchActiveProcess (processId) {
   const numericProcessId = parsePositiveInt(processId, 'معرّف العملية')
-
   const process = await workflowClient.getProcessById(numericProcessId)
 
   if (!process) {
-    throw new Error('Process not found')
+    throw createTransactionError('PROCESS_NOT_FOUND')
   }
 
   if (!process.is_active) {
-    throw new Error('Process is inactive')
+    throw createTransactionError('PROCESS_INACTIVE')
   }
 
-  const processCode = process.code
-  let draft = await repo.findDraftByCode(userId, processCode)
+  return process
+}
 
-  if (draft) {
-    return toDTO(draft)
-  }
+function assertSubmitIdentityComplete (transaction) {
+  const { error, missing_keys: missingKeys } =
+    validateIdentityCompleteForSubmit(transaction)
 
-  draft = await repo.create({
-    code: processCode,
-    user_id: userId,
-    status: 'draft'
-  })
-
-  return {
-    isNew: true,
-    draft: toDTO(draft)
+  if (error) {
+    throw createTransactionError('VALIDATION_ERROR', error, {
+      details: { missing_fields: missingKeys }
+    })
   }
 }
 
-async function UpdateDraft ({ transId, data }) {
-  const numericTransId = parsePositiveInt(transId, 'معرّف المسودة')
-  const { error, value } = validateDraftBody(data)
-
-  if (error) {
-    throw new Error(error)
-  }
-
-  const draft = await repo.findDraft(numericTransId)
-
-  if (!draft) {
-    throw new Error('لا يوجد مسودة')
+async function applyIdentityUpdate (draft, body, userId = null) {
+  if (userId != null && draft.user_id !== userId) {
+    throw createTransactionError('UNAUTHORIZED')
   }
 
   if (!draft.is_active) {
-    throw new Error('المسودة غير مفعلة')
+    throw createTransactionError('DRAFT_INACTIVE')
   }
 
-  const input = new TransactionDraftInputDTO(value)
+  const { error, value } = validateIdentityBody(body)
+
+  if (error) {
+    throw createTransactionError('VALIDATION_ERROR', error)
+  }
+
+  const input = new TransactionIdentityInputDTO(value)
+
+  await draft.update(input.getIdentityUpdatePayload())
+
+  return draft
+}
+
+async function applyDraftFormUpdate (draft, body, processCode, userId = null) {
+  if (userId != null && draft.user_id !== userId) {
+    throw createTransactionError('UNAUTHORIZED')
+  }
+
+  if (!draft.is_active) {
+    throw createTransactionError('DRAFT_INACTIVE')
+  }
+
+  const { error, value } = validateUpsertDraftBody(body)
+
+  if (error) {
+    throw createTransactionError('VALIDATION_ERROR', error)
+  }
+
+  const stageConfig = await loadAuthStageConfigByProcessCode(processCode)
+  const normalizedForm = validateDraftFormAgainstConfig(value.data, stageConfig)
+
+  if (typeof normalizedForm === 'string') {
+    throw createTransactionError('VALIDATION_ERROR', normalizedForm)
+  }
 
   await draft.update({
-    data: {
-      ...input.data
-    }
+    data: normalizedForm
   })
 
-  return {
-    isNew: false,
-    draft: toDTO(draft)
-  }
+  return draft
+}
+
+async function createDraft ({ userId, processId }) {
+  return retryWithBackoff(async () => {
+    const process = await fetchActiveProcess(processId)
+    let draft = await repo.findDraftByCode(userId, process.code)
+
+    if (draft) {
+      return {
+        isNew: false,
+        draft: toDTO(draft)
+      }
+    }
+
+    draft = await repo.create({
+      code: process.code,
+      user_id: userId,
+      status: 'draft'
+    })
+
+    return {
+      isNew: true,
+      draft: toDTO(draft)
+    }
+  }, { label: 'transaction.createDraft' })
+}
+
+async function UpdateDraft ({ transId, data, userId = null }) {
+  return retryWithBackoff(async () => {
+    const numericTransId = parsePositiveInt(transId, 'معرّف المسودة')
+    const draft = await repo.findDraft(numericTransId)
+
+    if (!draft) {
+      throw createTransactionError('DRAFT_NOT_FOUND')
+    }
+
+    await applyIdentityUpdate(draft, data, userId)
+
+    const refreshed = await repo.findById(numericTransId)
+
+    return {
+      isNew: false,
+      draft: toDTO(refreshed)
+    }
+  }, { label: 'transaction.updateDraft' })
+}
+
+async function upsertDraft ({ userId, processId, body = null }) {
+  return retryWithBackoff(async () => {
+    const process = await fetchActiveProcess(processId)
+    let draft = await repo.findDraftByCode(userId, process.code)
+    let isNew = false
+
+    if (!draft) {
+      draft = await repo.create({
+        code: process.code,
+        user_id: userId,
+        status: 'draft'
+      })
+      isNew = true
+    } else if (draft.user_id !== userId) {
+      throw createTransactionError('UNAUTHORIZED')
+    }
+
+    if (hasUpsertFormPayload(body)) {
+      await applyDraftFormUpdate(draft, body, process.code, userId)
+      draft = await repo.findById(draft.id)
+    }
+
+    return {
+      isNew,
+      draft: toDTO(draft)
+    }
+  }, { label: 'transaction.upsertDraft' })
 }
 
 async function getUserDraftByProcess (userId, processId) {
-  const numericProcessId = parsePositiveInt(processId, 'معرّف العملية')
-  const process = await workflowClient.getProcessById(numericProcessId)
+  return retryWithBackoff(async () => {
+    const process = await fetchActiveProcess(processId)
+    const draft = await repo.findDraftByCode(userId, process.code)
 
-  if (!process) {
-    throw new Error('لا يوجد عملية')
-  }
+    if (!draft) {
+      throw createTransactionError('DRAFT_NOT_FOUND')
+    }
 
-  const draft = await repo.findDraftByCode(userId, process.code)
-
-  if (!draft) {
-    throw new Error('لا يوجد مسودة')
-  }
-
-  return toDTO(draft)
+    return toDTO(draft)
+  }, { label: 'transaction.getUserDraftByProcess' })
 }
 
 async function getTransactionById (transactionId, userId) {
@@ -103,71 +230,231 @@ async function getTransactionById (transactionId, userId) {
   const transaction = await repo.findById(numericId)
 
   if (!transaction) {
-    throw new Error('Transaction not found')
+    throw createTransactionError('TRANSACTION_NOT_FOUND')
   }
 
   if (userId && transaction.user_id !== userId) {
-    throw new Error('Unauthorized access')
+    throw createTransactionError('UNAUTHORIZED')
   }
 
   return toDTO(transaction)
 }
 
-async function submitTransaction (transactionId, data) {
+async function resolveDraftForProcessSubmit ({ userId, processId }) {
+  const process = await fetchActiveProcess(processId)
+  let draft = await repo.findDraftByCode(userId, process.code)
+  let isNew = false
+
+  if (!draft) {
+    const inFlight = await repo.findInFlightByUserAndCode(userId, process.code)
+
+    if (inFlight) {
+      throw createTransactionError('TRANSACTION_IN_PROGRESS')
+    }
+
+    draft = await repo.create({
+      code: process.code,
+      user_id: userId,
+      status: 'draft'
+    })
+    isNew = true
+  } else if (draft.user_id !== userId) {
+    throw createTransactionError('UNAUTHORIZED')
+  }
+
+  return { draft, process, isNew }
+}
+
+async function submitTransactionByProcess (processId, data, { userId } = {}) {
+  const numericProcessId = parsePositiveInt(processId, 'معرّف العملية')
+  const { draft, process, isNew } = await resolveDraftForProcessSubmit({
+    userId,
+    processId: numericProcessId
+  })
+
+  const guardKey = buildSubmitGuardKeyForProcess(userId, process.code)
+
+  const result = await submitTransaction(draft.id, data, {
+    userId,
+    idempotencyKey: guardKey,
+    isNewDraft: isNew,
+    processId: numericProcessId
+  })
+
+  return result
+}
+
+async function submitTransaction (
+  transactionId,
+  data,
+  {
+    userId,
+    idempotencyKey: idempotencyKeyOverride = null,
+    isNewDraft = false,
+    processId = null
+  } = {}
+) {
   const numericId = parsePositiveInt(transactionId, 'معرّف المعاملة')
+  const guardKey = idempotencyKeyOverride || buildSubmitGuardKey(numericId)
+
+  if (userId) {
+    const replay = operationGuardService.getReplay({
+      scope: SUBMIT_IDEMPOTENCY_SCOPE,
+      userId,
+      idempotencyKey: guardKey
+    })
+
+    if (replay?.data) {
+      return replay.data
+    }
+  }
+
   const transaction = await repo.findById(numericId)
 
   if (!transaction) {
-    throw new Error('Transaction not found')
+    throw createTransactionError('TRANSACTION_NOT_FOUND')
+  }
+
+  if (userId && transaction.user_id !== userId) {
+    throw createTransactionError('UNAUTHORIZED')
   }
 
   if (transaction.status !== 'draft') {
-    throw new Error('Only draft can be submitted')
+    throw createTransactionError('SUBMIT_NOT_DRAFT')
   }
 
-  const configJson =
-    await loadAuthStageConfigByProcessCode(transaction.code)
+  assertSubmitIdentityComplete(transaction)
 
-  const normalized = await validateSubmissionAgainstConfig(
-    data,
-    configJson,
-    {
-      mode: 'submit',
-      requireVariables: Boolean(
-        (configJson.actions || []).length ||
-        data?.variables?.action
+  let guardContext = null
+  const issuedIdempotencyKey = uuidv4()
+
+  try {
+    if (userId) {
+      const guard = operationGuardService.begin({
+        scope: SUBMIT_IDEMPOTENCY_SCOPE,
+        userId,
+        resourceId: String(numericId),
+        idempotencyKey: guardKey
+      })
+
+      if (guard.replay) {
+        return guard.result.data
+      }
+
+      guardContext = guard.context
+    }
+
+    const result = await retryWithBackoff(async () => {
+      const current = await repo.findById(numericId)
+
+      if (!current) {
+        throw createTransactionError('TRANSACTION_NOT_FOUND')
+      }
+
+      if (userId && current.user_id !== userId) {
+        throw createTransactionError('UNAUTHORIZED')
+      }
+
+      if (current.status !== 'draft') {
+        throw createTransactionError('SUBMIT_NOT_DRAFT')
+      }
+
+      assertSubmitIdentityComplete(current)
+
+      const { stage, configJson } =
+        await loadAuthStageByProcessCode(current.code)
+
+      const normalized = await validateSubmitTransactionRequest(
+        data,
+        configJson,
+        { stageName: stage.name }
+      ).catch(err => {
+        throw createTransactionError('VALIDATION_ERROR', err.message, {
+          details: err.details,
+          validation: err.validation
+        })
+      })
+
+      let registeredFiles = []
+      const processCode = current.code
+
+      await db.sequelize.transaction(async (dbTransaction) => {
+        if (Array.isArray(normalized.files) && normalized.files.length) {
+          registeredFiles = await registerTransactionFiles({
+            transactionId: current.id,
+            files: normalized.files,
+            userId,
+            dbTransaction
+          })
+        }
+
+        const storedData = buildStoredSubmissionData(
+          {
+            ...normalized,
+            files: registeredFiles
+          },
+          {
+            stageName: stage.name,
+            configJson
+          }
+        )
+
+        await current.update(
+          {
+            data: storedData,
+            status: 'submitted'
+          },
+          { transaction: dbTransaction }
+        )
+
+        await ensureTransactionIdProcess(current, { transaction: dbTransaction })
+        await ensureGenesisHash(current, { transaction: dbTransaction })
+
+        try {
+          await startWorkflow({
+            transactionId: current.id,
+            processCode,
+            dbTransaction,
+            transactionRow: current
+          })
+        } catch (error) {
+          const detail = formatClientErrorMessage(error) || error.message
+
+          throw createTransactionError('WORKFLOW_START_FAILED', detail)
+        }
+      })
+
+      const refreshed = await repo.findById(numericId)
+
+      return wrapSubmitResult(
+        toDTO(refreshed),
+        issuedIdempotencyKey,
+        false,
+        {
+          is_new_draft: isNewDraft,
+          process_id: processId
+        }
       )
-    }
-  )
+    }, { label: 'transaction.submit' })
 
-  if (!normalized.variables.action) {
-    normalized.variables.action = 'submit'
+    if (guardContext) {
+      return operationGuardService.commit(guardContext, { data: result }).data
+    }
+
+    return result
+  } catch (error) {
+    operationGuardService.release(guardContext)
+    throw error
   }
-
-  const storedData = buildStoredSubmissionData(normalized)
-
-  await transaction.update({
-    data: storedData,
-    status: 'submitted'
-  })
-
-  await outboxRepository.create({
-    event_type: EVENTS.TRANSACTION_SUBMITTED,
-    payload: {
-      transactionId: transaction.id,
-      processCode: transaction.code
-    }
-  })
-
-  const refreshed = await repo.findById(numericId)
-
-  return toDTO(refreshed)
 }
 
 module.exports = {
   UpdateDraft,
   createDraft,
+  upsertDraft,
   getUserDraftByProcess,
   getTransactionById,
-  submitTransaction
+  submitTransaction,
+  submitTransactionByProcess,
+  MESSAGES
 }

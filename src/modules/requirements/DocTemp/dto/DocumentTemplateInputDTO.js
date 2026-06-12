@@ -4,7 +4,7 @@ class DocumentTemplateInputDTO {
   constructor ({
     name,
     file_path,
-    file_type,
+    type_doc_id,
     engine_type = 'ACROFORM',
     config_json = null,
     version = 1,
@@ -13,7 +13,7 @@ class DocumentTemplateInputDTO {
   }) {
     this.name = name
     this.file_path = file_path
-    this.file_type = file_type
+    this.type_doc_id = type_doc_id
     this.engine_type = engine_type
     this.config_json = config_json
     this.version = version

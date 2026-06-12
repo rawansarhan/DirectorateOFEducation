@@ -47,7 +47,27 @@ function respondIfSecurityError (res, err, defaultStatus = 401) {
   ApiResponder.error(res, {
     message: err.message,
     statusCode: getSecurityStatusCode(err, defaultStatus),
-    extra: buildSecurityExtra(err)
+    data: null,
+    error: err.code || 'SECURITY_ERROR'
+  })
+
+  return true
+}
+
+function respondIfOperationGuardError (res, err) {
+  const guardCodes = ['DUPLICATE_IN_FLIGHT', 'RATE_LIMITED']
+
+  if (!guardCodes.includes(err.code)) {
+    return false
+  }
+
+  const statusCode = err.code === 'RATE_LIMITED' ? 429 : 409
+
+  ApiResponder.error(res, {
+    message: err.message,
+    statusCode,
+    data: null,
+    error: err.code
   })
 
   return true
@@ -56,5 +76,6 @@ function respondIfSecurityError (res, err, defaultStatus = 401) {
 module.exports = {
   buildSecurityExtra,
   getSecurityStatusCode,
-  respondIfSecurityError
+  respondIfSecurityError,
+  respondIfOperationGuardError
 }

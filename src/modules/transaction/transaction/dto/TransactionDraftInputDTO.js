@@ -1,11 +1,24 @@
 'use strict'
 
-class TransactionDraftInputDTO {
+const { IDENTITY_KEYS } = require('../validations/transactionValidations')
+
+class TransactionIdentityInputDTO {
   constructor (data = {}) {
-    this.data = data
+    this.identity = {}
+
+    for (const key of IDENTITY_KEYS) {
+      if (Object.prototype.hasOwnProperty.call(data, key)) {
+        this.identity[key] = data[key]
+      }
+    }
+  }
+
+  getIdentityUpdatePayload () {
+    return { ...this.identity }
   }
 }
 
 module.exports = {
-  TransactionDraftInputDTO
+  TransactionIdentityInputDTO,
+  IDENTITY_KEYS
 }

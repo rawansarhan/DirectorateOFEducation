@@ -18,6 +18,8 @@ const documentSignatureRepository =
   require('../repositories/documentSignatureRepository')
 const digitalSignatureRepository =
   require('../repositories/digitalSignatureRepository')
+const { findOrCreateTypeDocByName } = require('../../../requirements/typeDoc/services/typeDocService')
+const { DIGITAL_SIGNED_DOCUMENT_TYPE } = require('../../../requirements/typeDoc/constants/typeDocDefaults')
 
 const {
   buildTransactionSignMessage,
@@ -165,7 +167,8 @@ async function createSigningChallenge ({
   taskId,
   userId,
   payload = {},
-  clientMeta = {}
+  clientMeta = {},
+  forceSignature = false
 }) {
   await securityGuardService.assertAccountNotLocked(userId)
 
@@ -177,7 +180,7 @@ async function createSigningChallenge ({
     userId
   })
 
-  if (!requiresDigitalSignature(context.stage, payload, context.stageConfig)) {
+  if (!forceSignature && !requiresDigitalSignature(context.stage, payload, context.stageConfig)) {
     throw new Error('Digital signature is not required for this task')
   }
 
@@ -315,7 +318,8 @@ async function verifySignatureForComplete ({
   signature,
   userId,
   decision = null,
-  clientMeta = {}
+  clientMeta = {},
+  expectedTaskId = null
 }) {
   await securityGuardService.assertAccountNotLocked(userId)
 
@@ -327,6 +331,32 @@ async function verifySignatureForComplete ({
     userId,
     decision
   })
+
+  if (
+    expectedTaskId &&
+    String(challenge.task_id) !== String(expectedTaskId)
+  ) {
+    const error = new Error(
+      [
+        `challenge_id مرتبط بمهمة مختلفة (${challenge.task_id}) عن taskId في URL (${expectedTaskId}).`,
+        'أعد GET /api/workflow/tasks ثم POST /tasks/{taskId}/signing-challenge على taskId الحالي قبل complete.'
+      ].join(' ')
+    )
+    error.code = 'SIGNING_CHALLENGE_TASK_MISMATCH'
+    error.statusCode = 400
+    error.expose = true
+    error.details = {
+      challenge_task_id: challenge.task_id,
+      url_task_id: String(expectedTaskId),
+      failure_stage: 'signature_verification',
+      next_steps: [
+        'GET /api/workflow/tasks/pending-pickup أو /in-progress',
+        `POST /api/workflow/tasks/${expectedTaskId}/signing-challenge`,
+        `POST /api/workflow/tasks/${expectedTaskId}/complete`
+      ]
+    }
+    throw error
+  }
 
   const userKey = await userKeyRepository.findById(challenge.user_key_id)
 
@@ -377,12 +407,14 @@ async function persistVerifiedSignature ({
   challengeId,
   signature,
   userId,
-  clientMeta = {}
+  clientMeta = {},
+  dbTransaction = null
 }) {
   await securityGuardService.assertAccountNotLocked(userId)
 
   const sequelize = transactionSigningChallengeRepository.getSequelize()
-  const transaction = await sequelize.transaction()
+  const ownsTransaction = !dbTransaction
+  const transaction = dbTransaction || await sequelize.transaction()
 
   try {
     const challenge = await transactionSigningChallengeRepository.findByIdWithLock(
@@ -415,12 +447,12 @@ async function persistVerifiedSignature ({
     }
 
     const stage = await stageRepository.findById(challenge.stage_id)
+    const signedTypeDoc = await findOrCreateTypeDocByName(DIGITAL_SIGNED_DOCUMENT_TYPE)
 
     const document = await documentSignatureRepository.create({
       transaction_id: challenge.transaction_id,
       file_path: `transaction://${challenge.transaction_id}/stage/${challenge.stage_id}`,
-      file_hash: challenge.payload_hash,
-      file_type: 'signed'
+      type_doc_id: signedTypeDoc.id
     }, { transaction })
 
     const previousSignature =
@@ -443,22 +475,24 @@ async function persistVerifiedSignature ({
 
     await transactionSigningChallengeRepository.markUsed(challenge, transaction)
 
-    await transaction.commit()
+    if (ownsTransaction) {
+      await transaction.commit()
 
-    await securityGuardService.recordSuccess({
-      userId,
-      action: 'TX_SIGN_VERIFIED',
-      resourceType: 'task',
-      resourceId: challenge.task_id,
-      ipAddress: clientMeta.ip,
-      userAgent: clientMeta.userAgent,
-      details: {
-        signingId: challengeId,
-        digitalSignatureId: digitalSignature.id,
-        documentId: document.id,
-        stageCode: stage?.code
-      }
-    })
+      await securityGuardService.recordSuccess({
+        userId,
+        action: 'TX_SIGN_VERIFIED',
+        resourceType: 'task',
+        resourceId: challenge.task_id,
+        ipAddress: clientMeta.ip,
+        userAgent: clientMeta.userAgent,
+        details: {
+          signingId: challengeId,
+          digitalSignatureId: digitalSignature.id,
+          documentId: document.id,
+          stageCode: stage?.code
+        }
+      })
+    }
 
     return toDigitalSignatureRecord({
       document,
@@ -468,7 +502,7 @@ async function persistVerifiedSignature ({
       userKey
     })
   } catch (error) {
-    if (!transaction.finished) {
+    if (ownsTransaction && !transaction.finished) {
       await transaction.rollback()
     }
 

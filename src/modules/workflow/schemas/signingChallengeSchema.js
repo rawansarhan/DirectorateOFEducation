@@ -2,7 +2,15 @@
 
 const Joi = require('joi')
 
-const taskDecisionSchema = Joi.string().min(1).max(64).required()
+const SIGNING_DECISIONS = ['approve', 'reject', 'rejected']
+
+const taskDecisionSchema = Joi.string()
+  .valid(...SIGNING_DECISIONS)
+  .required()
+  .messages({
+    'any.only': 'decision يجب أن يكون approve أو reject',
+    'any.required': 'decision مطلوب'
+  })
 
 const signingChallengePayloadSchema = Joi.object({
   pin: Joi.string()
@@ -17,6 +25,14 @@ const signingChallengePayloadSchema = Joi.object({
   decision: taskDecisionSchema
 }).unknown(false)
 
+function normalizeSigningDecision (decision) {
+  if (decision === 'rejected') {
+    return 'reject'
+  }
+
+  return decision
+}
+
 function validateSigningChallengePayload (payload = {}) {
   const { error, value } = signingChallengePayloadSchema.validate(payload, {
     abortEarly: false,
@@ -30,11 +46,19 @@ function validateSigningChallengePayload (payload = {}) {
     }
   }
 
-  return { value, error: null }
+  return {
+    value: {
+      ...value,
+      decision: normalizeSigningDecision(value.decision)
+    },
+    error: null
+  }
 }
 
 module.exports = {
+  SIGNING_DECISIONS,
   taskDecisionSchema,
   signingChallengePayloadSchema,
+  normalizeSigningDecision,
   validateSigningChallengePayload
 }

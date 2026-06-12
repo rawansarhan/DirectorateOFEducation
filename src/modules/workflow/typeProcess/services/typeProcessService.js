@@ -46,14 +46,26 @@ async function createTypeProcessService(data) {
 
   // ================= CREATE =================
 
+  const normalizedCode = String(data.code).trim().toUpperCase()
+
+  const existingCode =
+    await typeTransRepository.findByCode(normalizedCode)
+
+  if (existingCode) {
+    const err = new Error(`code "${normalizedCode}" مستخدم مسبقاً`)
+    err.statusCode = 409
+    err.code = 'DUPLICATE_CODE'
+    throw err
+  }
+
   const typeProcess =
     await typeTransRepository.create({
-
-      name: data.name
+      name: String(data.name).trim(),
+      code: normalizedCode
     })
 
   console.log(
-    `${LOG_PREFIX} POST /api/typeProcess — created id=${typeProcess.id} name="${typeProcess.name}" — clearing list cache...`
+    `${LOG_PREFIX} POST /api/typeProcess — created id=${typeProcess.id} name="${typeProcess.name}" code="${typeProcess.code}" — clearing list cache...`
   )
   await invalidateTypeProcesses()
 

@@ -10,7 +10,7 @@ async function createProcessStage ({
   status,
   data,
   assigned_to
-}) {
+}, { transaction: dbTransaction } = {}) {
   return processInstanceStageRepository.create({
     transaction_id: transactionId,
     stage_code: stageCode,
@@ -18,7 +18,7 @@ async function createProcessStage ({
     status,
     data,
     assigned_to
-  })
+  }, dbTransaction)
 }
 
 module.exports = {

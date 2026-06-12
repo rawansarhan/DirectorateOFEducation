@@ -14,6 +14,25 @@ function collectConfigWidgets (configJson = {}) {
   return (configJson.widgets || []).filter(widget => widget?.data?.id)
 }
 
+function buildFilePickerTypeDocMap (configJson = {}) {
+  const map = new Map()
+
+  for (const widget of configJson.widgets || []) {
+    if (widget.widget_type !== 'file_picker') {
+      continue
+    }
+
+    const widgetId = widget.data?.id
+    const typeDocId = Number(widget.data?.type_doc_id)
+
+    if (widgetId && Number.isInteger(typeDocId) && typeDocId > 0) {
+      map.set(widgetId, typeDocId)
+    }
+  }
+
+  return map
+}
+
 function normalizeFieldValue (value) {
   if (Array.isArray(value)) {
     return value
@@ -49,6 +68,59 @@ function assertCheckListValue (widget, value) {
     throw new Error(
       `"${label}" يسمح باختيار ${data.max_selected} عنصر/عناصر كحد أقصى`
     )
+  }
+}
+
+function assertFilesMatchConfig (files = [], configJson = {}) {
+  const pickerMap = buildFilePickerTypeDocMap(configJson)
+
+  if (!pickerMap.size) {
+    return
+  }
+
+  const filesByKey = new Map()
+
+  for (const file of files) {
+    if (!file?.key) {
+      continue
+    }
+
+    if (filesByKey.has(file.key)) {
+      throw new Error(`الملف "${file.key}" مكرر في files`)
+    }
+
+    filesByKey.set(file.key, file)
+
+    const expectedTypeDocId = pickerMap.get(file.key)
+
+    if (expectedTypeDocId == null) {
+      throw new Error(
+        `الملف "${file.key}" غير معرّف في استمارة المرحلة (file_picker)`
+      )
+    }
+
+    const submittedTypeDocId = Number(file.type_doc_id)
+
+    if (submittedTypeDocId !== expectedTypeDocId) {
+      throw new Error(
+        `type_doc_id للملف "${file.key}" يجب أن يكون ${expectedTypeDocId} كما في stage_config`
+      )
+    }
+  }
+
+  for (const [widgetId, typeDocId] of pickerMap.entries()) {
+    const widget = (configJson.widgets || []).find(
+      item => item.widget_type === 'file_picker' && item.data?.id === widgetId
+    )
+
+    if (!widget?.data?.is_required) {
+      continue
+    }
+
+    if (!filesByKey.has(widgetId)) {
+      const label = widget.data.label || widgetId
+      throw new Error(`الملف "${label}" مطلوب`)
+    }
   }
 }
 
@@ -109,9 +181,11 @@ async function assertPayloadAgainstStageConfig (
   }
 
   assertWidgetRules(widgets, fieldMap, fileMap)
+  assertFilesMatchConfig(normalizedPayload.files || [], configJson)
 }
 
 module.exports = {
   assertPayloadAgainstStageConfig,
-  collectConfigWidgets
+  collectConfigWidgets,
+  buildFilePickerTypeDocMap
 }

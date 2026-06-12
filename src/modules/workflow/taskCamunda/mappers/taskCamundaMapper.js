@@ -6,8 +6,22 @@ const { CompleteTaskOutputDTO } = require('../dto/CompleteTaskOutputDTO')
 const { SigningChallengeOutputDTO } = require('../dto/SigningChallengeOutputDTO')
 const { StartWorkflowOutputDTO } = require('../dto/StartWorkflowOutputDTO')
 
-function toEmployeeTaskItem (processInstance, activeTask) {
-  return new EmployeeTaskOutputDTO(processInstance, activeTask)
+function toEmployeeTaskItem ({
+  processInstance,
+  activeTask,
+  userId,
+  progressPercent,
+  employeeStatus,
+  stageNameOverride = null
+}) {
+  return new EmployeeTaskOutputDTO({
+    processInstance,
+    activeTask,
+    userId,
+    progressPercent,
+    employeeStatus,
+    stageNameOverride
+  })
 }
 
 function toEmployeeTaskList (pairs = []) {
@@ -20,8 +34,8 @@ function toTaskDetails ({
   task,
   processInstance,
   transaction,
-  taskLock,
-  previousStagesData
+  previousStagesData,
+  processDefinition = null
 }) {
   const stageConfigRow = processInstance.current_stage?.stage_config
 
@@ -29,23 +43,31 @@ function toTaskDetails ({
     task,
     processInstance,
     transaction,
-    taskLock,
     previousStagesData,
-    currentStageConfig: stageConfigRow?.config_json || {}
+    currentStageConfig: stageConfigRow?.config_json || {},
+    processDefinition
   })
 }
 
 function toCompleteTaskResponse ({
-  task,
   stage,
-  nextTask,
-  transactionData
+  stageSnapshot,
+  variables = null,
+  signatureRequest = null,
+  idempotencyKey = null,
+  idempotentReplay = false,
+  workflowStatus = 'running',
+  templates = []
 }) {
   return new CompleteTaskOutputDTO({
-    task,
     stage,
-    nextTask,
-    transactionData
+    stageSnapshot,
+    variables,
+    signatureRequest,
+    idempotencyKey,
+    idempotentReplay,
+    workflowStatus,
+    templates
   })
 }
 
@@ -139,7 +161,7 @@ function toSignatureLedgerEntry ({
     key_fingerprint: signature.user_key?.key_fingerprint || null,
     signed_hash: signature.signed_hash,
     previous_signature_hash: signature.previous_signature_hash,
-    payload_hash: document.file_hash,
+    payload_hash: signature.signed_hash,
     signed_at: signature.signed_at
   }
 }

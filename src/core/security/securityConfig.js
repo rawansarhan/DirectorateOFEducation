@@ -16,7 +16,11 @@ function getClientIp (req) {
 function getClientMeta (req) {
   return {
     ip: getClientIp(req),
-    userAgent: req.headers['user-agent'] || null
+    userAgent: req.headers['user-agent'] || null,
+    idempotencyKey:
+      req.headers['idempotency-key'] ||
+      req.headers['x-idempotency-key'] ||
+      null
   }
 }
 

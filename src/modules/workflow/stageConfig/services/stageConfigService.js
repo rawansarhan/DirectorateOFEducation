@@ -6,6 +6,8 @@ const {
   createStageConfigSchema
 } = require('../validations/stageConfigValidations')
 
+const { validateStageConfigJson } = require('../validations/stageConfigSchema')
+
 const stageRepository = require('../../processDefinition/repositories/stageRepository')
 
 const stageConfigRepository = require('../repositories/stageConfigRepository')
@@ -14,8 +16,12 @@ const stageAssignmentRepository = require('../repositories/stageAssignmentReposi
 
 const stageConfigMapper = require('../mappers/stageConfigMapper')
 
+const typeDocRepository = require('../../../requirements/typeDoc/repositories/typeDocRepository')
+
 const processRepository =
   require('../../processDefinition/repositories/processRepository')
+
+const { validateStageAction } = require('../../actions/actionHelpers')
 
 
 const {
@@ -44,11 +50,64 @@ function throwBusinessError (message, statusCode = HTTP_STATUS.BAD_REQUEST) {
   throw err
 }
 
+async function assertFilePickerTypeDocsExist (configJson = {}) {
+  for (const widget of configJson.widgets || []) {
+    if (widget.widget_type !== 'file_picker') {
+      continue
+    }
+
+    const widgetId = widget.data?.id || 'file_picker'
+    const typeDocId = Number(widget.data?.type_doc_id)
+
+    if (!Number.isInteger(typeDocId) || typeDocId <= 0) {
+      throwBusinessError(
+        `الودجت "${widgetId}": type_doc_id مطلوب في file_picker`
+      )
+    }
+
+    const typeDoc = await typeDocRepository.findById(typeDocId)
+
+    if (!typeDoc) {
+      throwBusinessError(
+        `الودجت "${widgetId}": نوع الوثيقة (type_doc_id=${typeDocId}) غير موجود`
+      )
+    }
+
+    if (typeDoc.is_active === false) {
+      throwBusinessError(
+        `الودجت "${widgetId}": نوع الوثيقة (type_doc_id=${typeDocId}) غير نشط`
+      )
+    }
+  }
+}
+
 // ======================================================
 // CREATE STAGE CONFIG
 // ======================================================
 
 async function createStageConfigService (data) {
+  // =====================================
+  // NORMALIZE + VALIDATE config_json (widgets incl. file_picker.type_doc_id)
+  // =====================================
+
+  if (Array.isArray(data?.stages)) {
+    data = {
+      ...data,
+      stages: data.stages.map(stage => {
+        const { error, value } = validateStageConfigJson(stage.config_json || {})
+
+        if (error) {
+          throwBusinessError(formatJoiError(error))
+        }
+
+        return {
+          ...stage,
+          config_json: value
+        }
+      })
+    }
+  }
+
   // =====================================
   // VALIDATION
   // =====================================
@@ -134,10 +193,10 @@ async function createStageConfigService (data) {
 
     if (stage.type === 'SERVICE_TASK' && Array.isArray(configActions)) {
       for (const action of configActions) {
-        if (!action?.name) {
-          throwBusinessError(
-            `المرحلة ${item.stage_id}: كل action في config_json يحتاج name`
-          )
+        const actionError = validateStageAction(action, item.stage_id)
+
+        if (actionError) {
+          throwBusinessError(actionError)
         }
       }
     }
@@ -151,6 +210,8 @@ async function createStageConfigService (data) {
         )
       }
     }
+
+    await assertFilePickerTypeDocsExist(item.config_json)
 
     // =================================
     // CONFIG
