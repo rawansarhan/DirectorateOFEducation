@@ -28,8 +28,50 @@
 
 const fs = require('fs')
 const path = require('path')
+const fontkit = require('@pdf-lib/fontkit')
 const { PDFDocument, StandardFonts, rgb } = require('pdf-lib')
 const { normalizeStoredFilePath } = require('../../../../core/utils/filePath')
+
+const DEFAULT_UNICODE_FONT_PATH = path.join(
+  process.cwd(),
+  'assets/fonts/NotoSansArabic-Regular.ttf'
+)
+
+function resolveUnicodeFontPath () {
+  const configured = process.env.PDF_UNICODE_FONT_PATH
+
+  if (configured && String(configured).trim()) {
+    return path.isAbsolute(configured)
+      ? configured
+      : path.join(process.cwd(), configured)
+  }
+
+  return DEFAULT_UNICODE_FONT_PATH
+}
+
+function containsNonLatin1Characters (value) {
+  return /[^\u0000-\u00ff]/.test(String(value ?? ''))
+}
+
+function valuesNeedUnicodeFont (values = {}) {
+  return Object.values(values).some(containsNonLatin1Characters)
+}
+
+async function embedUnicodeFont (pdfDoc) {
+  const fontPath = resolveUnicodeFontPath()
+
+  if (!fs.existsSync(fontPath)) {
+    throw new Error(
+      `خط Unicode للعربية غير موجود: ${fontPath}. ضع NotoSansArabic-Regular.ttf أو عيّن PDF_UNICODE_FONT_PATH`
+    )
+  }
+
+  pdfDoc.registerFontkit(fontkit)
+
+  const fontBytes = fs.readFileSync(fontPath)
+
+  return pdfDoc.embedFont(fontBytes, { subset: true })
+}
 
 /** يحوّل /uploads/file.pdf إلى مسار مطلق على القرص */
 function resolveAbsoluteUploadPath (storedPath) {
@@ -60,6 +102,7 @@ function collectWidgetKeys (configJson = {}) {
 /**
  * يفلتر values: فقط المفاتيح المعرفة في config_json.widgets
  * (إذا widgets فارغة يمرّر كل values)
+ * ملاحظة: ACROFORM لا يستخدم هذا افتراضياً — widgets للواجهة فقط
  */
 function filterValuesByTemplateKeys (values = {}, configJson = {}) {
   const widgetKeys = collectWidgetKeys(configJson)
@@ -74,12 +117,204 @@ function filterValuesByTemplateKeys (values = {}, configJson = {}) {
   return filtered
 }
 
+function resolvePdfSettings (configJson = {}) {
+  const pdf = configJson.pdf || {}
+
+  return {
+    flatten: pdf.flatten !== false,
+    auto_font_size: pdf.auto_font_size !== false,
+    fill_mode: pdf.fill_mode === 'ACROFORM' ? 'ACROFORM' : 'BURN_IN',
+    font_size: pdf.font_size != null ? Number(pdf.font_size) : null,
+    min_font_size: Number(pdf.min_font_size ?? 10),
+    max_font_size: Number(pdf.max_font_size ?? 14),
+    line_height: Number(pdf.line_height ?? 14),
+    filter_by_widgets: pdf.filter_by_widgets === true
+  }
+}
+
+function resolveValuesForEngine ({
+  engineType,
+  dataJson = {},
+  configJson = {},
+  pdfSettings = {}
+}) {
+  if (engineType === 'POSITIONED') {
+    return filterValuesByTemplateKeys(dataJson, configJson)
+  }
+
+  if (pdfSettings.filter_by_widgets) {
+    return filterValuesByTemplateKeys(dataJson, configJson)
+  }
+
+  return { ...(dataJson || {}) }
+}
+
+function getTextFieldRectangle (textField) {
+  const widgets = textField.acroField.getWidgets()
+
+  if (!widgets?.length) {
+    return null
+  }
+
+  return widgets[0].getRectangle()
+}
+
+function computeAutoFontSize ({
+  text,
+  font,
+  width,
+  height,
+  minSize = 10,
+  maxSize = 14,
+  respectFieldHeight = true
+}) {
+  if (!font) {
+    return maxSize
+  }
+
+  let upperBound = maxSize
+
+  if (respectFieldHeight && height) {
+    upperBound = Math.min(maxSize, height * 0.78)
+  }
+
+  const normalized = String(text ?? '')
+
+  if (!normalized.trim()) {
+    return upperBound
+  }
+
+  if (!width) {
+    return upperBound
+  }
+
+  for (let size = upperBound; size >= minSize; size -= 0.5) {
+    const textWidth = font.widthOfTextAtSize(normalized, size)
+
+    if (textWidth <= width * 0.96) {
+      return size
+    }
+  }
+
+  return minSize
+}
+
+function resolveWidgetPageIndex (pdfDoc, widget) {
+  const pages = pdfDoc.getPages()
+  const targetRef = widget.P?.()
+
+  if (!targetRef) {
+    return 0
+  }
+
+  for (let index = 0; index < pages.length; index += 1) {
+    if (pages[index].ref === targetRef) {
+      return index
+    }
+  }
+
+  return 0
+}
+
+function collectTextFieldPlacements (pdfDoc, form, values = {}) {
+  const placements = []
+
+  for (const [key, rawValue] of Object.entries(values)) {
+    if (rawValue == null) {
+      continue
+    }
+
+    try {
+      const textField = form.getTextField(key)
+      const widgets = textField.acroField.getWidgets()
+
+      if (!widgets?.length) {
+        continue
+      }
+
+      const widget = widgets[0]
+
+      placements.push({
+        key,
+        value: String(rawValue),
+        rect: widget.getRectangle(),
+        pageIndex: resolveWidgetPageIndex(pdfDoc, widget)
+      })
+    } catch (_) {}
+  }
+
+  return placements
+}
+
+function resolveDrawFontSize ({ value, font, rect, pdfSettings }) {
+  if (pdfSettings.font_size != null) {
+    return pdfSettings.font_size
+  }
+
+  if (!pdfSettings.auto_font_size) {
+    return pdfSettings.max_font_size
+  }
+
+  return computeAutoFontSize({
+    text: value,
+    font,
+    width: rect.width,
+    height: pdfSettings.line_height,
+    minSize: pdfSettings.min_font_size,
+    maxSize: pdfSettings.max_font_size,
+    respectFieldHeight: false
+  })
+}
+
+function resolveTextBaselineY ({ rect, fontSize, pdfSettings }) {
+  const lineHeight = Math.max(rect.height, pdfSettings.line_height, fontSize * 1.05)
+  return rect.y + (lineHeight - fontSize) / 2
+}
+
+function applyTextFieldFontSize ({
+  textField,
+  value,
+  font,
+  pdfSettings
+}) {
+  if (pdfSettings.font_size != null) {
+    textField.setFontSize(pdfSettings.font_size)
+    return pdfSettings.font_size
+  }
+
+  if (!pdfSettings.auto_font_size) {
+    return null
+  }
+
+  const rect = getTextFieldRectangle(textField)
+
+  if (!rect) {
+    return null
+  }
+
+  const fontSize = computeAutoFontSize({
+    text: value,
+    font,
+    width: rect.width,
+    height: rect.height,
+    minSize: pdfSettings.min_font_size,
+    maxSize: pdfSettings.max_font_size
+  })
+
+  textField.setFontSize(fontSize)
+
+  return fontSize
+}
+
 /** يملأ حقل AcroForm واحد — text / dropdown / checkbox / radio */
-function setAcroFormFieldValue (form, fieldName, rawValue) {
+function setAcroFormFieldValue (form, fieldName, rawValue, options = {}) {
   const value = rawValue == null ? '' : String(rawValue)
+  const { font = null, pdfSettings = resolvePdfSettings() } = options
 
   try {
-    form.getTextField(fieldName).setText(value)
+    const textField = form.getTextField(fieldName)
+    textField.setText(value)
+    applyTextFieldFontSize({ textField, value, font, pdfSettings })
     return true
   } catch (_) {}
 
@@ -115,16 +350,86 @@ function setAcroFormFieldValue (form, fieldName, rawValue) {
 }
 
 /**
- * ACROFORM: يمر على كل key في values ويحاول ملء حقل PDF بنفس الاسم
- * مثال: values.employee → حقل PDF اسمه "employee"
+ * BURN_IN (الافتراضي): يقرأ مواقع حقول AcroForm، يثبّت النموذج، ثم يرسم النص
+ * مباشرة على الصفحة بخط أكبر — لا يُقيّد بارتفاع صندوق الحقل الصغير (~13pt).
  */
-async function fillAcroFormPdf ({ pdfDoc, values = {} }) {
+async function fillAcroFormPdfBurnIn ({
+  pdfDoc,
+  values = {},
+  unicodeFont = null,
+  pdfSettings = resolvePdfSettings()
+}) {
+  const form = pdfDoc.getForm()
+  const font =
+    unicodeFont || (await pdfDoc.embedFont(StandardFonts.Helvetica))
+  const placements = collectTextFieldPlacements(pdfDoc, form, values)
+  const filled = placements.map(item => item.key)
+  const skipped = Object.keys(values).filter(key => !filled.includes(key))
+
+  for (const key of [...skipped]) {
+    if (setAcroFormFieldValue(form, key, values[key], { font, pdfSettings })) {
+      filled.push(key)
+    }
+  }
+
+  if (pdfSettings.flatten) {
+    try {
+      form.flatten()
+    } catch (_) {}
+  }
+
+  const pages = pdfDoc.getPages()
+
+  for (const placement of placements) {
+    const page = pages[placement.pageIndex]
+
+    if (!page) {
+      continue
+    }
+
+    const fontSize = resolveDrawFontSize({
+      value: placement.value,
+      font,
+      rect: placement.rect,
+      pdfSettings
+    })
+
+    page.drawText(placement.value, {
+      x: placement.rect.x,
+      y: resolveTextBaselineY({
+        rect: placement.rect,
+        fontSize,
+        pdfSettings
+      }),
+      size: fontSize,
+      font,
+      color: rgb(0, 0, 0)
+    })
+  }
+
+  return {
+    filled,
+    skipped: Object.keys(values).filter(key => !filled.includes(key)),
+    flattened: pdfSettings.flatten,
+    fill_mode: 'BURN_IN'
+  }
+}
+
+/** ACROFORM: ملء حقول النموذج التقليدي (قد يُنتج خطاً صغيراً مع حقول ضيقة) */
+async function fillAcroFormPdfLegacy ({
+  pdfDoc,
+  values = {},
+  unicodeFont = null,
+  pdfSettings = resolvePdfSettings()
+}) {
   const form = pdfDoc.getForm()
   const filled = []
   const skipped = []
+  const appearanceFont =
+    unicodeFont || (await pdfDoc.embedFont(StandardFonts.Helvetica))
 
   for (const [key, value] of Object.entries(values)) {
-    if (setAcroFormFieldValue(form, key, value)) {
+    if (setAcroFormFieldValue(form, key, value, { font: appearanceFont, pdfSettings })) {
       filled.push(key)
     } else {
       skipped.push(key)
@@ -133,25 +438,52 @@ async function fillAcroFormPdf ({ pdfDoc, values = {} }) {
 
   if (filled.length) {
     try {
-      form.updateFieldAppearances()
-    } catch (_) {
-      // بعض القوالب لا تدعم تحديث المظهر — نتابع
+      form.updateFieldAppearances(appearanceFont)
+    } catch (error) {
+      if (unicodeFont) {
+        throw error
+      }
+    }
+
+    if (pdfSettings.flatten) {
+      form.flatten()
     }
   }
 
-  return { filled, skipped }
+  return {
+    filled,
+    skipped,
+    flattened: filled.length > 0 && pdfSettings.flatten,
+    fill_mode: 'ACROFORM'
+  }
+}
+
+async function fillAcroFormPdf (options) {
+  const pdfSettings = options.pdfSettings || resolvePdfSettings()
+
+  if (pdfSettings.fill_mode === 'ACROFORM') {
+    return fillAcroFormPdfLegacy(options)
+  }
+
+  return fillAcroFormPdfBurnIn(options)
 }
 
 /**
  * POSITIONED: يرسم النص عند إحداثيات محددة في widget.data.pdf
  * { page: 0, x: 120, y: 500, font_size: 12 }
  */
-async function fillPositionedPdf ({ pdfDoc, configJson = {}, values = {} }) {
+async function fillPositionedPdf ({
+  pdfDoc,
+  configJson = {},
+  values = {},
+  unicodeFont = null
+}) {
   const widgets = configJson.widgets || []
   const filled = []
   const skipped = []
 
-  const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
+  const font =
+    unicodeFont || (await pdfDoc.embedFont(StandardFonts.Helvetica))
   const pages = pdfDoc.getPages()
 
   for (const widget of widgets) {
@@ -221,10 +553,13 @@ async function generatePdfFromTemplate ({
   }
 
   const configJson = documentTemplate.config_json || {}
-  const values = filterValuesByTemplateKeys(
-    documentInstance.data_json,
-    configJson
-  )
+  const pdfSettings = resolvePdfSettings(configJson)
+  const values = resolveValuesForEngine({
+    engineType: documentTemplate.engine_type,
+    dataJson: documentInstance.data_json,
+    configJson,
+    pdfSettings
+  })
 
   if (!Object.keys(values).length) {
     throw new Error('لا توجد قيم للملء في document_instance.data_json')
@@ -233,20 +568,45 @@ async function generatePdfFromTemplate ({
   const templateBytes = fs.readFileSync(templateAbsolutePath)
   const pdfDoc = await PDFDocument.load(templateBytes)
 
+  const needsUnicodeFont = valuesNeedUnicodeFont(values)
+  const unicodeFont = needsUnicodeFont
+    ? await embedUnicodeFont(pdfDoc)
+    : null
+
   let fillResult = { filled: [], skipped: [] }
 
   // ACROFORM أولاً أو POSITIONED حسب engine_type — مع fallback للطريقة الأخرى
   if (documentTemplate.engine_type === 'POSITIONED') {
-    fillResult = await fillPositionedPdf({ pdfDoc, configJson, values })
+    fillResult = await fillPositionedPdf({
+      pdfDoc,
+      configJson,
+      values,
+      unicodeFont
+    })
 
     if (!fillResult.filled.length) {
-      fillResult = await fillAcroFormPdf({ pdfDoc, values })
+      fillResult = await fillAcroFormPdf({
+        pdfDoc,
+        values,
+        unicodeFont,
+        pdfSettings
+      })
     }
   } else {
-    fillResult = await fillAcroFormPdf({ pdfDoc, values })
+    fillResult = await fillAcroFormPdf({
+      pdfDoc,
+      values,
+      unicodeFont,
+      pdfSettings
+    })
 
     if (!fillResult.filled.length) {
-      fillResult = await fillPositionedPdf({ pdfDoc, configJson, values })
+      fillResult = await fillPositionedPdf({
+        pdfDoc,
+        configJson,
+        values,
+        unicodeFont
+      })
     }
   }
 
@@ -276,6 +636,7 @@ async function generatePdfFromTemplate ({
     generated_pdf_path: outputStoredPath,
     filled_keys: fillResult.filled,
     skipped_keys: fillResult.skipped,
+    flattened: fillResult.flattened === true,
     values_used: values
   }
 }

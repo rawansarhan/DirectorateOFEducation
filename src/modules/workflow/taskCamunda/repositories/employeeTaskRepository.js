@@ -67,6 +67,26 @@ const LIST_INCLUDES = [
 
 const MAX_RUNNING_FETCH = 120
 
+const ACTIVE_EMPLOYEE_TRANSACTION_STATUSES = ['in_progress']
+
+function buildRunningListIncludes () {
+  return LIST_INCLUDES.map((include) => {
+    if (include.as !== 'transaction') {
+      return include
+    }
+
+    return {
+      ...include,
+      required: true,
+      where: {
+        status: {
+          [Op.in]: ACTIVE_EMPLOYEE_TRANSACTION_STATUSES
+        }
+      }
+    }
+  })
+}
+
 async function getUserRoleIds (userId) {
   const roles = await db.UserRoleAssignment.findAll({
     where: {
@@ -177,7 +197,7 @@ async function getRunningInstancesForProcessDefinitions ({
       'task_lock_expires_at',
       'created_at'
     ],
-    include: LIST_INCLUDES,
+    include: buildRunningListIncludes(),
     order: [
       [
         { model: db.ProcessDefinition, as: 'process_definition' },
@@ -218,7 +238,7 @@ async function getRunningInstancesForStages ({
       'task_lock_expires_at',
       'created_at'
     ],
-    include: LIST_INCLUDES,
+    include: buildRunningListIncludes(),
     order: [
       [
         { model: db.ProcessDefinition, as: 'process_definition' },
@@ -675,6 +695,37 @@ async function countCompletedStagesByTransactionIds (transactionIds = []) {
   )
 }
 
+async function getCompletedStageCodesByTransactionIds (transactionIds = []) {
+  if (!transactionIds.length) {
+    return new Map()
+  }
+
+  const rows = await db.ProcessInstanceStage.findAll({
+    where: {
+      transaction_id: {
+        [Op.in]: transactionIds
+      },
+      status: 'completed'
+    },
+    attributes: ['transaction_id', 'stage_code'],
+    raw: true
+  })
+
+  const map = new Map()
+
+  for (const row of rows) {
+    const transactionId = Number(row.transaction_id)
+
+    if (!map.has(transactionId)) {
+      map.set(transactionId, new Set())
+    }
+
+    map.get(transactionId).add(String(row.stage_code))
+  }
+
+  return map
+}
+
 module.exports = {
   getUserRoleIds,
   getAccessibleStageContext,
@@ -689,5 +740,6 @@ module.exports = {
   userHasDepartmentsAccess,
   countStagesByProcessDefinitionIds,
   countCompletedStagesByTransactionIds,
+  getCompletedStageCodesByTransactionIds,
   MAX_RUNNING_FETCH
 }

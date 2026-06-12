@@ -288,10 +288,22 @@ function validateStageConfigJson (value) {
   return { error: null, value: validated }
 }
 
+const documentPdfSettingsSchema = Joi.object({
+  flatten: Joi.boolean().default(true),
+  auto_font_size: Joi.boolean().default(true),
+  fill_mode: Joi.string().valid('BURN_IN', 'ACROFORM').default('BURN_IN'),
+  font_size: Joi.number().min(4).max(72).optional(),
+  min_font_size: Joi.number().min(4).max(72).default(10),
+  max_font_size: Joi.number().min(4).max(72).default(14),
+  line_height: Joi.number().min(8).max(72).default(14),
+  filter_by_widgets: Joi.boolean().default(false)
+}).unknown(false)
+
 const documentFormConfigJsonSchema = Joi.object({
   form_id: Joi.string().trim().min(1).max(128).required(),
   form_name: Joi.string().trim().min(1).max(255).required(),
-  widgets: Joi.array().items(widgetSchema).default([])
+  widgets: Joi.array().items(widgetSchema).default([]),
+  pdf: documentPdfSettingsSchema.optional()
 }).unknown(false)
 
 function validateDocumentFormConfigJson (value) {

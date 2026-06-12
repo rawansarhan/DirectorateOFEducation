@@ -183,7 +183,8 @@ async function syncCurrentStageIfNeeded (instance, activeStage) {
 async function matchInstancesToUserStages ({
   instances,
   stageIds,
-  taskMap
+  taskMap,
+  completedStageCodesMap = new Map()
 }) {
   const matched = []
 
@@ -197,6 +198,15 @@ async function matchInstancesToUserStages ({
     const activeStage = await resolveActiveStageForInstance(instance, activeTask)
 
     if (!activeStage || !stageIds.includes(activeStage.id)) {
+      continue
+    }
+
+    const transactionId = instance.transaction?.id
+    const completedCodes = transactionId
+      ? completedStageCodesMap.get(transactionId)
+      : null
+
+    if (completedCodes?.has(activeStage.code)) {
       continue
     }
 
@@ -250,10 +260,20 @@ async function getRunningTasks ({
 
   const taskMap = await fetchActiveCamundaTasks(camundaIds)
 
+  const transactionIds = instances
+    .map((instance) => instance.transaction?.id)
+    .filter(Boolean)
+
+  const completedStageCodesMap =
+    await employeeTaskRepository.getCompletedStageCodesByTransactionIds(
+      transactionIds
+    )
+
   const matchedPairs = await matchInstancesToUserStages({
     instances,
     stageIds,
-    taskMap
+    taskMap,
+    completedStageCodesMap
   })
 
   if (!matchedPairs.length) {
