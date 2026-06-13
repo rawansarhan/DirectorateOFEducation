@@ -1,7 +1,6 @@
 const eventBus = require('../../events/eventBus')
 const OutboxRepository = require('../repositories/OutboxRepository')
-
-const POLL_INTERVAL = 1000
+const { OUTBOX_POLL_INTERVAL_MS } = require('../../../config/env')
 
 let isRunning = false
 
@@ -30,8 +29,8 @@ async function processOutbox () {
 }
 
 function startOutboxWorker () {
-  console.log('📦 Outbox Worker Started')
-  setInterval(processOutbox, POLL_INTERVAL)
+  console.log(`📦 Outbox Worker Started (poll=${OUTBOX_POLL_INTERVAL_MS}ms)`)
+  setInterval(processOutbox, OUTBOX_POLL_INTERVAL_MS)
 }
 
 module.exports = {

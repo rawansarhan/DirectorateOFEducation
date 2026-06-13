@@ -817,6 +817,7 @@ router.get('/tasks/:taskId', authMiddleware, getTaskDetailsController)
 router.post(
   '/tasks/:taskId/submit-documents/signing-challenge',
   authMiddleware,
+  signingChallengeLimiter,
   createDocumentSubmitSigningChallengeController
 )
 
@@ -967,6 +968,7 @@ router.post(
 router.post(
   '/tasks/:taskId/submit-documents/complete',
   authMiddleware,
+  completeTaskLimiter,
   completeDocumentSubmitController
 )
 

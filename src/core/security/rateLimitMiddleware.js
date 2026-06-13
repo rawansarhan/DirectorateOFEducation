@@ -100,10 +100,18 @@ const completeTaskLimiter = createRateLimiter({
   keyGenerator: userAwareKey
 })
 
+const submitTransactionLimiter = createRateLimiter({
+  windowMs: Number(process.env.RATE_LIMIT_SUBMIT_WINDOW_MS || 60 * 1000),
+  max: Number(process.env.RATE_LIMIT_SUBMIT_MAX || 10),
+  keyPrefix: 'submit-transaction',
+  keyGenerator: userAwareKey
+})
+
 module.exports = {
   createRateLimiter,
   authSensitiveLimiter,
   authBruteForceLimiter,
   signingChallengeLimiter,
-  completeTaskLimiter
+  completeTaskLimiter,
+  submitTransactionLimiter
 }

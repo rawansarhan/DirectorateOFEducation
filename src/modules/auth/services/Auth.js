@@ -230,194 +230,194 @@ async function registerEmployee (userData) {
     organization_department_roles_id: orgDeptRole.id
   }
 }
-// //////////////////////////////////////////////////
-const jwt = require('jsonwebtoken')
-const { OrgDeptRole , User , UserRoleAssignment } = require('../../../entities')
-const JWT_SECRET = process.env.JWT_SECRET || 'your_very_secret_key'
+// // //////////////////////////////////////////////////
+// const jwt = require('jsonwebtoken')
+// const { OrgDeptRole , User , UserRoleAssignment } = require('../../../entities')
+// const JWT_SECRET = process.env.JWT_SECRET || 'your_very_secret_key'
 
-// ================== REGISTER CITIZEN ==================
-async function registerCitizen(userData) {
+// // ================== REGISTER CITIZEN ==================
+// async function registerCitizen(userData) {
 
-  const sequelize = User.sequelize
-
-  const transaction = await sequelize.transaction()
-
-  try {
-
-    const { error } = validateRegisterCitizen(userData)
-
-    if (error) {
-      throw new Error(error.details.map(d => d.message).join(', '))
-    }
-
-    const existingUser = await User.findOne({
-      where: { email: userData.email },
-      transaction
-    })
-
-    if (existingUser) {
-      throw new Error('Email already exists')
-    }
-
-    const orgDeptRole = await OrgDeptRole.findOne({
-      where: {
-        camunda_group_key: 'CITIZEN'
-      },
-      transaction
-    })
-
-    if (!orgDeptRole) {
-      throw new Error('CITIZEN role not found')
-    }
-
-    const hashedPassword = await bcrypt.hash(userData.password, 10)
-
-    const inputUserDTO = new RegisterCitizenInputDTO({
-      ...userData,
-      password: hashedPassword
-    })
-
-    const user = await User.create(
-      { ...inputUserDTO },
-      { transaction }
-    )
-
-    await UserRoleAssignment.create({
-      user_id: user.id,
-      organization_department_roles_id: orgDeptRole.id
-    }, { transaction })
-
-    const token = jwt.sign(
-      { id: user.id },
-      JWT_SECRET,
-      { expiresIn: '30d' }
-    )
-
-    await transaction.commit()
-
-    return {
-      token,
-      user: new RegisterCitizenOutputDTO(user),
-      role_code: 'CITIZEN'
-    }
-
-  } catch (error) {
-
-    await transaction.rollback()
-
-    throw error
-  }
-}
-// async function registerCitizen (userData) {
-//   const sequelize = userRepository.getSequelize()
+//   const sequelize = User.sequelize
 
 //   const transaction = await sequelize.transaction()
 
 //   try {
-//     const { error } =
-//       validateRegisterCitizen(userData)
+
+//     const { error } = validateRegisterCitizen(userData)
 
 //     if (error) {
-//       throw new Error(
-//         error.details.map(d => d.message).join(', ')
-//       )
+//       throw new Error(error.details.map(d => d.message).join(', '))
 //     }
 
-//     const conflictingUsers =
-//       await userRepository.findConflictingByEmailOrUserName(
-//         userData.email,
-//         userData.userName,
-//         { transaction }
-//       )
+//     const existingUser = await User.findOne({
+//       where: { email: userData.email },
+//       transaction
+//     })
 
-//     for (const existing of conflictingUsers) {
-//       if (existing.is_active) {
-//         if (existing.email === userData.email) {
-//           throw new Error(
-//             'البريد الإلكتروني مستخدم مسبقاً، الرجاء استخدام بريد آخر'
-//           )
-//         }
-
-//         throw new Error(
-//           'اسم المستخدم مستخدم مسبقاً، الرجاء اختيار اسم آخر'
-//         )
-//       }
-
-//       await otpCodeRepository.destroyByUserId(
-//         existing.id,
-//         { transaction }
-//       )
-
-//       await userRepository.destroyInstance(
-//         existing,
-//         { transaction }
-//       )
+//     if (existingUser) {
+//       throw new Error('Email already exists')
 //     }
 
-//     const orgDeptRole =
-//       await orgDeptRolesClient.getCitizenRole()
+//     const orgDeptRole = await OrgDeptRole.findOne({
+//       where: {
+//         camunda_group_key: 'CITIZEN'
+//       },
+//       transaction
+//     })
 
 //     if (!orgDeptRole) {
-//       throw new Error(
-//         'دور المواطن (CITIZEN) غير معرّف في النظام. يرجى التواصل مع الدعم الفني.'
-//       )
+//       throw new Error('CITIZEN role not found')
 //     }
 
-//     const hashedPassword = await bcrypt.hash(
-//       userData.password,
-//       10
-//     )
+//     const hashedPassword = await bcrypt.hash(userData.password, 10)
 
-//     const inputUserDTO =
-//       new RegisterCitizenInputDTO({
-//         ...userData,
-//         password: hashedPassword
-//       })
+//     const inputUserDTO = new RegisterCitizenInputDTO({
+//       ...userData,
+//       password: hashedPassword
+//     })
 
-//     const user = await userRepository.create(
-//       {
-//         ...inputUserDTO,
-//         is_active: false
-//       },
+//     const user = await User.create(
+//       { ...inputUserDTO },
 //       { transaction }
 //     )
 
-//     await userRoleAssignmentRepository.create(
-//       {
-//         user_id: user.id,
-//         organization_department_roles_id:
-//           orgDeptRole.id
-//       },
-//       { transaction }
+//     await UserRoleAssignment.create({
+//       user_id: user.id,
+//       organization_department_roles_id: orgDeptRole.id
+//     }, { transaction })
+
+//     const token = jwt.sign(
+//       { id: user.id },
+//       JWT_SECRET,
+//       { expiresIn: '30d' }
 //     )
 
 //     await transaction.commit()
 
-//     if (!user.phone_number) {
-//       throw new Error(
-//         'لا يوجد رقم هاتف مرتبط بهذا الحساب. يرجى التواصل مع الدعم الفني'
-//       )
-//     }
-
-//     const session_id =
-//       await saveAndSendOtp(
-//         user.id,
-//         user.phone_number
-//       )
-
 //     return {
-//       session_id,
-//       message:
-//         `تم إرسال رمز التحقق على رقم الموبايل. أدخله خلال ${OTP_TTL_MINUTES} دقائق.`,
+//       token,
+//       user: new RegisterCitizenOutputDTO(user),
+//       role_code: 'CITIZEN'
 //     }
+
 //   } catch (error) {
-//     if (!transaction.finished) {
-//       await transaction.rollback()
-//     }
+
+//     await transaction.rollback()
 
 //     throw error
 //   }
 // }
+async function registerCitizen (userData) {
+  const sequelize = userRepository.getSequelize()
+
+  const transaction = await sequelize.transaction()
+
+  try {
+    const { error } =
+      validateRegisterCitizen(userData)
+
+    if (error) {
+      throw new Error(
+        error.details.map(d => d.message).join(', ')
+      )
+    }
+
+    const conflictingUsers =
+      await userRepository.findConflictingByEmailOrUserName(
+        userData.email,
+        userData.userName,
+        { transaction }
+      )
+
+    for (const existing of conflictingUsers) {
+      if (existing.is_active) {
+        if (existing.email === userData.email) {
+          throw new Error(
+            'البريد الإلكتروني مستخدم مسبقاً، الرجاء استخدام بريد آخر'
+          )
+        }
+
+        throw new Error(
+          'اسم المستخدم مستخدم مسبقاً، الرجاء اختيار اسم آخر'
+        )
+      }
+
+      await otpCodeRepository.destroyByUserId(
+        existing.id,
+        { transaction }
+      )
+
+      await userRepository.destroyInstance(
+        existing,
+        { transaction }
+      )
+    }
+
+    const orgDeptRole =
+      await orgDeptRolesClient.getCitizenRole()
+
+    if (!orgDeptRole) {
+      throw new Error(
+        'دور المواطن (CITIZEN) غير معرّف في النظام. يرجى التواصل مع الدعم الفني.'
+      )
+    }
+
+    const hashedPassword = await bcrypt.hash(
+      userData.password,
+      10
+    )
+
+    const inputUserDTO =
+      new RegisterCitizenInputDTO({
+        ...userData,
+        password: hashedPassword
+      })
+
+    const user = await userRepository.create(
+      {
+        ...inputUserDTO,
+        is_active: false
+      },
+      { transaction }
+    )
+
+    await userRoleAssignmentRepository.create(
+      {
+        user_id: user.id,
+        organization_department_roles_id:
+          orgDeptRole.id
+      },
+      { transaction }
+    )
+
+    await transaction.commit()
+
+    if (!user.phone_number) {
+      throw new Error(
+        'لا يوجد رقم هاتف مرتبط بهذا الحساب. يرجى التواصل مع الدعم الفني'
+      )
+    }
+
+    const session_id =
+      await saveAndSendOtp(
+        user.id,
+        user.phone_number
+      )
+
+    return {
+      session_id,
+      message:
+        `تم إرسال رمز التحقق على رقم الموبايل. أدخله خلال ${OTP_TTL_MINUTES} دقائق.`,
+    }
+  } catch (error) {
+    if (!transaction.finished) {
+      await transaction.rollback()
+    }
+
+    throw error
+  }
+}
 
 // ================== LOGIN ==================
 // async function login(userData , clientMeta = {}) {

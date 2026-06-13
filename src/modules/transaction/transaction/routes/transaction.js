@@ -20,6 +20,7 @@ const {
 } = require('../../integrityChain/controllers/integrityChainController')
 
 const { authMiddleware } = require('../../../../core/middleware/authMiddleware')
+const { submitTransactionLimiter } = require('../../../../core/security/rateLimitMiddleware')
 
 /**
  * @swagger
@@ -187,6 +188,7 @@ router.post(
 router.post(
   '/submit/:transactionId',
   authMiddleware,
+  submitTransactionLimiter,
   submitTransactionController
 )
 

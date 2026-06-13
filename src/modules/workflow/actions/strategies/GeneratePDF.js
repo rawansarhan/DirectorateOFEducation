@@ -14,14 +14,13 @@
  *   - document_instance موجود مسبقاً (أُنشئ من templates في USER_TASK)
  *   - document_template نشط وملف PDF موجود في uploads
  *
- * النتيجة: generated_pdf_path محدّث في document_instance
+ * التنفيذ: يُ enqueue في outbox — التوليد الفعلي في generatePdf.listener.js
  */
 
 const documentInstanceRepository = require('../../../transaction/document/repositories/documentInstanceRepository')
 const documentTemplateRepository = require('../../../requirements/DocTemp/repositories/documentTemplateRepository')
-const {
-  generatePdfFromTemplate
-} = require('../../../transaction/document/services/pdfGenerationService')
+const { enqueueOutboxEvent } = require('../../../../core/shared/outbox/services/outboxEnqueueService')
+const EVENTS = require('../../../../core/shared/events/types')
 
 class GeneratePdfStrategy {
   async execute ({ payload, context }) {
@@ -36,7 +35,6 @@ class GeneratePdfStrategy {
       throw new Error('GENERATE_PDF: transaction غير موجود في السياق')
     }
 
-    // document_instance أُنشئ عند complete USER_TASK مع templates[].values
     const documentInstance =
       await documentInstanceRepository.findByTransactionAndTemplate(
         transactionId,
@@ -59,26 +57,34 @@ class GeneratePdfStrategy {
       )
     }
 
-    const generation = await generatePdfFromTemplate({
-      documentTemplate,
-      documentInstance
-    })
+    if (documentInstance.generated_pdf_path) {
+      return {
+        type: 'pdf',
+        status: 'generated',
+        skipped: true,
+        template_id: templateId,
+        document_instance_id: documentInstance.id,
+        transaction_id: transactionId,
+        generated_pdf_path: documentInstance.generated_pdf_path,
+        engine_type: documentTemplate.engine_type
+      }
+    }
 
-    await documentInstanceRepository.updateInstance(documentInstance, {
-      generated_pdf_path: generation.generated_pdf_path,
-      status: 'generated'
+    await enqueueOutboxEvent(EVENTS.GENERATE_PDF, {
+      transaction_id: transactionId,
+      template_id: templateId,
+      document_instance_id: documentInstance.id,
+      stage_code: context?.stage?.code || null,
+      user_id: context?.userId || null
     })
 
     return {
       type: 'pdf',
-      status: 'generated',
+      status: 'queued',
       template_id: templateId,
       document_instance_id: documentInstance.id,
       transaction_id: transactionId,
-      generated_pdf_path: generation.generated_pdf_path,
-      filled_keys: generation.filled_keys,
-      skipped_keys: generation.skipped_keys,
-      values_used: generation.values_used,
+      generated_pdf_path: null,
       engine_type: documentTemplate.engine_type
     }
   }
