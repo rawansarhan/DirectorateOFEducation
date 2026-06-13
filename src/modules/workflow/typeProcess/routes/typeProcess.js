@@ -95,7 +95,7 @@ router.put(
 router.get(
   '/',
   authMiddleware,
-  authorize('TYPETPROCESS_VIEW'),
+  // authorize('TYPETPROCESS_VIEW'),
   getAlltype
 )
 
