@@ -1,6 +1,7 @@
 'use strict'
 
 const filePickerRepository = require('../repositories/filePickerRepository')
+const typeDocRepository = require('../../typeDoc/repositories/typeDocRepository')
 const { FilePickerInputDTO } = require('../dto/FilePickerInputDTO')
 const { validateCreateFilePicker } = require('../validations/filePickerValidations')
 const { toDTO, toDTOList } = require('../mappers/filePickerMapper')
@@ -21,12 +22,28 @@ function buildIdWidget (id) {
   return `${WIDGET_PREFIX}${id}`
 }
 
+async function assertTypeDocExists (typeDocId) {
+  const typeDoc = await typeDocRepository.findById(typeDocId)
+
+  if (!typeDoc) {
+    throw new Error('نوع الوثيقة (type_doc_id) غير موجود')
+  }
+
+  if (typeDoc.is_active === false) {
+    throw new Error('نوع الوثيقة (type_doc_id) غير نشط')
+  }
+
+  return typeDoc
+}
+
 async function createFilePickerService (payload = {}) {
   const { error, value } = validateCreateFilePicker(payload)
 
   if (error) {
     throw new Error(formatValidationError(error))
   }
+
+  await assertTypeDocExists(value.type_doc_id)
 
   const input = new FilePickerInputDTO(value)
   const pendingIdWidget = `__pending__${Date.now()}`

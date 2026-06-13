@@ -14,6 +14,10 @@ const {
   normalizeActionPayload,
   resolveActionsForStage
 } = require('../../actions/actionHelpers')
+const {
+  validateAndNormalizeUnifiedFormPayload,
+  buildCamundaGatewayVariables
+} = require('../../services/unifiedFormPayloadService')
 const { buildStoredStageData } = require('../../services/stageSubmissionService')
 const {
   registerTransactionFiles
@@ -58,6 +62,7 @@ const {
   notifyTransactionOwnerOnReject
 } = require('../../../transaction/notification/services/transactionRejectNotificationService')
 const { enrichCamundaTaskNotFoundError } = require('../../../../core/utils/errorMessageHelper')
+const { formatTransactionDate } = require('../utils/employeeTaskFormatters')
 
 const LOG_PREFIX = '[CompleteTask]'
 
@@ -89,6 +94,24 @@ function buildRootSubmissionSnapshot (transactionData = {}) {
   }
 
   return snapshot
+}
+
+function buildAutoCompleteAuthPayload (transactionData = {}) {
+  const snapshot = buildRootSubmissionSnapshot(transactionData)
+
+  return {
+    form_id: snapshot.form_id,
+    form_name: snapshot.form_name,
+    widgets: Array.isArray(snapshot.widgets) ? snapshot.widgets : [],
+    templates: (snapshot.templates || [])
+      .map(item => ({
+        id: item.id_template ?? item.id ?? null,
+        value: item.value ?? {}
+      }))
+      .filter(item => item.id != null),
+    note: snapshot.note ?? '',
+    decision: snapshot.decision ?? 'submit'
+  }
 }
 
 /**
@@ -173,8 +196,11 @@ async function enrichTemplatesForResponse (templates = []) {
 
     enriched.push({
       id: templateId,
+      id_template: templateId,
       document_instance_id: template.document_instance_id ?? null,
-      values: template.values || {},
+      id_document_instance: template.document_instance_id ?? null,
+      value: template.values ?? template.value ?? {},
+      values: template.values ?? template.value ?? {},
       path: row?.file_path || template.path || null,
       generated_pdf_path: generatedPdfPath
     })
@@ -574,16 +600,6 @@ async function completeTaskCore ({
     stageType: stage.type
   })
 
-  // Validate optional stage_name sent by the client matches the current stage.
-  if (
-    payload.stage_name &&
-    String(payload.stage_name).trim() !== String(stage.name).trim()
-  ) {
-    const error = new Error('stage_name does not match the current workflow stage')
-    error.code = 'VALIDATION_ERROR'
-    throw error
-  }
-
   // ------------------------------------------------------------------
   // Phase 6: Resolve decision (approve / reject) and stage config
   // ------------------------------------------------------------------
@@ -609,6 +625,48 @@ async function completeTaskCore ({
     isReject,
     needsSignature
   })
+
+  let normalizedPayload = payload
+
+  if (
+    isAutoComplete &&
+    stage?.auth_type === 'AUTH' &&
+    !Array.isArray(payload?.widgets)
+  ) {
+    const authPayload = buildAutoCompleteAuthPayload(transaction.data || {})
+
+    if (!authPayload.widgets.length) {
+      const error = new Error(
+        'بيانات التقديم غير موجودة على المعاملة — أعد submit مع widgets[] قبل بدء workflow'
+      )
+      error.code = 'VALIDATION_ERROR'
+      throw error
+    }
+
+    logStep('PHASE_6_AUTH_AUTO_PAYLOAD', {
+      widgetCount: authPayload.widgets.length,
+      templateCount: authPayload.templates.length
+    })
+
+    normalizedPayload = authPayload
+  }
+
+  if (stageConfig?.config_json) {
+    try {
+      normalizedPayload = await validateAndNormalizeUnifiedFormPayload(
+        normalizedPayload,
+        stageConfig.config_json,
+        {
+          mode: 'complete',
+          stageName: stage.name
+        }
+      )
+    } catch (validationError) {
+      const error = new Error(validationError.message)
+      error.code = 'VALIDATION_ERROR'
+      throw error
+    }
+  }
 
   let signingRequest = null
 
@@ -674,8 +732,8 @@ async function completeTaskCore ({
   const collectedFiles = []
   const collectedTemplates = []
 
-  if (Array.isArray(payload.fields)) {
-    for (const field of payload.fields) {
+  if (Array.isArray(normalizedPayload.fields)) {
+    for (const field of normalizedPayload.fields) {
       collectedFields.push({
         key: field.key || field.name,
         value: field.value
@@ -683,31 +741,34 @@ async function completeTaskCore ({
     }
   }
 
-  if (Array.isArray(payload.files) && payload.files.length) {
-    logStep('FILES_REGISTER', { count: payload.files.length })
+  if (Array.isArray(normalizedPayload.files) && normalizedPayload.files.length) {
+    const skipFileRegistration =
+      isAutoComplete && stage?.auth_type === 'AUTH'
 
-    const registeredFiles = await registerTransactionFiles({
-      transactionId: transaction.id,
-      files: payload.files,
-      userId
-    })
+    if (skipFileRegistration) {
+      logStep('FILES_REGISTER_SKIP', { reason: 'auth_auto_complete_already_registered' })
+      collectedFiles.push(...normalizedPayload.files)
+    } else {
+      logStep('FILES_REGISTER', { count: normalizedPayload.files.length })
 
-    collectedFiles.push(...registeredFiles)
+      const registeredFiles = await registerTransactionFiles({
+        transactionId: transaction.id,
+        files: normalizedPayload.files,
+        userId
+      })
 
-    logStep('FILES_REGISTERED', { count: registeredFiles.length })
+      collectedFiles.push(...registeredFiles)
+
+      logStep('FILES_REGISTERED', { count: registeredFiles.length })
+    }
   }
 
-  // ------------------------------------------------------------------
-  // templates → document_instance (USER_TASK) — PDF يُولَّد لاحقاً في SERVICE_TASK
-  // مثال body: templates: [{ id: 1, values: { employee: "...", job: "..." } }]
-  // يُخزَّن في history: { id, document_instance_id, values }
-  // ------------------------------------------------------------------
-  if (Array.isArray(payload.templates) && payload.templates.length) {
-    logStep('TEMPLATES_REGISTER', { count: payload.templates.length })
+  if (Array.isArray(normalizedPayload.templates) && normalizedPayload.templates.length) {
+    logStep('TEMPLATES_REGISTER', { count: normalizedPayload.templates.length })
 
     const registeredTemplates = await registerTemplatesForTransaction({
       transactionId: transaction.id,
-      templates: payload.templates
+      templates: normalizedPayload.templates
     })
 
     collectedTemplates.push(...registeredTemplates)
@@ -717,13 +778,16 @@ async function completeTaskCore ({
 
   const stageSnapshot = buildStoredStageData(
     {
-      stage_name: payload.stage_name || stage.name,
+      form_id: normalizedPayload.form_id,
+      form_name: normalizedPayload.form_name,
+      widgets: normalizedPayload.widgets,
+      stage_name: stage.name,
       fields: collectedFields,
       files: collectedFiles,
       templates: collectedTemplates,
-      variables: payload.variables || {},
-      decision: signingDecision || payload.decision || null,
-      note: payload.note ?? payload.notes ?? ''
+      gateway_value: normalizedPayload.gateway_value,
+      decision: signingDecision || normalizedPayload.decision || null,
+      note: normalizedPayload.note ?? normalizedPayload.notes ?? ''
     },
     {
       stageName: stage.name,
@@ -785,27 +849,15 @@ async function completeTaskCore ({
   // ------------------------------------------------------------------
   logStep('PHASE_10_PREPARE_CAMUNDA_VARIABLES')
 
-  const variables = {}
-  const routingDecision = isReject
-    ? 'reject'
-    : (
-      payload.variables?.decision ||
-      signingDecision ||
-      payload.decision ||
-      'approve'
-    )
+  const variables = buildCamundaGatewayVariables({
+    isReject,
+    gatewayValue: normalizedPayload.gateway_value,
+    signingDecision
+  })
 
-  if (isReject) {
-    variables.decision = {
-      value: 'reject'
-    }
-  } else if (routingDecision) {
-    variables.decision = {
-      value: routingDecision
-    }
-  }
+  const routingValue = variables.value?.value || signingDecision || 'approve'
 
-  logStep('CAMUNDA_VARIABLES_READY', { decision: routingDecision })
+  logStep('CAMUNDA_VARIABLES_READY', { value: routingValue })
 
   // ------------------------------------------------------------------
   // Phase 11: Complete Camunda task BEFORE any DB persistence
@@ -817,7 +869,7 @@ async function completeTaskCore ({
     await camundaClient.getTaskById(task.id)
   } catch (err) {
     if (err.expose && err.details && typeof err.details === 'object') {
-      err.details.stage_name = payload?.stage_name || stage?.name || null
+      err.details.stage_name = stage?.name || null
       err.details.stage_code = stage?.code || null
       err.details.hint =
         'المهمة كانت نشطة عند بدء الطلب لكن اختفت قبل الإكمال — غالباً إكمال مكرر أو طلب موازٍ.'
@@ -832,7 +884,7 @@ async function completeTaskCore ({
     await camundaClient.completeTask(task.id, variables)
   } catch (err) {
     if (err.expose && err.details && typeof err.details === 'object') {
-      err.details.stage_name = payload?.stage_name || stage?.name || null
+      err.details.stage_name = stage?.name || null
       err.details.stage_code = stage?.code || null
     }
 
@@ -850,7 +902,7 @@ async function completeTaskCore ({
     ...(transaction.data || {})
   }
 
-  const completedAt = new Date()
+  const completedAt = formatTransactionDate(new Date())
   const persistAuthSubmissionAtRoot = shouldPersistAuthSubmissionAtRoot({
     isAutoComplete,
     stage
@@ -871,11 +923,6 @@ async function completeTaskCore ({
   } else {
     transactionData[stage.code] = {
       ...stageSnapshot,
-      ...(payload.variables &&
-        typeof payload.variables === 'object' &&
-        Object.keys(payload.variables).length
-        ? { variables: payload.variables }
-        : {}),
       completed_by: userId,
       completed_at: completedAt
     }
@@ -1172,7 +1219,7 @@ async function completeTaskCore ({
   return buildCompleteResponse({
     stage,
     stageSnapshot,
-    variables: payload.variables || (routingDecision ? { decision: routingDecision } : null),
+    variables: routingValue ? { value: routingValue } : null,
     signingRequest,
     idempotencyKey: issuedIdempotencyKey,
     idempotentReplay: false,
@@ -1182,5 +1229,6 @@ async function completeTaskCore ({
 }
 
 module.exports = {
-  completeTask
+  completeTask,
+  buildAutoCompleteAuthPayload
 }

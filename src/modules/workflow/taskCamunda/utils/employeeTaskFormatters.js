@@ -35,9 +35,9 @@ function formatTransactionDate (value) {
     return null
   }
 
-  const date = value instanceof Date ? value : new Date(value)
+  const date = value instanceof Date ? value : parseTransactionDate(value)
 
-  if (Number.isNaN(date.getTime())) {
+  if (!date || Number.isNaN(date.getTime())) {
     return null
   }
 
@@ -48,9 +48,33 @@ function formatTransactionDate (value) {
   return `${day}/${month}/${year}`
 }
 
+function parseTransactionDate (value) {
+  if (!value) {
+    return null
+  }
+
+  if (value instanceof Date) {
+    return value
+  }
+
+  const text = String(value).trim()
+
+  const dmyMatch = text.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
+
+  if (dmyMatch) {
+    const [, day, month, year] = dmyMatch
+    return new Date(Number(year), Number(month) - 1, Number(day))
+  }
+
+  const parsed = new Date(text)
+
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
 module.exports = {
   PROCESS_PRIORITY,
   PROCESS_PRIORITY_LABELS,
   normalizeProcessPriority,
-  formatTransactionDate
+  formatTransactionDate,
+  parseTransactionDate
 }

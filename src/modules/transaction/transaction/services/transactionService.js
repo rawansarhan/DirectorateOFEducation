@@ -43,10 +43,6 @@ function buildSubmitGuardKey (transactionId) {
   return `txn-${transactionId}`
 }
 
-function buildSubmitGuardKeyForProcess (userId, processCode) {
-  return `submit-${userId}-${processCode}`
-}
-
 function wrapSubmitResult (dto, idempotencyKey, idempotentReplay = false, extra = {}) {
   return {
     ...dto,
@@ -163,21 +159,29 @@ async function createDraft ({ userId, processId }) {
   }, { label: 'transaction.createDraft' })
 }
 
-async function UpdateDraft ({ transId, data, userId = null }) {
+async function UpdateDraft ({ userId, processId, data }) {
   return retryWithBackoff(async () => {
-    const numericTransId = parsePositiveInt(transId, 'معرّف المسودة')
-    const draft = await repo.findDraft(numericTransId)
+    const process = await fetchActiveProcess(processId)
+    let draft = await repo.findDraftByCode(userId, process.code)
+    let isNew = false
 
     if (!draft) {
-      throw createTransactionError('DRAFT_NOT_FOUND')
+      draft = await repo.create({
+        code: process.code,
+        user_id: userId,
+        status: 'draft'
+      })
+      isNew = true
+    } else if (draft.user_id !== userId) {
+      throw createTransactionError('UNAUTHORIZED')
     }
 
     await applyIdentityUpdate(draft, data, userId)
 
-    const refreshed = await repo.findById(numericTransId)
+    const refreshed = await repo.findById(draft.id)
 
     return {
-      isNew: false,
+      isNew,
       draft: toDTO(refreshed)
     }
   }, { label: 'transaction.updateDraft' })
@@ -240,58 +244,12 @@ async function getTransactionById (transactionId, userId) {
   return toDTO(transaction)
 }
 
-async function resolveDraftForProcessSubmit ({ userId, processId }) {
-  const process = await fetchActiveProcess(processId)
-  let draft = await repo.findDraftByCode(userId, process.code)
-  let isNew = false
-
-  if (!draft) {
-    const inFlight = await repo.findInFlightByUserAndCode(userId, process.code)
-
-    if (inFlight) {
-      throw createTransactionError('TRANSACTION_IN_PROGRESS')
-    }
-
-    draft = await repo.create({
-      code: process.code,
-      user_id: userId,
-      status: 'draft'
-    })
-    isNew = true
-  } else if (draft.user_id !== userId) {
-    throw createTransactionError('UNAUTHORIZED')
-  }
-
-  return { draft, process, isNew }
-}
-
-async function submitTransactionByProcess (processId, data, { userId } = {}) {
-  const numericProcessId = parsePositiveInt(processId, 'معرّف العملية')
-  const { draft, process, isNew } = await resolveDraftForProcessSubmit({
-    userId,
-    processId: numericProcessId
-  })
-
-  const guardKey = buildSubmitGuardKeyForProcess(userId, process.code)
-
-  const result = await submitTransaction(draft.id, data, {
-    userId,
-    idempotencyKey: guardKey,
-    isNewDraft: isNew,
-    processId: numericProcessId
-  })
-
-  return result
-}
-
 async function submitTransaction (
   transactionId,
   data,
   {
     userId,
-    idempotencyKey: idempotencyKeyOverride = null,
-    isNewDraft = false,
-    processId = null
+    idempotencyKey: idempotencyKeyOverride = null
   } = {}
 ) {
   const numericId = parsePositiveInt(transactionId, 'معرّف المعاملة')
@@ -344,7 +302,7 @@ async function submitTransaction (
       guardContext = guard.context
     }
 
-    const result = await retryWithBackoff(async () => {
+    const result = await (async () => {
       const current = await repo.findById(numericId)
 
       if (!current) {
@@ -377,6 +335,7 @@ async function submitTransaction (
 
       let registeredFiles = []
       const processCode = current.code
+      let storedData = null
 
       await db.sequelize.transaction(async (dbTransaction) => {
         if (Array.isArray(normalized.files) && normalized.files.length) {
@@ -388,7 +347,7 @@ async function submitTransaction (
           })
         }
 
-        const storedData = buildStoredSubmissionData(
+        storedData = buildStoredSubmissionData(
           {
             ...normalized,
             files: registeredFiles
@@ -409,33 +368,36 @@ async function submitTransaction (
 
         await ensureTransactionIdProcess(current, { transaction: dbTransaction })
         await ensureGenesisHash(current, { transaction: dbTransaction })
-
-        try {
-          await startWorkflow({
-            transactionId: current.id,
-            processCode,
-            dbTransaction,
-            transactionRow: current
-          })
-        } catch (error) {
-          const detail = formatClientErrorMessage(error) || error.message
-
-          throw createTransactionError('WORKFLOW_START_FAILED', detail)
-        }
       })
+
+      try {
+        await startWorkflow({
+          transactionId: current.id,
+          processCode,
+          submissionPayload: storedData
+        })
+      } catch (error) {
+        await db.sequelize.transaction(async (dbTransaction) => {
+          const failed = await repo.findById(numericId, dbTransaction)
+
+          if (failed && failed.status === 'submitted') {
+            await failed.update({ status: 'draft' }, { transaction: dbTransaction })
+          }
+        })
+
+        const detail = formatClientErrorMessage(error) || error.message
+
+        throw createTransactionError('WORKFLOW_START_FAILED', detail)
+      }
 
       const refreshed = await repo.findById(numericId)
 
       return wrapSubmitResult(
         toDTO(refreshed),
         issuedIdempotencyKey,
-        false,
-        {
-          is_new_draft: isNewDraft,
-          process_id: processId
-        }
+        false
       )
-    }, { label: 'transaction.submit' })
+    })()
 
     if (guardContext) {
       return operationGuardService.commit(guardContext, { data: result }).data
@@ -455,6 +417,5 @@ module.exports = {
   getUserDraftByProcess,
   getTransactionById,
   submitTransaction,
-  submitTransactionByProcess,
   MESSAGES
 }

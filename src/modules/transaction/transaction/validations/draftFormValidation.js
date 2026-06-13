@@ -236,11 +236,16 @@ function validateFilePickerValue (data, value, label) {
   )
 
   for (const filePath of paths) {
-    if (typeof filePath !== 'string' || !filePath.trim()) {
+    const pathValue =
+      typeof filePath === 'string'
+        ? filePath
+        : (filePath && typeof filePath === 'object' ? filePath.path : null)
+
+    if (!pathValue || !String(pathValue).trim()) {
       return `"${label}" يجب أن يحتوي مسارات ملفات نصية صالحة`
     }
 
-    const extension = getExtension(filePath)
+    const extension = getExtension(pathValue)
 
     if (!allowed.has(extension)) {
       return `"${label}" يسمح فقط بالامتدادات: ${[...allowed].join(', ')}`
@@ -283,7 +288,17 @@ function validateDraftFormAgainstConfig (formData, stageConfig = {}) {
   const configWidgets = stageConfig.widgets || []
 
   if (!configWidgets.length) {
-    return 'لا توجد ودجات معرفة في استمارة العملية'
+    const submittedWidgets = formData.widgets || []
+
+    if (submittedWidgets.length) {
+      return 'هذه المرحلة لا تحتوي widgets — أرسل widgets: []'
+    }
+
+    return {
+      form_id: formData.form_id,
+      form_name: formData.form_name,
+      widgets: []
+    }
   }
 
   const widgetsError = validateWidgetsBusinessRules(configWidgets)

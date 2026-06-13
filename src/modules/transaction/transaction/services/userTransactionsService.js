@@ -195,6 +195,38 @@ async function getMyTransactions ({
   }
 }
 
+function buildStatusCountMap (rows = []) {
+  const map = {}
+
+  for (const row of rows) {
+    map[row.status] = Number(row.count) || 0
+  }
+
+  return map
+}
+
+async function getMyTransactionCounts ({ userId }) {
+  const rows = await retryWithBackoff(
+    () => repo.countByUserIdGroupByStatus(userId),
+    { label: 'transaction.countByUserIdGroupByStatus' }
+  )
+
+  const statusMap = buildStatusCountMap(rows)
+  const completed = statusMap.completed || 0
+  const inProgress =
+    (statusMap.submitted || 0) + (statusMap.in_progress || 0)
+
+  return {
+    message: MESSAGES.TRANSACTION_COUNTS_RETRIEVED,
+    data: {
+      completed,
+      in_progress: inProgress,
+      total: completed + inProgress
+    }
+  }
+}
+
 module.exports = {
-  getMyTransactions
+  getMyTransactions,
+  getMyTransactionCounts
 }

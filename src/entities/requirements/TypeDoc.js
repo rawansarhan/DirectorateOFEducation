@@ -12,6 +12,11 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: 'type_doc_id',
         as: 'document_templates'
       })
+
+      TypeDoc.hasMany(models.FilePicker, {
+        foreignKey: 'type_doc_id',
+        as: 'file_pickers'
+      })
     }
   }
 

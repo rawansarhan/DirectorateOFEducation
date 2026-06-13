@@ -54,7 +54,7 @@ router.get(
  *         application/json:
  *           schema:
  *             type: object
- *             required: [label, max_size_mb, allowed_extensions]
+ *             required: [label, max_size_mb, allowed_extensions, typeDoc_id]
  *             properties:
  *               label:
  *                 type: string
@@ -74,6 +74,13 @@ router.get(
  *               allow_multiple:
  *                 type: boolean
  *                 example: true
+ *               typeDoc_id:
+ *                 type: integer
+ *                 minimum: 1
+ *                 example: 1
+ *                 description: |
+ *                   معرّف نوع الوثيقة — يقبل أيضاً type_doc_id أو TypeDoc_id.
+ *                   يجب أن يكون موجوداً ونشطاً في type_docs.
  *     responses:
  *       201:
  *         description: تم الإنشاء بنجاح

@@ -12,7 +12,7 @@ function normalizeTypeDocId (raw) {
 
 function pickTypeDocIdFromObject (obj = {}) {
   return normalizeTypeDocId(
-    obj.type_doc_id ?? obj.type_Doc_id ?? obj.TypeDoc_id
+    obj.type_doc_id ?? obj.typeDoc_id ?? obj.type_Doc_id ?? obj.TypeDoc_id
   )
 }
 

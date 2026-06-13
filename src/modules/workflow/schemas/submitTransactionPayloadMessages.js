@@ -1,38 +1,23 @@
 'use strict'
 
+const { STRICT_FORM_UNKNOWN_HINTS } = require('../services/unifiedFormPayloadService')
+
 const SUBMIT_PAYLOAD_ALLOWED_FIELDS = [
-  'stage_name',
-  'fields',
-  'files',
+  'form_id',
+  'form_name',
+  'widgets',
   'templates',
-  'decision',
   'note',
   'expected_version'
 ]
 
 const SUBMIT_UNKNOWN_FIELD_HINTS = {
-  variables:
-    'variables مخصّص لإكمال مهمة الموظف POST /api/workflow/tasks/{taskId}/complete — في submit استخدم fields[] (key = data.id) و decision',
+  ...STRICT_FORM_UNKNOWN_HINTS,
+  decision:
+    'decision لا يُرسل في submit — يُثبت تلقائياً على السيرفر',
   signature:
-    'signature مطلوب فقط عند إكمال مهمة موظف مع توقيع USB',
-  schema_version:
-    'schema_version لا يُرسل في submit — يُستخدم في complete فقط',
-  employee:
-    'employee لا يُرسل في submit — حقل خاص بإكمال مهمة الموظف',
-  actions:
-    'actions لا تُرسل في submit',
-  notes:
-    'استخدم note بدلاً من notes',
-  widgets:
-    'لا ترسل widgets في submit — أرسل fields و files حيث key = data.id من stage_config (widgets يُستخدم في upsertDraft فقط)',
-  data:
-    'لا ترسل data في submit — أرسل fields و files مباشرة في جسم الطلب (data يُستخدم في upsertDraft فقط)'
-}
-
-const submitFieldItemMessages = {
-  'any.required': 'fields[].key مطلوب — يجب أن يساوي widget.data.id من stage_config',
-  'string.base': 'fields[].key يجب أن يكون نصاً',
-  'string.max': 'fields[].key أطول من 128 حرفاً'
+    'signature مطلوب فقط عند إكمال مهمة موظف POST /api/workflow/tasks/{taskId}/complete',
+  notes: 'استخدم note بدلاً من notes'
 }
 
 const submitPayloadRootMessages = {
@@ -49,14 +34,14 @@ function describeSubmitJoiDetail (detail) {
     if (hint) {
       return {
         field: unknownKey,
-        message: `الحقل "${unknownKey}" غير مسموح في POST /api/transaction/submit/{processId} — ${hint}`
+        message: `الحقل "${unknownKey}" غير مسموح في POST /api/transaction/submit/{transactionId} — ${hint}`
       }
     }
 
     return {
       field: unknownKey,
       message:
-        `الحقل "${unknownKey}" غير مسموح في POST /api/transaction/submit/{processId} — ` +
+        `الحقل "${unknownKey}" غير مسموح في POST /api/transaction/submit/{transactionId} — ` +
         `الحقول المقبولة: ${SUBMIT_PAYLOAD_ALLOWED_FIELDS.join(', ')}`
     }
   }
@@ -90,7 +75,6 @@ function formatSubmitTransactionJoiError (error) {
 module.exports = {
   SUBMIT_PAYLOAD_ALLOWED_FIELDS,
   SUBMIT_UNKNOWN_FIELD_HINTS,
-  submitFieldItemMessages,
   submitPayloadRootMessages,
   formatSubmitTransactionJoiError
 }

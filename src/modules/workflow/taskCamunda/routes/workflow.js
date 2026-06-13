@@ -838,11 +838,11 @@ router.post(
 
  *
 
- *       **الحقول المطلوبة:** `stage_name`, `decision` (`approve` فقط), `files[]`, `signature`
+ *       **الحقول المطلوبة:** `form_id`, `form_name`, `widgets[]`, `decision` (`approve`), `signature`
 
  *
 
- *       **بدون:** `variables`, `templates`, `employee`
+ *       **الملفات:** عبر `file_picker` داخل `widgets[].value`
 
  *
 
@@ -884,37 +884,9 @@ router.post(
 
  *           examples:
 
- *             full:
+ *             sign_secondary:
 
- *               summary: مثال كامل — رفع وثائق مع توقيع USB
-
- *               value:
-
- *                 stage_name: مرحلة رفع الوثائق
-
- *                 decision: approve
-
- *                 fields:
-
- *                   - key: citizen_name
-
- *                     value: روان سرحان
-
- *                 files:
-
- *                   - key: national_id_files
-
- *                     path: /uploads/signed-doc.pdf
-
- *                     type_doc_id: 3
-
- *                 note: ''
-
- *                 signature:
-
- *                   challenge_id: 3ad67615-8c89-4a5e-a758-217e9d85b6e6
-
- *                   signature: Bj7trXvyM9jfruXKttly27VY1xsVuqtKgcjfLf7fZrohjBGX0MwIFtYRMQ3nP5WHtbx0EFadm9rXy/RQqVw2Dg==
+ *               $ref: '#/components/examples/LeaveProcessSignSecondaryComplete'
 
  *     responses:
 
@@ -940,21 +912,13 @@ router.post(
 
  *               data:
 
- *                 stage_name: مرحلة رفع الوثائق
+ *                 form_id: leave_process_sign_secondary
 
- *                 fields:
+ *                 form_name: توقيع مدير دائرة الثانوي
 
- *                   - key: citizen_name
+ *                 stage_name: توقيع مدير دائرة الثانوي
 
- *                     value: روان سرحان
-
- *                 files:
-
- *                   - key: national_id_files
-
- *                     path: /uploads/signed-doc.pdf
-
- *                     type_doc_id: 3
+ *                 widgets: []
 
  *                 templates: []
 
@@ -1172,7 +1136,7 @@ router.post(
 
  *
 
- *       **الحقول:** `stage_name`, `employee`, `fields`, `files`, `templates`, `variables`, `decision`, `note`, `signature`
+ *       **القالب (إلزامي):** `form_id`, `form_name`, `widgets[]` + `value`, `templates[]`, `decision`, `note`, `signature`
 
  *
 
@@ -1180,7 +1144,7 @@ router.post(
 
  *
 
- *       **Response `data`:** `stage_name`, `fields`, `files`, `templates`, `variables`, `decision`, `note`, `signature`, `idempotency_key`, `idempotent_replay`, `workflow_status`
+ *       **Response `data`:** `form_id`, `form_name`, `widgets`, `templates`, `variables.value`, `decision`, `workflow_status`, ...
 
  *     tags: [Workflow]
 
@@ -1218,59 +1182,13 @@ router.post(
 
  *           examples:
 
- *             approve:
+ *             review:
 
- *               summary: مثال كامل — موافقة مع توقيع USB
+ *               $ref: '#/components/examples/LeaveProcessReviewComplete'
 
- *               value:
+ *             sign_pdf:
 
- *                 stage_name: التشيك على العمر
-
- *                 employee:
-
- *                   first_name: أحمد
-
- *                   last_name: علي
-
- *                   father_name: محمد
-
- *                   national_id: '12345678901'
-
- *                 fields:
-
- *                   - key: citizen_name
-
- *                     value: روان سرحان
-
- *                 files:
-
- *                   - key: national_id_files
-
- *                     path: /uploads/a.pdf
-
- *                     type_doc_id: 1
-
- *                 templates:
-
- *                   - id: 1
-
- *                     values:
-
- *                       full_name: روان سرحان
-
- *                 variables:
-
- *                   decision: over_50
-
- *                 decision: approve
-
- *                 note: ''
-
- *                 signature:
-
- *                   challenge_id: 3ad67615-8c89-4a5e-a758-217e9d85b6e6
-
- *                   signature: Bj7trXvyM9jfruXKttly27VY1xsVuqtKgcjfLf7fZrohjBGX0MwIFtYRMQ3nP5WHtbx0EFadm9rXy/RQqVw2Dg==
+ *               $ref: '#/components/examples/LeaveProcessSignEduManagerComplete'
 
  *             reject:
 
@@ -1300,35 +1218,31 @@ router.post(
 
  *               data:
 
- *                 stage_name: التشيك على العمر
+ *                 form_id: leave_process_review
 
- *                 fields:
+ *                 form_name: التشيك على المعلومات المدخلة
 
- *                   - key: citizen_name
+ *                 stage_name: التشيك على المعلومات المدخلة
 
- *                     value: روان سرحان
+ *                 widgets:
 
- *                 files:
+ *                   - widget_type: radio_group
 
- *                   - key: national_id_files
+ *                     data:
 
- *                     path: /uploads/a.pdf
+ *                       id: decision
 
- *                     type_doc_id: 1
+ *                       label: قرار الطلب
 
- *                 templates:
+ *                     value: الطلب مقبول
 
- *                   - template_id: 1
-
- *                     values:
-
- *                       full_name: روان سرحان
-
- *                     path: /uploads/templates/form.pdf
+ *                 templates: []
 
  *                 variables:
 
- *                   decision: over_50
+ *                   value: الطلب مقبول
+
+ *                 gateway_value: الطلب مقبول
 
  *                 decision: approve
 

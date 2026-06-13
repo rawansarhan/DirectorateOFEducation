@@ -7,10 +7,9 @@ const {
   getUserDraftByProcess,
   getTransactionById,
   submitTransaction,
-  submitTransactionByProcess,
   MESSAGES
 } = require('../services/transactionService')
-const { getMyTransactions } = require('../services/userTransactionsService')
+const { getMyTransactions, getMyTransactionCounts } = require('../services/userTransactionsService')
 const {
   successResponse,
   errorResponse
@@ -67,13 +66,17 @@ async function createDraftController (req, res) {
 async function updateDraftController (req, res) {
   try {
     const result = await UpdateDraft({
-      transId: req.params.transId,
-      data: req.body,
-      userId: req.user.id
+      userId: req.user.id,
+      processId: req.params.processId,
+      data: req.body
     })
 
+    const message = result.isNew
+      ? MESSAGES.DRAFT_CREATED
+      : MESSAGES.DRAFT_UPDATED
+
     return successResponse(res, {
-      message: MESSAGES.DRAFT_UPDATED,
+      message,
       data: result
     })
   } catch (err) {
@@ -145,6 +148,21 @@ async function getMyTransactionsController (req, res) {
   }
 }
 
+async function getMyTransactionCountsController (req, res) {
+  try {
+    const result = await getMyTransactionCounts({
+      userId: req.user.id
+    })
+
+    return successResponse(res, {
+      message: result.message,
+      data: result.data
+    })
+  } catch (err) {
+    return handleTransactionError(res, err)
+  }
+}
+
 async function getTransactionController (req, res) {
   try {
     const result = await getTransactionById(
@@ -161,10 +179,10 @@ async function getTransactionController (req, res) {
   }
 }
 
-async function submitTransactionByProcessController (req, res) {
+async function submitTransactionController (req, res) {
   try {
-    const result = await submitTransactionByProcess(
-      req.params.processId,
+    const result = await submitTransaction(
+      req.params.transactionId,
       req.body,
       { userId: req.user.id }
     )
@@ -185,6 +203,7 @@ module.exports = {
   UpdateDraftController: updateDraftController,
   getUserDraftByProcessController,
   getMyTransactionsController,
+  getMyTransactionCountsController,
   getTransactionController,
-  submitTransactionByProcessController
+  submitTransactionController
 }

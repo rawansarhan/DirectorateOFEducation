@@ -66,11 +66,14 @@ async function registerTemplateForTransaction ({
       { transaction: dbTransaction }
     )
 
-    return {
-      id: numericTemplateId,
-      document_instance_id: existing.id,
-      values
-    }
+  return {
+    id: numericTemplateId,
+    id_template: numericTemplateId,
+    document_instance_id: existing.id,
+    id_document_instance: existing.id,
+    values,
+    value: values
+  }
   }
 
   const instance = await documentInstanceRepository.create(
@@ -86,8 +89,11 @@ async function registerTemplateForTransaction ({
 
   return {
     id: numericTemplateId,
+    id_template: numericTemplateId,
     document_instance_id: instance.id,
-    values
+    id_document_instance: instance.id,
+    values,
+    value: values
   }
 }
 
@@ -109,7 +115,7 @@ async function registerTemplatesForTransaction ({
       await registerTemplateForTransaction({
         transactionId,
         templateId,
-        values: template.values || {},
+        values: template.values ?? template.value ?? {},
         dbTransaction
       })
     )

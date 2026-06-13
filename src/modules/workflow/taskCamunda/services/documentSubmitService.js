@@ -58,12 +58,13 @@ async function completeDocumentSubmit ({
   }
 
   const completePayload = {
-    stage_name: value.stage_name,
+    form_id: value.form_id,
+    form_name: value.form_name,
+    widgets: value.widgets,
+    templates: value.templates,
     decision: value.decision,
     signature: value.signature,
     expected_version: value.expected_version,
-    fields: value.fields,
-    files: value.files,
     note: value.note
   }
 

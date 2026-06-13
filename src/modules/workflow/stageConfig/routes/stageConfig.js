@@ -169,6 +169,11 @@ router.post(
  * /api/stage_config/config/{id}:
  *   get:
  *     summary: Get config_json for process (AUTH stage) — استمارة التقديم للمواطن
+ *     description: |
+ *       يجلب استمارة التقديم للمواطن:
+ *       - إن وُجدت **مسودة draft** للمستخدم على هذه العملية وفيها `transaction.data` → يُعاد محتواها في `config_json`
+ *       - وإلا → يُعاد `stageConfig.config_json` (القالب الفارغ)
+ *       - عند وجود مسودة يُضاف `transaction_id` لاستخدامه في `POST /api/transaction/submit/{transactionId}`
  *     tags: [Stage Config]
  *     security:
  *       - bearerAuth: []
@@ -202,24 +207,92 @@ router.post(
  *                   properties:
  *                     config_json:
  *                       type: object
- *                       example:
- *                         form_id: civil_transaction_55
- *                         form_name: استمارة معاملة المواطن
- *                         widgets:
- *                           - widget_type: text_field
- *                             data:
- *                               id: citizen_phone
- *                               label: رقم الموبايل
- *                               is_required: true
- *                               input_type: phone
- *                         template:
- *                           - template_id: 1
+ *                       description: بيانات المسودة أو قالب stage_config
+ *                     transaction_id:
+ *                       type: integer
+ *                       description: معرّف المسودة — يُعاد فقط عند وجود draft
+ *                       example: 441
+ *                   example:
+ *                     transaction_id: 441
+ *                     config_json:
+ *                       form_id: civil_transaction_55
+ *                       form_name: استمارة معاملة المواطن
+ *                       widgets:
+ *                         - widget_type: text_field
+ *                           data:
+ *                             id: citizen_phone
+ *                             label: رقم الموبايل
+ *                             is_required: true
+ *                             input_type: phone
+ *                       template:
+ *                         - template_id: 1
  *       400:
- *         description: خطأ في الطلب (ID غير صحيح أو مفقود)
+ *         description: معرّف العملية غير صالح
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ApiErrorResponse'
+ *             example:
+ *               success: false
+ *               status_code: 400
+ *               message: معرّف العملية غير صالح — يجب أن يكون رقماً صحيحاً موجباً
+ *               error: VALIDATION_ERROR
+ *               data: null
+ *       401:
+ *         description: غير مصادق — Bearer token مفقود أو غير صالح
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ApiErrorResponse'
+ *             example:
+ *               success: false
+ *               status_code: 401
+ *               message: Unauthorized
+ *               error: UNAUTHORIZED
+ *               data: null
  *       404:
- *         description: لم يتم العثور على المرحلة أو الإعدادات
+ *         description: العملية أو مرحلة AUTH أو استمارة التقديم غير موجودة
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ApiErrorResponse'
+ *             examples:
+ *               process_not_found:
+ *                 summary: تعريف العملية غير موجود
+ *                 value:
+ *                   success: false
+ *                   status_code: 404
+ *                   message: تعريف العملية غير موجود — تحقق من معرّف العملية
+ *                   error: NOT_FOUND
+ *                   data: null
+ *               auth_stage_missing:
+ *                 summary: لا توجد مرحلة AUTH
+ *                 value:
+ *                   success: false
+ *                   status_code: 404
+ *                   message: لا توجد مرحلة تقديم (AUTH) مرتبطة بهذه العملية
+ *                   error: NOT_FOUND
+ *                   data: null
+ *               form_not_configured:
+ *                 summary: الاستمارة غير مكوّنة
+ *                 value:
+ *                   success: false
+ *                   status_code: 404
+ *                   message: لم تُكوَّن استمارة التقديم لهذه العملية بعد
+ *                   error: NOT_FOUND
+ *                   data: null
  *       500:
  *         description: خطأ داخلي في السيرفر
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ApiErrorResponse'
+ *             example:
+ *               success: false
+ *               status_code: 500
+ *               message: Internal Server Error
+ *               error: INTERNAL_ERROR
+ *               data: null
  */
 router.get(
   '/config/:id',

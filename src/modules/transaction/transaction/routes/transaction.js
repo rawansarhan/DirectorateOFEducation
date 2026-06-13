@@ -9,8 +9,9 @@ const {
   upsertDraftController,
   getUserDraftByProcessController,
   getMyTransactionsController,
+  getMyTransactionCountsController,
   getTransactionController,
-  submitTransactionByProcessController
+  submitTransactionController
 } = require('../controllers/transactionController')
 
 const {
@@ -130,41 +131,43 @@ router.post(
 
 /**
  * @swagger
- * /api/transaction/submit/{processId}:
+ * /api/transaction/submit/{transactionId}:
  *   post:
  *     summary: Submit transaction and start workflow
  *     description: |
  *       يقدّم المعاملة ويبدأ الـ workflow مباشرة.
  *
  *       **التدفق:**
- *       1. يُمرَّر `processId` (معرّف تعريف العملية — process definition id)
- *       2. إن وُجدت مسودة draft للمواطن على هذه العملية → يُحدَّث عليها ويُقدَّم
- *       3. إن لم توجد مسودة → يُنشأ سجل draft جديد ثم يُقدَّم
- *       4. يُولَّد `id_process` (مثل STUTR-2026-001) ويُبدأ Camunda workflow
+ *       1. أولاً: `POST /api/transaction/updateDraft/{processId}` — حفظ بيانات الهوية والحصول على `draft.id`
+ *       2. ثانياً: `POST /api/transaction/submit/{transactionId}` — إرسال الاستمارة على المسودة نفسها
+ *       3. يُولَّد `id_process` (مثل STUTR-2026-001) ويُبدأ Camunda workflow
  *
- *       **قالب الطلب:** `stage_name`, `fields`, `files`, `templates`, `decision`, `note`
- *       **بيانات الهوية (إلزامي قبل التقديم):** `first_name`, `last_name`, `father_name`, `mother_name`, `national_id` — عبر `POST /updateDraft` أو `upsertDraft`
- *       **الملفات:** ارفع أولاً عبر `POST /api/transaction/files/upload` (multipart) ثم ضع الناتج في `files[]`.
- *       - Idempotency تلقائي على مستوى `(user + process)` — لا ترسل Idempotency-Key
+ *       **قالب الطلب (إلزامي):** `form_id`, `form_name`, `widgets[]` (config_json + value), `templates[]` ({ id, value }), `note`
+ *       **مرفوض:** `fields`, `files`, `signature`, `variables`, `employee`, `decision`, `stage_name`
+ *       **القالب الفارغ:** GET `/api/stage_config/config/{processId}`
+ *       - Idempotency تلقائي على مستوى `transactionId` — لا ترسل Idempotency-Key
  *
- *       **Response `data`:** `id`, `id_process`, `status`, `is_new_draft`, `idempotency_key`, ...
+ *       **Response `data`:** `id`, `id_process`, `status`, `idempotency_key`, ...
  *     tags: [Transaction]
  *     security:
  *       - bearerAuth: []
  *     parameters:
  *       - in: path
- *         name: processId
+ *         name: transactionId
  *         required: true
  *         schema:
  *           type: integer
  *           minimum: 1
- *         description: معرّف تعريف العملية (process definition id)
+ *         description: معرّف المسودة (transaction id) من خطوة updateDraft
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             $ref: '#/components/schemas/SubmitTransactionPayload'
+ *           examples:
+ *             leave_auth:
+ *               $ref: '#/components/examples/LeaveProcessAuthSubmit'
  *     responses:
  *       200:
  *         description: تم تقديم المعاملة بنجاح
@@ -182,30 +185,38 @@ router.post(
  *         description: فشل بدء workflow
  */
 router.post(
-  '/submit/:processId',
+  '/submit/:transactionId',
   authMiddleware,
-  submitTransactionByProcessController
+  submitTransactionController
 )
 
 /**
  * @swagger
- * /api/transaction/updateDraft/{transId}:
+ * /api/transaction/updateDraft/{processId}:
  *   post:
- *     summary: Update draft identity fields
+ *     summary: Create or update draft identity fields
  *     description: |
- *       يحدّث حقول هوية المواطن على المسودة فقط:
+ *       **الخطوة الأولى** قبل تقديم المعاملة:
+ *       1. يُمرَّر `processId` (معرّف تعريف العملية)
+ *       2. إن وُجدت مسودة draft للمستخدم على هذه العملية → تُحدَّث بيانات الهوية
+ *       3. إن لم توجد مسودة → يُنشأ سجل draft جديد ثم تُحفظ بيانات الهوية
+ *
+ *       يحدّث حقول هوية المواطن:
  *       `first_name`, `last_name`, `father_name`, `mother_name`, `national_id`.
  *       يجب إرسال حقل واحد على الأقل.
+ *
+ *       **Response `data.draft.id`:** استخدمه في `POST /api/transaction/submit/{transactionId}`
  *     tags: [Transaction]
  *     security:
  *       - bearerAuth: []
  *     parameters:
  *       - in: path
- *         name: transId
+ *         name: processId
  *         required: true
  *         schema:
  *           type: integer
  *           minimum: 1
+ *         description: معرّف تعريف العملية (process definition id)
  *     requestBody:
  *       required: true
  *       content:
@@ -233,7 +244,7 @@ router.post(
  *         description: Unauthorized
  */
 router.post(
-  '/updateDraft/:transId',
+  '/updateDraft/:processId',
   authMiddleware,
   updateDraftController
 )
@@ -278,6 +289,35 @@ router.get(
   '/draft/:processId',
   authMiddleware,
   getUserDraftByProcessController
+)
+
+/**
+ * @swagger
+ * /api/transaction/my/counts:
+ *   get:
+ *     summary: Get authenticated user's transaction counts (AUTH)
+ *     description: |
+ *       يعيد **أعداد فقط** لمعاملات المواطن (بدون قائمة):
+ *       - `completed` — المعاملات المكتملة
+ *       - `in_progress` — المعاملات قيد المعالجة (`submitted`) + قيد التنفيذ (`in_progress`)
+ *       - `total` — مجموع الاثنين
+ *     tags: [Transaction]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: تم جلب أعداد معاملاتك بنجاح
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/UserTransactionCountsResponse'
+ *       401:
+ *         description: Unauthorized
+ */
+router.get(
+  '/my/counts',
+  authMiddleware,
+  getMyTransactionCountsController
 )
 
 /**

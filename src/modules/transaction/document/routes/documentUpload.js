@@ -18,7 +18,7 @@ const {
  *   post:
  *     summary: Upload transaction attachment
  *     description: |
- *       **الخطوة 1** قبل `POST /api/transaction/submit/{processId}` أو `POST /api/workflow/tasks/{taskId}/complete`.
+ *       **الخطوة 1** قبل `POST /api/transaction/updateDraft/{processId}` ثم `POST /api/transaction/submit/{transactionId}` أو `POST /api/workflow/tasks/{taskId}/complete`.
  *
  *       يرفع الملف إلى `uploads/` ويرجع `path` و `type_doc_id` لإدراجها في `files[]`:
  *       ```json

@@ -2,7 +2,12 @@
 
 module.exports = (sequelize, DataTypes) => {
   class FilePicker extends sequelize.Sequelize.Model {
-    static associate () {}
+    static associate (models) {
+      FilePicker.belongsTo(models.TypeDoc, {
+        foreignKey: 'type_doc_id',
+        as: 'type_doc'
+      })
+    }
   }
 
   FilePicker.init(
@@ -33,6 +38,14 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.BOOLEAN,
         allowNull: false,
         defaultValue: false
+      },
+      type_doc_id: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        references: {
+          model: 'type_docs',
+          key: 'id'
+        }
       },
       is_active: {
         type: DataTypes.BOOLEAN,

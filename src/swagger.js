@@ -677,8 +677,36 @@ const swaggerOptions = {
               example: ['pdf', 'png', 'jpg']
             },
             allow_multiple: { type: 'boolean', example: true },
+            type_doc_id: {
+              type: 'integer',
+              example: 1,
+              description: 'معرّف نوع الوثيقة من type_docs'
+            },
             created_at: { type: 'string', format: 'date-time' },
             updated_at: { type: 'string', format: 'date-time' }
+          }
+        },
+
+        FilePickerCreateInput: {
+          type: 'object',
+          required: ['label', 'max_size_mb', 'allowed_extensions', 'typeDoc_id'],
+          properties: {
+            label: { type: 'string', example: 'وثائق الهوية الشخصية' },
+            is_required: { type: 'boolean', example: true },
+            max_size_mb: { type: 'integer', example: 5 },
+            allowed_extensions: {
+              type: 'array',
+              minItems: 1,
+              items: { type: 'string' },
+              example: ['pdf', 'png', 'jpg']
+            },
+            allow_multiple: { type: 'boolean', example: true },
+            typeDoc_id: {
+              type: 'integer',
+              minimum: 1,
+              example: 1,
+              description: 'alias مقبول — يُخزَّن كـ type_doc_id في الاستجابة'
+            }
           }
         },
 
@@ -1266,13 +1294,16 @@ const swaggerOptions = {
           type: 'object',
           required: ['success', 'status_code', 'message', 'error', 'data'],
           description:
-            'شكل خطأ موحّد لجميع endpoints الـ Workflow (وباقي الـ API). ' +
-            'message: رسالة واضحة للمستخدم بالعربية. ' +
-            'error: رمز الخطأ (مثل VALIDATION_ERROR, TASK_NOT_FOUND). ' +
-            'data: دائماً null',
+            'شكل خطأ موحّد لجميع endpoints. ' +
+            'status_code يعكس HTTP الفعلي (400, 401, 403, 404, 409, 422, 429, 500, …) — ليس 400 دائماً. ' +
+            'message: رسالة واضحة بالعربية. error: رمز الخطأ. data: دائماً null',
           properties: {
             success: { type: 'boolean', example: false },
-            status_code: { type: 'integer', example: 400 },
+            status_code: {
+              type: 'integer',
+              example: 400,
+              description: 'HTTP status الفعلي — مثال: 400 تحقق، 404 غير موجود، 409 تعارض'
+            },
             message: {
               type: 'string',
               example: 'decision مطلوب (approve / reject) عند إكمال مهمة تتطلب توقيعاً'
@@ -1354,65 +1385,6 @@ const swaggerOptions = {
           }
         },
 
-        SubmitTransactionPayload: {
-          type: 'object',
-          description:
-            'قالب تقديم المعاملة (POST /transaction/submit/{processId}). ' +
-            'fields / files / templates اختيارية — ما يُطلَب يُحدَّد من stage_config لمرحلة AUTH.',
-          properties: {
-            stage_name: {
-              type: 'string',
-              example: 'التشيك على العمر',
-              description: 'اختياري — يُتحقق منه مقابل اسم مرحلة AUTH إذا أُرسل'
-            },
-            fields: {
-              type: 'array',
-              items: { $ref: '#/components/schemas/StageSubmissionFieldItem' },
-              default: []
-            },
-            files: {
-              type: 'array',
-              items: { $ref: '#/components/schemas/StageSubmissionFileItem' },
-              default: []
-            },
-            templates: {
-              type: 'array',
-              items: { $ref: '#/components/schemas/StageSubmissionTemplateItem' },
-              default: []
-            },
-            decision: {
-              type: 'string',
-              example: 'submit',
-              default: 'submit',
-              description: 'قرار التقديم — افتراضياً submit'
-            },
-            note: {
-              type: 'string',
-              example: '',
-              description: 'ملاحظة اختيائية'
-            },
-            expected_version: {
-              type: 'integer',
-              example: 1,
-              description: 'transaction.version — optimistic concurrency (اختياري)'
-            }
-          },
-          example: {
-            stage_name: 'التشيك على العمر',
-            fields: [
-              { key: 'citizen_name', value: 'روان سرحان' }
-            ],
-            files: [
-              { key: 'national_id_files', path: '/uploads/a.pdf', type_doc_id: 1 }
-            ],
-            templates: [
-              { template_id: 1, values: { full_name: 'روان' } }
-            ],
-            decision: 'submit',
-            note: ''
-          }
-        },
-
         SubmitTransactionResponse: {
           allOf: [
             { $ref: '#/components/schemas/ApiSuccessResponse' },
@@ -1458,7 +1430,8 @@ const swaggerOptions = {
 
         StageSubmissionPayload: {
           type: 'object',
-          description: 'قالب request ثابت لكل المعاملات — الفرونت يرسل نفس الشكل دائماً',
+          deprecated: true,
+          description: '⚠️ deprecated — استخدم UnifiedFormPayload / SubmitTransactionPayload / CompleteTaskPayload',
           properties: {
             schema_version: {
               type: 'string',
@@ -1505,19 +1478,17 @@ const swaggerOptions = {
             }
           },
           example: {
-            schema_version: '1.0',
-            expected_version: 1,
-            fields: [
-              { key: 'citizen_full_name', value: 'أحمد محمد علي' },
-              { key: 'citizen_phone', value: '0912345678' }
+            form_id: 'leave_process_auth',
+            form_name: 'الوثائق المطلوبة للمواطن',
+            widgets: [
+              {
+                widget_type: 'text_field',
+                data: { id: 'student_first_name', label: 'اسم الطالب', is_required: true },
+                value: 'روان'
+              }
             ],
-            files: [
-              { key: 'national_id_file', path: '/uploads/id.pdf' }
-            ],
-            templates: [
-              { template_id: 1, values: { full_name: 'أحمد محمد علي' } }
-            ],
-            variables: { action: 'submit' }
+            templates: [],
+            note: ''
           }
         },
 
@@ -1561,6 +1532,51 @@ const swaggerOptions = {
             },
             created_at: { type: 'string', format: 'date-time' },
             updated_at: { type: 'string', format: 'date-time' }
+          }
+        },
+
+        UserTransactionCountsResponse: {
+          allOf: [
+            { $ref: '#/components/schemas/ApiSuccessResponse' },
+            {
+              type: 'object',
+              properties: {
+                message: {
+                  type: 'string',
+                  example: 'تم جلب أعداد معاملاتك بنجاح'
+                },
+                data: {
+                  type: 'object',
+                  properties: {
+                    completed: {
+                      type: 'integer',
+                      example: 8,
+                      description: 'عدد المعاملات المكتملة'
+                    },
+                    in_progress: {
+                      type: 'integer',
+                      example: 3,
+                      description: 'submitted + in_progress (قيد المعالجة + قيد التنفيذ)'
+                    },
+                    total: {
+                      type: 'integer',
+                      example: 11,
+                      description: 'completed + in_progress'
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          example: {
+            success: true,
+            status_code: 200,
+            message: 'تم جلب أعداد معاملاتك بنجاح',
+            data: {
+              completed: 8,
+              in_progress: 3,
+              total: 11
+            }
           }
         },
 
@@ -1724,11 +1740,188 @@ const swaggerOptions = {
                   max_size_mb: 5,
                   allowed_extensions: ['pdf', 'png', 'jpg'],
                   allow_multiple: true,
-                  type_doc_id: 1
+                  type_doc_id: 3
                 },
-                value: ['/uploads/id-front.pdf', '/uploads/id-back.png']
+                value: [
+                  {
+                    path: '/uploads/1781283413699-332269555.pdf',
+                    url: 'http://localhost:4000/uploads/1781283413699-332269555.pdf',
+                    document_id: 3,
+                    type_doc_id: 3,
+                    original_name: 'national_id_files'
+                  }
+                ]
+              }
+            },
+            radio_group_gateway: {
+              summary: 'radio_group (Camunda gateway)',
+              value: {
+                widget_type: 'radio_group',
+                data: {
+                  id: 'gateway',
+                  label: 'قرار المسار',
+                  is_required: true,
+                  is_gateway: true,
+                  options: [
+                    { key: 'approved', value: 'موافق' },
+                    { key: 'rejected', value: 'مرفوض' }
+                  ]
+                },
+                value: 'approved'
               }
             }
+          }
+        },
+
+        UnifiedFormTemplateWithValue: {
+          type: 'object',
+          required: ['id', 'value'],
+          additionalProperties: false,
+          properties: {
+            id: {
+              type: 'integer',
+              example: 1,
+              description: 'document_templates.id — من stage_config.config_json.template[]'
+            },
+            value: {
+              type: 'object',
+              additionalProperties: true,
+              example: {
+                employee: 'روان سرحان',
+                job: 'معلمة',
+                department: 'دائرة التربية'
+              },
+              description: 'قيم حقول PDF — تُخزَّن في document_instance.data_json'
+            }
+          }
+        },
+
+        UnifiedFormPayload: {
+          type: 'object',
+          required: ['form_id', 'form_name', 'widgets'],
+          additionalProperties: false,
+          description:
+            'القالب الموحّد لـ submit / complete / submit-documents — stage_config.config_json + value لكل widget/template. ' +
+            'مرفوض: fields[], files[], variables, employee, template_id, values, stage_name',
+          properties: {
+            form_id: {
+              type: 'string',
+              example: 'leave_process_auth',
+              description: 'يجب أن يطابق stage_config.config_json.form_id'
+            },
+            form_name: {
+              type: 'string',
+              example: 'الوثائق المطلوبة للمواطن',
+              description: 'يجب أن يطابق stage_config.config_json.form_name'
+            },
+            widgets: {
+              type: 'array',
+              minItems: 0,
+              items: { $ref: '#/components/schemas/TransactionDraftWidgetWithValue' },
+              description:
+                'نفس config_json.widgets من stage_config/create + value — [] إذا المرحلة templates فقط'
+            },
+            templates: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/UnifiedFormTemplateWithValue' },
+              default: []
+            },
+            note: {
+              type: 'string',
+              example: '',
+              description: 'ملاحظة اختيارية'
+            },
+            expected_version: {
+              type: 'integer',
+              example: 1,
+              description: 'transaction.version — optimistic concurrency (اختياري)'
+            }
+          }
+        },
+
+        SubmitTransactionPayload: {
+          allOf: [{ $ref: '#/components/schemas/UnifiedFormPayload' }],
+          description:
+            'POST /transaction/submit/{transactionId} — بدون signature وبدون decision (يُثبت submit على السيرفر). ' +
+            'احصل على القالب الفارغ من GET /stage_config/config/{processId}. ' +
+            'أنشئ/حدّث المسودة أولاً عبر POST /transaction/updateDraft/{processId}',
+          example: {
+            form_id: 'leave_process_auth',
+            form_name: 'الوثائق المطلوبة للمواطن',
+            widgets: [
+              {
+                widget_type: 'text_field',
+                data: {
+                  id: 'student_first_name',
+                  label: 'اسم الطالب',
+                  is_required: true,
+                  input_type: 'text',
+                  max_length: 100,
+                  min_length: 2
+                },
+                value: 'روان'
+              },
+              {
+                widget_type: 'text_field',
+                data: {
+                  id: 'student_last_name',
+                  label: 'الاسم الأخير',
+                  is_required: true,
+                  input_type: 'text',
+                  max_length: 100,
+                  min_length: 2
+                },
+                value: 'سرحان'
+              },
+              {
+                widget_type: 'text_field',
+                data: {
+                  id: 'father_name',
+                  label: 'اسم الأب',
+                  is_required: true,
+                  input_type: 'text',
+                  max_length: 100,
+                  min_length: 2
+                },
+                value: 'أحمد'
+              },
+              {
+                widget_type: 'dropdown',
+                data: {
+                  id: 'birth_governorate',
+                  label: 'محافظة الولادة',
+                  is_required: true,
+                  options: [
+                    { key: 'DAM', value: 'دمشق' },
+                    { key: 'HAM', value: 'حماة' },
+                    { key: 'ALE', value: 'حلب' }
+                  ]
+                },
+                value: 'DAM'
+              },
+              {
+                widget_type: 'file_picker',
+                data: {
+                  id: 'national_id_files',
+                  label: 'وثائق الهوية الشخصية',
+                  is_required: true,
+                  max_size_mb: 5,
+                  allowed_extensions: ['pdf', 'png', 'jpg'],
+                  allow_multiple: true,
+                  type_doc_id: 3
+                },
+                value: [
+                  {
+                    path: '/uploads/1781283413699-332269555.pdf',
+                    url: 'http://localhost:4000/uploads/1781283413699-332269555.pdf',
+                    type_doc_id: 3,
+                    original_name: 'national_id_files'
+                  }
+                ]
+              }
+            ],
+            templates: [],
+            note: ''
           }
         },
 
@@ -1945,129 +2138,53 @@ const swaggerOptions = {
         },
 
         CompleteTaskPayload: {
-          type: 'object',
-          required: [],
-          description:
-            'Payload لإكمال مهمة workflow. fields / files / templates / variables كلها اختيارية — يمكن حذفها أو إرسال [] أو عنصر واحد أو أكثر. العناصر الفارغة داخل المصفوفات تُتجاهل تلقائياً. idempotency_key يُولَّد من السيرفر.',
-          properties: {
-            stage_name: {
-              type: 'string',
-              example: 'مرحلة الموافقة',
-              description: 'اسم المرحلة الحالية — اختياري'
-            },
-            employee: {
+          allOf: [
+            { $ref: '#/components/schemas/UnifiedFormPayload' },
+            {
               type: 'object',
-              required: ['first_name', 'last_name', 'father_name', 'national_id'],
-              properties: {
-                first_name: { type: 'string', example: 'أحمد' },
-                last_name: { type: 'string', example: 'علي' },
-                father_name: { type: 'string', example: 'محمد' },
-                national_id: { type: 'string', example: '12345678901' }
-              }
-            },
-            fields: {
-              type: 'array',
-              description: 'اختياري — [] أو عناصر { key, value }',
-              default: [],
-              items: { $ref: '#/components/schemas/StageSubmissionFieldItem' }
-            },
-            files: {
-              type: 'array',
-              description: 'اختياري — [] أو عناصر { key, path, type_doc_id }',
-              default: [],
-              items: { $ref: '#/components/schemas/StageSubmissionFileItem' }
-            },
-            templates: {
-              type: 'array',
-              description: 'اختياري — [] أو عناصر { template_id, values }',
-              default: [],
-              items: {
-                type: 'object',
-                required: ['values'],
-                properties: {
-                  id: { type: 'integer', example: 1 },
-                  template_id: { type: 'integer', example: 1 },
-                  values: {
-                    type: 'object',
-                    additionalProperties: true,
-                    example: { full_name: 'روان سرحان' }
-                  }
-                }
-              }
-            },
-            actions: {
-              type: 'array',
-              items: { $ref: '#/components/schemas/CompleteTaskActionItem' }
-            },
-            variables: {
-              type: 'object',
-              description: 'اختياري — يمكن {} أو { decision: "over_50" }',
+              required: ['decision'],
               properties: {
                 decision: {
                   type: 'string',
-                  example: 'over_50',
-                  description: 'متغير Camunda للـ gateway — اختياري إذا لا يوجد gateway'
+                  enum: ['approve', 'reject', 'rejected'],
+                  example: 'approve',
+                  description: 'قرار التوقيع USB — approve / reject'
+                },
+                rejection_reason: {
+                  type: 'string',
+                  example: 'المستندات غير مكتملة',
+                  description: 'مطلوب عند decision = reject'
+                },
+                signature: {
+                  $ref: '#/components/schemas/StageSubmissionSignature'
                 }
               },
-              additionalProperties: true,
-              example: {}
-            },
-            decision: {
-              type: 'string',
-              enum: ['approve', 'reject', 'rejected'],
-              example: 'approve',
-              description: 'قرار التوقيع USB (approve / reject) — مستقل عن variables.decision'
-            },
-            rejection_reason: {
-              type: 'string',
-              example: 'المستندات غير مكتملة',
-              description: 'مطلوب عند decision = reject — سبب الرفض'
-            },
-            signature: {
-              $ref: '#/components/schemas/StageSubmissionSignature'
-            },
-            expected_version: {
-              type: 'integer',
-              example: 1,
-              description: 'transaction.version — optimistic concurrency (اختياري)'
-            },
-            idempotency_key: {
-              type: 'string',
-              format: 'uuid',
-              readOnly: true,
-              description: 'يُولَّد من السيرفر — لا ترسله في الطلب. يُعاد في data.idempotency_key'
-            },
-            note: {
-              type: 'string',
-              example: '',
-              description: 'ملاحظة اختيارية على المرحلة'
-            },
-            notes: {
-              type: 'string',
-              deprecated: true,
-              description: 'alias قديم لـ note'
+              description:
+                'POST /workflow/tasks/{taskId}/complete — config_json + value. ' +
+                'مسار Camunda gateway من radio_group (is_gateway) داخل widgets — لا variables. ' +
+                'idempotency_key يُولَّد من السيرفر ولا يُرسل في الطلب.'
             }
-          },
+          ],
           example: {
-            stage_name: 'التشيك على العمر',
-            employee: {
-              first_name: 'أحمد',
-              last_name: 'علي',
-              father_name: 'محمد',
-              national_id: '12345678901'
-            },
-            fields: [
-              { key: 'citizen_name', value: 'روان سرحان' }
+            form_id: 'leave_process_review',
+            form_name: 'التشيك على المعلومات المدخلة',
+            widgets: [
+              {
+                widget_type: 'radio_group',
+                data: {
+                  id: 'decision',
+                  label: 'قرار الطلب',
+                  is_required: true,
+                  is_gateway: true,
+                  options: [
+                    { key: 'الطلب مرفوض', value: 'الطلب مرفوض' },
+                    { key: 'الطلب مقبول', value: 'الطلب مقبول' }
+                  ]
+                },
+                value: 'الطلب مقبول'
+              }
             ],
-            files: [
-              { key: 'national_id_files', path: '/uploads/a.pdf', type_doc_id: 1 }
-            ],
-            templates: [
-              { id: 1, values: { full_name: 'روان سرحان' } }
-            ],
-            variables: {
-              decision: 'over_50'
-            },
+            templates: [],
             decision: 'approve',
             note: '',
             signature: {
@@ -2096,60 +2213,31 @@ const swaggerOptions = {
         },
 
         DocumentSubmitCompletePayload: {
-          type: 'object',
-          required: ['stage_name', 'decision', 'files', 'signature'],
-          additionalProperties: false,
-          description:
-            'Payload لـ POST /workflow/tasks/{taskId}/submit-documents/complete — approve + ملفات + توقيع USB فقط (بدون variables/templates)',
-          properties: {
-            stage_name: {
-              type: 'string',
-              example: 'مرحلة رفع الوثائق',
-              description: 'اسم المرحلة الحالية من GET /tasks/{taskId}'
-            },
-            decision: {
-              type: 'string',
-              enum: ['approve'],
-              example: 'approve',
-              description: 'approve فقط في تقديم الوثائق'
-            },
-            fields: {
-              type: 'array',
-              description: 'اختياري — حقول إضافية [{ key, value }]',
-              default: [],
-              items: { $ref: '#/components/schemas/StageSubmissionFieldItem' }
-            },
-            files: {
-              type: 'array',
-              minItems: 1,
-              description: 'ملف واحد على الأقل — path من رفع الملف على السيرفر',
-              items: { $ref: '#/components/schemas/StageSubmissionFileItem' }
-            },
-            note: {
-              type: 'string',
-              example: '',
-              description: 'ملاحظة اختيارية'
-            },
-            signature: {
-              $ref: '#/components/schemas/StageSubmissionSignature'
-            },
-            expected_version: {
-              type: 'integer',
-              example: 1,
-              description: 'transaction.version — optimistic concurrency (اختياري)'
+          allOf: [
+            { $ref: '#/components/schemas/UnifiedFormPayload' },
+            {
+              type: 'object',
+              required: ['decision', 'signature'],
+              properties: {
+                decision: {
+                  type: 'string',
+                  enum: ['approve'],
+                  example: 'approve'
+                },
+                signature: {
+                  $ref: '#/components/schemas/StageSubmissionSignature'
+                }
+              },
+              description:
+                'POST /workflow/tasks/{taskId}/submit-documents/complete — config_json + value + signature'
             }
-          },
+          ],
           example: {
-            stage_name: 'مرحلة رفع الوثائق',
+            form_id: 'leave_process_sign_secondary',
+            form_name: 'توقيع مدير دائرة الثانوي',
+            widgets: [],
+            templates: [],
             decision: 'approve',
-            fields: [{ key: 'citizen_name', value: 'روان سرحان' }],
-            files: [
-              {
-                key: 'national_id_files',
-                path: '/uploads/signed-doc.pdf',
-                type_doc_id: 3
-              }
-            ],
             note: '',
             signature: {
               challenge_id: '3ad67615-8c89-4a5e-a758-217e9d85b6e6',
@@ -2175,34 +2263,38 @@ const swaggerOptions = {
 
         CompleteTaskTemplateResponseItem: {
           type: 'object',
-          required: ['template_id', 'values', 'path'],
           properties: {
-            template_id: { type: 'integer', example: 1 },
-            values: {
+            id: { type: 'integer', example: 1 },
+            id_template: { type: 'integer', example: 1 },
+            id_document_instance: { type: 'integer', example: 5 },
+            value: {
               type: 'object',
-              example: { full_name: 'روان' }
+              example: { employee: 'روان سرحان', job: 'معلمة' }
+            },
+            generated_pdf_path: {
+              type: 'string',
+              nullable: true,
+              example: '/uploads/generated-3-tpl1-inst5-123.pdf'
             },
             path: {
               type: 'string',
               nullable: true,
               example: '/uploads/templates/form.pdf',
-              description: 'مسار ملف القالب من document_templates'
+              description: 'مسار ملف القالب الأصلي'
             }
           }
         },
 
         CompleteTaskData: {
           type: 'object',
-          description: 'بيانات استجابة إكمال المهمة — بدون actions',
+          description: 'بيانات استجابة إكمال المهمة — mirrors الطلب (widgets + templates)',
           properties: {
-            stage_name: { type: 'string', example: 'مرحلة الموافقة' },
-            fields: {
+            stage_name: { type: 'string', example: 'التشيك على المعلومات المدخلة' },
+            form_id: { type: 'string', example: 'leave_process_review' },
+            form_name: { type: 'string', example: 'التشيك على المعلومات المدخلة' },
+            widgets: {
               type: 'array',
-              items: { $ref: '#/components/schemas/StageSubmissionFieldItem' }
-            },
-            files: {
-              type: 'array',
-              items: { $ref: '#/components/schemas/StageSubmissionFileItem' }
+              items: { $ref: '#/components/schemas/TransactionDraftWidgetWithValue' }
             },
             templates: {
               type: 'array',
@@ -2210,69 +2302,57 @@ const swaggerOptions = {
             },
             variables: {
               type: 'object',
-              required: ['decision'],
               properties: {
-                decision: { type: 'string', example: 'over_50' }
-              },
-              additionalProperties: false
+                value: {
+                  type: 'string',
+                  example: 'approved',
+                  description: 'قيمة radio_group gateway — تُرسل لـ Camunda كـ ${value}'
+                }
+              }
+            },
+            gateway_value: {
+              type: 'string',
+              example: 'approved',
+              description: 'alias لـ variables.value'
             },
             decision: {
               type: 'string',
-              nullable: true,
               example: 'approve',
-              description: 'قرار التوقيع — ليس مسار Camunda'
+              description: 'قرار التوقيع USB'
             },
-            note: {
-              type: 'string',
-              example: '',
-              description: 'ملاحظة المرحلة'
-            },
-            signature: {
-              $ref: '#/components/schemas/StageSubmissionSignature'
-            },
-            idempotency_key: {
-              type: 'string',
-              format: 'uuid',
-              example: '0dbc8ad0-2618-4be2-8080-07e13c862d9b'
-            },
-            idempotent_replay: {
-              type: 'boolean',
-              example: false
-            },
+            note: { type: 'string', example: '' },
+            signature: { $ref: '#/components/schemas/StageSubmissionSignature' },
+            idempotency_key: { type: 'string', format: 'uuid' },
+            idempotent_replay: { type: 'boolean', example: false },
             workflow_status: {
               type: 'string',
               enum: ['running', 'completed', 'rejected'],
               example: 'running'
             },
-            rejection_reason: {
-              type: 'string',
-              nullable: true,
-              example: 'المستندات غير مكتملة'
-            }
+            rejection_reason: { type: 'string', nullable: true }
           },
           example: {
-            stage_name: 'مرحلة الموافقة',
-            fields: [
-              { key: 'citizen_name', value: 'روان سرحان' }
-            ],
-            files: [
-              { key: 'national_id_files', path: '/uploads/a.pdf', type_doc_id: 1 }
+            stage_name: 'التشيك على المعلومات المدخلة',
+            form_id: 'leave_process_review',
+            form_name: 'التشيك على المعلومات المدخلة',
+            widgets: [
+              {
+                widget_type: 'radio_group',
+                data: { id: 'gateway', label: 'قرار المسار', is_gateway: true },
+                value: 'approved'
+              }
             ],
             templates: [
               {
-                template_id: 1,
-                values: { full_name: 'روان' },
-                path: '/uploads/templates/form.pdf'
+                id: 1,
+                id_template: 1,
+                id_document_instance: 5,
+                value: { employee: 'روان سرحان' },
+                generated_pdf_path: '/uploads/generated-3-tpl1-inst5-123.pdf'
               }
             ],
-            variables: {
-              decision: 'over_50'
-            },
-            signature: {
-              challenge_id: '3ad67615-8c89-4a5e-a758-217e9d85b6e6',
-              signature:
-                'Bj7trXvyM9jfruXKttly27VY1xsVuqtKgcjfLf7fZrohjBGX0MwIFtYRMQ3nP5WHtbx0EFadm9rXy/RQqVw2Dg=='
-            },
+            variables: { value: 'approved' },
+            gateway_value: 'approved',
             decision: 'approve',
             note: '',
             idempotency_key: '0dbc8ad0-2618-4be2-8080-07e13c862d9b',
@@ -2547,7 +2627,41 @@ const swaggerOptions = {
                         },
                         data: {
                           type: 'object',
-                          description: 'لقطة تقديم المواطن فقط (form_id, widgets, ...) — بدون مراحل Camunda أو مصفوفة stages'
+                          description:
+                            'transaction_history — applicant + stages[] (كل stage: form_id, widgets+value, templates, note, completed_by/at)',
+                          properties: {
+                            applicant: {
+                              type: 'object',
+                              properties: {
+                                first_name_employee: { type: 'string' },
+                                father_name_employee: { type: 'string' },
+                                last_name_employee: { type: 'string' },
+                                national_id_employee: { type: 'string' },
+                                phone_number_employee: { type: 'string' }
+                              }
+                            },
+                            stages: {
+                              type: 'array',
+                              items: {
+                                type: 'object',
+                                properties: {
+                                  form_id: { type: 'string' },
+                                  form_name: { type: 'string' },
+                                  widgets: {
+                                    type: 'array',
+                                    items: { $ref: '#/components/schemas/TransactionDraftWidgetWithValue' }
+                                  },
+                                  templates: {
+                                    type: 'array',
+                                    items: { $ref: '#/components/schemas/CompleteTaskTemplateResponseItem' }
+                                  },
+                                  note: { type: 'string' },
+                                  completed_by: { type: 'integer' },
+                                  completed_at: { type: 'string', format: 'date-time' }
+                                }
+                              }
+                            }
+                          }
                         }
                       }
                     },
@@ -2584,12 +2698,30 @@ const swaggerOptions = {
                 id_process: 'STUTR-2026-001',
                 priority: 1,
                 data: {
-                  stage_name: 'الوثائق المطلوبة للمواطن',
-                  form_id: 'leave_process_auth',
-                  form_name: 'الوثائق المطلوبة للمواطن',
-                  widgets: [],
-                  decision: 'submit',
-                  note: ''
+                  applicant: {
+                    first_name_employee: 'روان',
+                    father_name_employee: 'أحمد',
+                    last_name_employee: 'سرحان',
+                    national_id_employee: '',
+                    phone_number_employee: '0954263536'
+                  },
+                  stages: [
+                    {
+                      form_id: 'leave_process_auth',
+                      form_name: 'الوثائق المطلوبة للمواطن',
+                      widgets: [
+                        {
+                          widget_type: 'text_field',
+                          data: { id: 'student_first_name', label: 'اسم الطالب' },
+                          value: 'روان'
+                        }
+                      ],
+                      templates: [],
+                      note: '',
+                      completed_by: 5,
+                      completed_at: '2026-06-12T10:00:00.000Z'
+                    }
+                  ]
                 }
               },
               currentStage: {
@@ -2637,30 +2769,24 @@ const swaggerOptions = {
             status_code: 200,
             message: 'تم إكمال المهمة بنجاح',
             data: {
-              stage_name: 'مرحلة الموافقة',
-              fields: [
-                { key: 'citizen_name', value: 'روان سرحان' }
-              ],
-              files: [
-                { key: 'national_id_files', path: '/uploads/a.pdf', type_doc_id: 1 }
-              ],
-              templates: [
+              stage_name: 'التشيك على المعلومات المدخلة',
+              form_id: 'leave_process_review',
+              form_name: 'التشيك على المعلومات المدخلة',
+              widgets: [
                 {
-                  template_id: 1,
-                  values: { full_name: 'روان' },
-                  path: '/uploads/templates/form.pdf'
+                  widget_type: 'radio_group',
+                  data: { id: 'decision', label: 'قرار الطلب', is_gateway: true },
+                  value: 'الطلب مقبول'
                 }
               ],
-              variables: {
-                action: 'اذا كان العمر اقل من خمسين'
-              },
-              signature: {
-                challenge_id: '3ad67615-8c89-4a5e-a758-217e9d85b6e6',
-                signature:
-                  'Bj7trXvyM9jfruXKttly27VY1xsVuqtKgcjfLf7fZrohjBGX0MwIFtYRMQ3nP5WHtbx0EFadm9rXy/RQqVw2Dg=='
-              },
+              templates: [],
+              variables: { value: 'الطلب مقبول' },
+              gateway_value: 'الطلب مقبول',
+              decision: 'approve',
+              note: '',
               idempotency_key: '0dbc8ad0-2618-4be2-8080-07e13c862d9b',
-              idempotent_replay: false
+              idempotent_replay: false,
+              workflow_status: 'running'
             }
           }
         },
@@ -2691,22 +2817,33 @@ const swaggerOptions = {
         CompleteTaskRejectExample: {
           summary: 'رفض معاملة مع توقيع USB',
           value: {
-            stage_name: 'مراجعة المدير القسم',
+            form_id: 'leave_process_review',
+            form_name: 'مراجعة المدير',
+            widgets: [
+              {
+                widget_type: 'radio_group',
+                data: {
+                  id: 'gateway',
+                  label: 'قرار المسار',
+                  is_required: true,
+                  is_gateway: true,
+                  options: [
+                    { key: 'approved', value: 'موافق' },
+                    { key: 'rejected', value: 'مرفوض' }
+                  ]
+                },
+                value: 'rejected'
+              }
+            ],
+            templates: [],
             decision: 'reject',
             rejection_reason: 'المستندات غير مكتملة',
             note: '',
-            fields: [],
-            files: [],
-            templates: [],
-            variables: {
-              decision: 'reject'
-            },
             signature: {
               challenge_id: '3ad67615-8c89-4a5e-a758-217e9d85b6e6',
               signature:
                 'Bj7trXvyM9jfruXKttly27VY1xsVuqtKgcjfLf7fZrohjBGX0MwIFtYRMQ3nP5WHtbx0EFadm9rXy/RQqVw2Dg=='
-            },
-            idempotency_key: '0dbc8ad0-2618-4be2-8080-07e13c862d9b'
+            }
           }
         },
 
@@ -3126,6 +3263,167 @@ const swaggerOptions = {
             message: { type: 'string', example: 'regex غير صالح للودجت citizen_phone' },
             error: { type: 'string', example: 'VALIDATION_ERROR' },
             data: { type: 'null', example: null }
+          }
+        }
+      },
+
+      examples: {
+        LeaveProcessAuthSubmit: {
+          summary: 'POST /transaction/submit — مرحلة AUTH (leave_process_auth)',
+          description: 'نفس config_json من stage_config/create + value لكل widget',
+          value: {
+            form_id: 'leave_process_auth',
+            form_name: 'الوثائق المطلوبة للمواطن',
+            widgets: [
+              {
+                widget_type: 'text_field',
+                data: {
+                  id: 'student_first_name',
+                  label: 'اسم الطالب',
+                  is_required: true,
+                  input_type: 'text',
+                  max_length: 100,
+                  min_length: 2
+                },
+                value: 'روان'
+              },
+              {
+                widget_type: 'text_field',
+                data: {
+                  id: 'student_last_name',
+                  label: 'الاسم الأخير',
+                  is_required: true,
+                  input_type: 'text',
+                  max_length: 100,
+                  min_length: 2
+                },
+                value: 'سرحان'
+              },
+              {
+                widget_type: 'text_field',
+                data: {
+                  id: 'father_name',
+                  label: 'اسم الأب',
+                  is_required: true,
+                  input_type: 'text',
+                  max_length: 100,
+                  min_length: 2
+                },
+                value: 'أحمد'
+              },
+              {
+                widget_type: 'dropdown',
+                data: {
+                  id: 'birth_governorate',
+                  label: 'محافظة الولادة',
+                  is_required: true,
+                  options: [
+                    { key: 'DAM', value: 'دمشق' },
+                    { key: 'HAM', value: 'حماة' },
+                    { key: 'ALE', value: 'حلب' }
+                  ]
+                },
+                value: 'DAM'
+              },
+              {
+                widget_type: 'file_picker',
+                data: {
+                  id: 'national_id_files',
+                  label: 'وثائق الهوية الشخصية',
+                  is_required: true,
+                  max_size_mb: 5,
+                  allowed_extensions: ['pdf', 'png', 'jpg'],
+                  allow_multiple: true,
+                  type_doc_id: 3
+                },
+                value: [
+                  {
+                    path: '/uploads/1781283413699-332269555.pdf',
+                    url: 'http://localhost:4000/uploads/1781283413699-332269555.pdf',
+                    type_doc_id: 3,
+                    original_name: 'national_id_files'
+                  }
+                ]
+              }
+            ],
+            templates: [],
+            note: ''
+          }
+        },
+
+        LeaveProcessReviewComplete: {
+          summary: 'POST /tasks/{taskId}/complete — مراجعة (leave_process_review)',
+          value: {
+            form_id: 'leave_process_review',
+            form_name: 'التشيك على المعلومات المدخلة',
+            widgets: [
+              {
+                widget_type: 'radio_group',
+                data: {
+                  id: 'decision',
+                  label: 'قرار الطلب',
+                  is_required: true,
+                  is_gateway: true,
+                  options: [
+                    { key: 'الطلب مرفوض', value: 'الطلب مرفوض' },
+                    { key: 'الطلب مقبول', value: 'الطلب مقبول' }
+                  ]
+                },
+                value: 'الطلب مقبول'
+              }
+            ],
+            templates: [],
+            decision: 'approve',
+            note: '',
+            signature: {
+              challenge_id: '3ad67615-8c89-4a5e-a758-217e9d85b6e6',
+              signature:
+                'Bj7trXvyM9jfruXKttly27VY1xsVuqtKgcjfLf7fZrohjBGX0MwIFtYRMQ3nP5WHtbx0EFadm9rXy/RQqVw2Dg=='
+            }
+          }
+        },
+
+        LeaveProcessSignEduManagerComplete: {
+          summary: 'POST /tasks/{taskId}/complete — توقيع مدير التربية + PDF',
+          value: {
+            form_id: 'leave_process_sign_edu_manager',
+            form_name: 'توقيع مدير التربية',
+            widgets: [],
+            templates: [
+              {
+                id: 1,
+                value: {
+                  'manager-name': 'اسم مدير التربية',
+                  employee: 'روان سرحان',
+                  job: 'معلمة',
+                  department: 'دائرة التربية'
+                }
+              }
+            ],
+            decision: 'approve',
+            note: '',
+            signature: {
+              challenge_id: '3ad67615-8c89-4a5e-a758-217e9d85b6e6',
+              signature:
+                'Bj7trXvyM9jfruXKttly27VY1xsVuqtKgcjfLf7fZrohjBGX0MwIFtYRMQ3nP5WHtbx0EFadm9rXy/RQqVw2Dg=='
+            }
+          }
+        },
+
+        LeaveProcessSignSecondaryComplete: {
+          summary: 'POST /tasks/{taskId}/submit-documents/complete — توقيع الثانوي',
+          value: {
+            form_id: 'leave_process_sign_secondary',
+            form_name: 'توقيع مدير دائرة الثانوي',
+            widgets: [],
+            templates: [],
+            decision: 'approve',
+            note: '',
+            signature: {
+              challenge_id: '3ad67615-8c89-4a5e-a758-217e9d85b6e6',
+              signature:
+                'Bj7trXvyM9jfruXKttly27VY1xsVuqtKgcjfLf7fZrohjBGX0MwIFtYRMQ3nP5WHtbx0EFadm9rXy/RQqVw2Dg=='
+            }
           }
         }
       }

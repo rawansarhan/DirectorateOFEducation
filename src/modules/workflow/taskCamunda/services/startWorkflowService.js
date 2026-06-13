@@ -14,7 +14,8 @@ const processInstanceRepository =
   require('../repositories/processInstanceRepository')
 
 const {
-  completeTask
+  completeTask,
+  buildAutoCompleteAuthPayload
 } = require('./completeTaskService')
 const { toStartWorkflow } = require('../mappers/taskCamundaMapper')
 
@@ -38,7 +39,8 @@ async function startWorkflow ({
   transactionId,
   processCode,
   dbTransaction = null,
-  transactionRow = null
+  transactionRow = null,
+  submissionPayload = null
 }) {
   const [transaction, process] = await Promise.all([
     transactionRow
@@ -91,16 +93,20 @@ async function startWorkflow ({
     let result = null
 
     if (firstTask) {
+      const autoPayload = buildAutoCompleteAuthPayload(
+        submissionPayload || transaction.data || {}
+      )
+
+      if (!autoPayload.widgets.length) {
+        throw new Error(
+          'widgets[] غير موجودة على المعاملة — أعد submit مع الاستمارة كاملة'
+        )
+      }
+
       result = await completeTask({
         taskId: firstTask.id,
         userId: transaction.user_id,
-        payload: {
-          fields: [],
-          files: [],
-          templates: [],
-          actions: [],
-          variables: {}
-        },
+        payload: autoPayload,
         isAutoComplete: true,
         dbTransaction
       })

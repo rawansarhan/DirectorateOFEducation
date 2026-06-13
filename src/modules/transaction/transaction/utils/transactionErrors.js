@@ -23,7 +23,8 @@ const MESSAGES = {
   DRAFT_UPSERT_UPDATED: 'تم تحديث المسودة الحالية بنجاح',
   TRANSACTION_RETRIEVED: 'تم جلب المعاملة بنجاح',
   TRANSACTION_SUBMITTED: 'تم تقديم المعاملة بنجاح',
-  TRANSACTIONS_LIST_RETRIEVED: 'تم جلب معاملاتك بنجاح'
+  TRANSACTIONS_LIST_RETRIEVED: 'تم جلب معاملاتك بنجاح',
+  TRANSACTION_COUNTS_RETRIEVED: 'تم جلب أعداد معاملاتك بنجاح'
 }
 
 function createTransactionError (code, detail, meta = null) {

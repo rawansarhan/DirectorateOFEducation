@@ -35,6 +35,9 @@ const {
   createHttpError
 } = require('../../../../core/middleware/httpStatusCodes')
 
+const transactionRepository = require('../../../transaction/transaction/repositories/transactionRepository')
+const { retryWithBackoff } = require('../../../../core/utils/retryWithBackoff')
+
 function formatJoiError (error) {
   const lines = error.details.map(d => {
     const path = d.path.length ? d.path.join('.') : 'body'
@@ -314,68 +317,71 @@ for (const a of assignments) {
 // GET AUTH STAGE CONFIG (مواطن / موظف — استمارة التقديم)
 // ======================================================
 
-async function getConfig_json (processId) {
-  // =====================================
-  // VALIDATION
-  // =====================================
+async function getConfig_json (processId, { userId } = {}) {
+  return retryWithBackoff(async () => {
+    const numericProcessId = Number(processId)
 
-  if (!Number.isInteger(processId) || processId < 1) {
-    throw createHttpError(
-      'معرّف العملية غير صالح',
-      HTTP_STATUS.BAD_REQUEST
-    );
-  }
-
-  // =====================================
-  // PROCESS
-  // =====================================
-
-  const process = await processRepository.findById(processId);
-
-  if (!process) {
-    throw createHttpError(
-      'لم يتم ايجاد العملية',
-      HTTP_STATUS.NOT_FOUND
-    );
-  }
-
-  // =====================================
-  // STAGE
-  // =====================================
-
-  const stage = await stageRepository.findAuthStageByProcessId(
-    processId
-  );
-
-  if (!stage) {
-    throw createHttpError(
-      'لا توجد مرحلة لهذه العملية',
-      HTTP_STATUS.NOT_FOUND
-    );
-  }
-
-  // =====================================
-  // CONFIG
-  // =====================================
-
-  const stageConfig =
-    await stageConfigRepository.findByStageId(
-      stage.id
-    );
-
-  if (!stageConfig) {
-    throw createHttpError(
-      'لم نجد إعدادات للمرحلة',
-      HTTP_STATUS.NOT_FOUND
-    );
-  }
-
-  return {
-    message: 'تم جلب إعدادات العملية بنجاح',
-    data: {
-      config_json: stageConfig.config_json
+    if (!Number.isInteger(numericProcessId) || numericProcessId < 1) {
+      throw createHttpError(
+        'معرّف العملية غير صالح — يجب أن يكون رقماً صحيحاً موجباً',
+        HTTP_STATUS.BAD_REQUEST,
+        'VALIDATION_ERROR'
+      )
     }
-  }
+
+    const process = await processRepository.findById(numericProcessId)
+
+    if (!process) {
+      throw createHttpError(
+        'تعريف العملية غير موجود — تحقق من معرّف العملية',
+        HTTP_STATUS.NOT_FOUND,
+        'NOT_FOUND'
+      )
+    }
+
+    const stage = await stageRepository.findFirstAuthStage(numericProcessId)
+
+    if (!stage) {
+      throw createHttpError(
+        'لا توجد مرحلة تقديم (AUTH) مرتبطة بهذه العملية',
+        HTTP_STATUS.NOT_FOUND,
+        'NOT_FOUND'
+      )
+    }
+
+    const stageConfig =
+      await stageConfigRepository.findByStageId(
+        stage.id
+      )
+
+    if (!stageConfig) {
+      throw createHttpError(
+        'لم تُكوَّن استمارة التقديم لهذه العملية بعد',
+        HTTP_STATUS.NOT_FOUND,
+        'NOT_FOUND'
+      )
+    }
+
+    let draft = null
+
+    if (userId) {
+      draft = await transactionRepository.findDraftByCode(userId, process.code)
+    }
+
+    const config_json = draft?.data ?? stageConfig.config_json
+    const data = { config_json }
+
+    if (draft) {
+      data.transaction_id = draft.id
+    }
+
+    return {
+      message: draft?.data
+        ? 'تم جلب استمارة المسودة بنجاح'
+        : 'تم جلب إعدادات العملية بنجاح',
+      data
+    }
+  }, { label: 'stageConfig.getConfig_json' })
 }
 module.exports = {
   createStageConfigService,

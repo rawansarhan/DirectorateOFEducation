@@ -168,6 +168,20 @@ async function findAndCountByUserId ({
   })
 }
 
+async function countByUserIdGroupByStatus (userId) {
+  const db = require('../../../../entities')
+
+  return db.Transaction.findAll({
+    attributes: [
+      'status',
+      [db.sequelize.fn('COUNT', db.sequelize.col('id')), 'count']
+    ],
+    where: { user_id: userId },
+    group: ['status'],
+    raw: true
+  })
+}
+
 module.exports = {
   findDraft,
   create,
@@ -175,6 +189,7 @@ module.exports = {
   findDraftByCode,
   findInFlightByUserAndCode,
   findAndCountByUserId,
+  countByUserIdGroupByStatus,
   VALID_USER_LIST_STATUSES,
   updateDataOptimistic,
   updateStatus

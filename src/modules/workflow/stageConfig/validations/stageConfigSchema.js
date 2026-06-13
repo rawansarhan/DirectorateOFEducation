@@ -69,7 +69,9 @@ const dropdownDataSchema = Joi.object({
   options: Joi.array().items(widgetOptionSchema).min(1).required()
 }).unknown(false)
 
-const radioGroupDataSchema = dropdownDataSchema
+const radioGroupDataSchema = dropdownDataSchema.keys({
+  is_gateway: Joi.boolean().default(false)
+})
 
 const checkListDataSchema = Joi.object({
   id: widgetIdSchema,

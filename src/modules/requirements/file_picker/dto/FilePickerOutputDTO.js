@@ -14,6 +14,7 @@ class FilePickerOutputDTO {
     this.max_size_mb = plain?.max_size_mb
     this.allowed_extensions = plain?.allowed_extensions ?? []
     this.allow_multiple = plain?.allow_multiple
+    this.type_doc_id = plain?.type_doc_id
     this.created_at = plain?.created_at
     this.updated_at = plain?.updated_at
   }

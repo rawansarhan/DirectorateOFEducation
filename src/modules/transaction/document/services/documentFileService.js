@@ -12,7 +12,7 @@
  * - يُخزَّن في document_signature.type_doc_id
  *
  * APIs: POST /api/transaction/files/upload  ← رفع الملف (multipart)
- *       POST /api/transaction/submit/{processId}
+ *       POST /api/transaction/submit/{transactionId}
  *       POST /api/workflow/tasks/{id}/complete
  *       POST /api/workflow/tasks/{id}/submit-documents/complete
  */

@@ -1,52 +1,17 @@
 'use strict'
 
 const {
-  validateStageSubmissionPayload,
   validateSubmitTransactionPayload,
-  normalizeSubmissionPayload,
   SUBMISSION_SCHEMA_VERSION
 } = require('../schemas/stageSubmissionSchema')
 
 const {
-  assertPayloadAgainstStageConfig
-} = require('../validators/stageSubmissionValidator')
+  validateAndNormalizeUnifiedFormPayload
+} = require('./unifiedFormPayloadService')
 
 const processRepository = require('../processDefinition/repositories/processRepository')
 const stageRepository = require('../processDefinition/repositories/stageRepository')
 const stageConfigRepository = require('../stageConfig/repositories/stageConfigRepository')
-const { buildStageFormSnapshot } = require('./stageFormSnapshotBuilder')
-
-function validateSubmissionRequest (payload = {}, options = {}) {
-  const {
-    mode = 'draft',
-    requireVariables = false,
-    requireSignature = false
-  } = options
-
-  const { value, error } = validateStageSubmissionPayload(payload, {
-    mode,
-    requireVariables,
-    requireSignature
-  })
-
-  if (error) {
-    throw new Error(error)
-  }
-
-  return normalizeSubmissionPayload(value)
-}
-
-async function validateSubmissionAgainstConfig (
-  payload = {},
-  configJson = {},
-  options = {}
-) {
-  const normalized = validateSubmissionRequest(payload, options)
-
-  await assertPayloadAgainstStageConfig(normalized, configJson, options)
-
-  return normalized
-}
 
 async function validateSubmitTransactionRequest (
   payload = {},
@@ -64,20 +29,12 @@ async function validateSubmitTransactionRequest (
     throw err
   }
 
-  if (
-    value.stage_name &&
-    stageName &&
-    String(value.stage_name).trim() !== String(stageName).trim()
-  ) {
-    throw new Error('stage_name لا يطابق مرحلة التقديم (AUTH)')
-  }
-
-  const normalized = normalizeSubmissionPayload(value)
-  normalized.decision = normalized.decision || 'submit'
-
-  await assertPayloadAgainstStageConfig(normalized, configJson, {
-    mode: 'submit'
+  const normalized = await validateAndNormalizeUnifiedFormPayload(value, configJson, {
+    mode: 'submit',
+    stageName
   })
+
+  normalized.decision = 'submit'
 
   return normalized
 }
@@ -87,38 +44,31 @@ function resolveStoredDecision (payload = {}) {
     return payload.decision
   }
 
-  if (payload.variables?.action) {
-    return payload.variables.action
-  }
-
-  if (payload.variables?.decision) {
-    return payload.variables.decision
+  if (payload.gateway_value) {
+    return payload.gateway_value
   }
 
   return null
 }
 
+function mapTemplatesForStorage (templates = []) {
+  return (templates || []).map(item => ({
+    id_template: item.id ?? item.template_id ?? null,
+    id_document_instance: item.document_instance_id ?? null,
+    value: item.values ?? item.value ?? {},
+    generated_pdf_path: item.generated_pdf_path ?? null
+  }))
+}
+
 function buildStoredStageData (payload = {}, { stageName = null, configJson = null } = {}) {
-  const base = {
-    stage_name: stageName || payload.stage_name || null,
-    templates: payload.templates || [],
-    decision: resolveStoredDecision(payload),
-    note: payload.note ?? payload.notes ?? ''
-  }
-
-  if (configJson?.widgets?.length) {
-    return {
-      ...base,
-      ...buildStageFormSnapshot(configJson, payload)
-    }
-  }
-
   return {
-    ...base,
-    form_id: configJson?.form_id ?? null,
-    form_name: configJson?.form_name ?? null,
-    fields: payload.fields || [],
-    files: payload.files || []
+    stage_name: stageName ?? null,
+    form_id: payload.form_id ?? configJson?.form_id ?? null,
+    form_name: payload.form_name ?? configJson?.form_name ?? null,
+    widgets: payload.widgets || [],
+    templates: mapTemplatesForStorage(payload.templates || []),
+    decision: resolveStoredDecision(payload),
+    note: payload.note ?? ''
   }
 }
 
@@ -158,8 +108,6 @@ async function loadAuthStageConfigByProcessCode (processCode) {
 
 module.exports = {
   SUBMISSION_SCHEMA_VERSION,
-  validateSubmissionRequest,
-  validateSubmissionAgainstConfig,
   validateSubmitTransactionRequest,
   buildStoredStageData,
   buildStoredSubmissionData,

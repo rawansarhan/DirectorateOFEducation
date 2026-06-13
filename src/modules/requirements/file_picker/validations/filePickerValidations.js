@@ -1,6 +1,7 @@
 'use strict'
 
 const Joi = require('joi')
+const { pickTypeDocIdFromObject } = require('../../../../core/utils/typeDocId')
 
 const ALLOWED_EXTENSION_PATTERN = /^[a-z0-9]{1,10}$/
 
@@ -47,7 +48,18 @@ const filePickerBodySchema = Joi.object({
     }),
 
   allow_multiple: Joi.boolean()
-    .default(false)
+    .default(false),
+
+  type_doc_id: Joi.number()
+    .integer()
+    .positive()
+    .required()
+    .messages({
+      'any.required': 'type_doc_id مطلوب',
+      'number.base': 'type_doc_id يجب أن يكون رقماً صحيحاً',
+      'number.integer': 'type_doc_id يجب أن يكون رقماً صحيحاً',
+      'number.positive': 'type_doc_id يجب أن يكون رقماً موجباً'
+    })
 }).messages({
   'object.unknown': 'الحقل {#label} غير مسموح به'
 })
@@ -56,8 +68,23 @@ function normalizeExtensions (extensions = []) {
   return [...new Set(extensions.map(ext => String(ext).trim().toLowerCase()))]
 }
 
+function normalizeCreatePayload (data = {}) {
+  const {
+    typeDoc_id: _typeDocId,
+    type_Doc_id: _typeDocIdAlt,
+    TypeDoc_id: _typeDocIdLegacy,
+    ...rest
+  } = data
+
+  return {
+    ...rest,
+    type_doc_id: pickTypeDocIdFromObject(data)
+  }
+}
+
 function validateCreateFilePicker (data) {
-  const { error, value } = filePickerBodySchema.validate(data, {
+  const payload = normalizeCreatePayload(data)
+  const { error, value } = filePickerBodySchema.validate(payload, {
     abortEarly: false,
     allowUnknown: false,
     stripUnknown: true
@@ -74,7 +101,8 @@ function validateCreateFilePicker (data) {
       is_required: Boolean(value.is_required),
       max_size_mb: Number(value.max_size_mb),
       allowed_extensions: normalizeExtensions(value.allowed_extensions),
-      allow_multiple: Boolean(value.allow_multiple)
+      allow_multiple: Boolean(value.allow_multiple),
+      type_doc_id: Number(value.type_doc_id)
     }
   }
 }

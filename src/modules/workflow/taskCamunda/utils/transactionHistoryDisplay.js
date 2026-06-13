@@ -5,6 +5,11 @@ const {
   enrichStageSnapshot,
   isStageFormSnapshot
 } = require('../../../../core/utils/filePath')
+const { mapTemplatesForHistory } = require('../../services/unifiedFormPayloadService')
+const {
+  formatTransactionDate,
+  parseTransactionDate
+} = require('./employeeTaskFormatters')
 
 const ACTIVITY_STAGE_KEY_PATTERN = /^Activity_[A-Za-z0-9_]+$/
 
@@ -49,14 +54,67 @@ function copyFormRootFields (source = {}, target = {}) {
       continue
     }
 
+    if (key === 'templates') {
+      target.templates = mapTemplatesForHistory(source.templates)
+      continue
+    }
+
+    if (key === 'completed_at') {
+      target.completed_at = formatTransactionDate(source.completed_at) ?? null
+      continue
+    }
+
     target[key] = source[key]
   }
 
   return target
 }
 
-function hasActivityStageKeys (data = {}) {
-  return Object.keys(data).some(isActivityStageKey)
+function buildApplicantSnapshot (transaction = null, rootData = {}) {
+  const employeeWidgets = {}
+
+  for (const widget of rootData.widgets || []) {
+    const widgetId = widget?.data?.id
+
+    if (widgetId?.startsWith('employee_') || widgetId?.includes('employee')) {
+      employeeWidgets[widgetId] = widget.value
+    }
+  }
+
+  return {
+    first_name_employee:
+      employeeWidgets.employee_first_name ?? transaction?.first_name ?? '',
+    father_name_employee:
+      employeeWidgets.employee_father_name ?? transaction?.father_name ?? '',
+    last_name_employee:
+      employeeWidgets.employee_last_name ?? transaction?.last_name ?? '',
+    national_id_employee:
+      employeeWidgets.employee_national_id ?? transaction?.national_id ?? '',
+    phone_number_employee: transaction?.user?.phone_number ?? ''
+  }
+}
+
+function buildHistoryStageEntry (stageData = {}) {
+  const entry = {
+    stage_name: stageData.stage_name || null,
+    form_id: stageData.form_id ?? null,
+    form_name: stageData.form_name ?? null,
+    decision: stageData.decision ?? null,
+    note: stageData.note ?? '',
+    rejection_reason: stageData.rejection_reason ?? null,
+    completed_by: stageData.completed_by ?? null,
+    completed_at: formatTransactionDate(stageData.completed_at) ?? null
+  }
+
+  if (Array.isArray(stageData.widgets) && stageData.widgets.length) {
+    entry.widgets = enrichWidgets(stageData.widgets)
+  }
+
+  if (Array.isArray(stageData.templates) && stageData.templates.length) {
+    entry.templates = mapTemplatesForHistory(stageData.templates)
+  }
+
+  return entry
 }
 
 function omitActivityStageKeys (data = {}) {
@@ -81,52 +139,42 @@ function buildCompletedStagesFromData (rawData = {}) {
       continue
     }
 
-    const entry = {
-      stage_name: value.stage_name || null,
-      decision: value.decision ?? null,
-      note: value.note ?? '',
-      variables: value.variables ?? null,
-      fields: value.fields ?? null,
-      files: value.files ?? null,
-      templates: value.templates ?? null,
-      rejection_reason: value.rejection_reason ?? null,
-      completed_by: value.completed_by ?? null,
-      completed_at: value.completed_at ?? null
-    }
-
-    if (Array.isArray(value.widgets) && value.widgets.length) {
-      entry.widgets = enrichWidgets(value.widgets)
-    }
-
-    stages.push(entry)
+    stages.push(buildHistoryStageEntry(value))
   }
 
   return stages.sort((a, b) => {
-    const dateA = a.completed_at ? new Date(a.completed_at).getTime() : 0
-    const dateB = b.completed_at ? new Date(b.completed_at).getTime() : 0
+    const dateA = parseTransactionDate(a.completed_at)?.getTime() || 0
+    const dateB = parseTransactionDate(b.completed_at)?.getTime() || 0
     return dateA - dateB
   })
 }
 
 /**
  * Prepares transaction.data for task-details display:
- * - Keeps citizen submission snapshot at root (form_id, widgets, ...)
- * - Adds completed_stages[] from saved Activity_* snapshots (without exposing raw keys)
+ * - applicant snapshot
+ * - stages[] ordered history (citizen root + completed employee stages)
  */
-function formatTransactionHistoryForDisplay (rawData = {}) {
+function formatTransactionHistoryForDisplay (rawData = {}, transaction = null) {
   if (!rawData || typeof rawData !== 'object' || Array.isArray(rawData)) {
     return {}
   }
 
   const cleaned = omitActivityStageKeys(rawData)
-  const display = copyFormRootFields(cleaned, {})
-  const completedStages = buildCompletedStagesFromData(rawData)
+  const stages = []
+  const applicant = buildApplicantSnapshot(transaction, cleaned)
 
-  if (completedStages.length) {
-    display.completed_stages = completedStages
+  if (cleaned.form_id || Array.isArray(cleaned.widgets)) {
+    stages.push(buildHistoryStageEntry(copyFormRootFields(cleaned, {})))
   }
 
-  if (!Object.keys(display).length) {
+  stages.push(...buildCompletedStagesFromData(rawData))
+
+  const display = {
+    applicant,
+    stages
+  }
+
+  if (!stages.length && !Object.keys(applicant).some(key => applicant[key])) {
     return {}
   }
 
@@ -140,5 +188,6 @@ function formatTransactionHistoryForDisplay (rawData = {}) {
 module.exports = {
   formatTransactionHistoryForDisplay,
   isActivityStageKey,
-  hasActivityStageKeys
+  buildApplicantSnapshot,
+  buildHistoryStageEntry
 }

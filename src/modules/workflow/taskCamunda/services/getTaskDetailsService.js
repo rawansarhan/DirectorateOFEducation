@@ -121,7 +121,8 @@ async function getTaskDetails ({ taskId, userId }) {
   })
 
   const previousStagesData = formatTransactionHistoryForDisplay(
-    transaction?.data || {}
+    transaction?.data || {},
+    transaction
   )
 
   return {
