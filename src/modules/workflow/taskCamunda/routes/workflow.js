@@ -760,6 +760,8 @@ router.get('/tasks/:taskId', authMiddleware, getTaskDetailsController)
 
  *       للموظف عند رفع وثائق تتطلب توقيع USB — `decision` ثابت `approve`.
 
+ *       **بديل (معاملات يبدأها الموظف):** `POST /api/transaction/{transactionId}/submit-documents/signing-challenge`
+
  *       **نجاح:** `{ success, status_code, message, data }`
 
  *       **خطأ:** `{ success, status_code, message, error, data: null }`
@@ -836,6 +838,8 @@ router.post(
  *     description: |
 
  *       **تسلسل:** GET `/tasks/{taskId}` → POST `/submit-documents/signing-challenge` → وقّع `message` → POST `/submit-documents/complete`
+
+ *       **بديل (transactionId):** POST `/api/transaction/{transactionId}/submit-documents/signing-challenge` ثم `/complete`
 
  *
 

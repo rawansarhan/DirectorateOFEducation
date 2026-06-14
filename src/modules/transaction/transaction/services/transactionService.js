@@ -36,11 +36,47 @@ const {
 } = require('../../../workflow/services/stageSubmissionService')
 
 const operationGuardService = require('../../../../core/security/operationGuardService')
+const employeeTaskRepository = require('../../../workflow/taskCamunda/repositories/employeeTaskRepository')
+const userRepository = require('../../../auth/repositories/userRepository')
+const {
+  verifySignatureForComplete,
+  persistVerifiedSignature,
+  buildDraftSubmitTaskId
+} = require('../../../workflow/taskCamunda/services/transactionSigningService')
 
 const SUBMIT_IDEMPOTENCY_SCOPE = 'submit_transaction'
 
 function buildSubmitGuardKey (transactionId) {
   return `txn-${transactionId}`
+}
+
+async function userRequiresSubmitSignature (userId) {
+  if (!userId) {
+    return false
+  }
+
+  const roleIds = await employeeTaskRepository.getUserRoleIds(userId)
+  return roleIds.length > 0
+}
+
+function extractSubmitSignature (payload = {}) {
+  const signature = payload?.signature
+
+  if (!signature) {
+    return null
+  }
+
+  const challengeId = signature.challenge_id || signature.signing_id
+  const signatureValue = signature.signature
+
+  if (!challengeId || !signatureValue) {
+    return null
+  }
+
+  return {
+    challengeId,
+    signature: signatureValue
+  }
 }
 
 function wrapSubmitResult (dto, idempotencyKey, idempotentReplay = false, extra = {}) {
@@ -159,6 +195,47 @@ async function createDraft ({ userId, processId }) {
   }, { label: 'transaction.createDraft' })
 }
 
+async function ensureDraftForProcess ({ userId, processId }) {
+  return retryWithBackoff(async () => {
+    const process = await fetchActiveProcess(processId)
+    let draft = await repo.findDraftByCode(userId, process.code)
+    let isNew = false
+
+    if (draft) {
+      return {
+        isNew: false,
+        draft,
+        process
+      }
+    }
+
+    const user = await userRepository.findById(userId)
+
+    if (!user || !user.is_active) {
+      throw createTransactionError('UNAUTHORIZED')
+    }
+
+    draft = await repo.create({
+      code: process.code,
+      user_id: userId,
+      status: 'draft',
+      first_name: user.first_name ?? null,
+      last_name: user.last_name ?? null,
+      father_name: user.father_name ?? null,
+      mother_name: user.mother_name ?? null,
+      national_id: user.national_id ?? null
+    })
+
+    isNew = true
+
+    return {
+      isNew,
+      draft,
+      process
+    }
+  }, { label: 'transaction.ensureDraftForProcess' })
+}
+
 async function UpdateDraft ({ userId, processId, data }) {
   return retryWithBackoff(async () => {
     const process = await fetchActiveProcess(processId)
@@ -249,7 +326,8 @@ async function submitTransaction (
   data,
   {
     userId,
-    idempotencyKey: idempotencyKeyOverride = null
+    idempotencyKey: idempotencyKeyOverride = null,
+    clientMeta = {}
   } = {}
 ) {
   const numericId = parsePositiveInt(transactionId, 'معرّف المعاملة')
@@ -333,11 +411,47 @@ async function submitTransaction (
         })
       })
 
+      const requiresSignature = await userRequiresSubmitSignature(userId)
+      const submitSignature = extractSubmitSignature(normalized)
+
+      if (requiresSignature) {
+        if (!submitSignature) {
+          throw createTransactionError(
+            'SIGNATURE_REQUIRED',
+            'التوقيع الرقمي مطلوب — POST /api/transaction/{transactionId}/submit-documents/signing-challenge ثم أرسل signature مع submit'
+          )
+        }
+
+        await verifySignatureForComplete({
+          challengeId: submitSignature.challengeId,
+          signature: submitSignature.signature,
+          userId,
+          decision: 'approve',
+          clientMeta,
+          expectedTaskId: buildDraftSubmitTaskId(current.id)
+        })
+      } else if (submitSignature) {
+        throw createTransactionError(
+          'VALIDATION_ERROR',
+          'signature غير مطلوب لتقديم المواطن — احذف signature من الطلب'
+        )
+      }
+
       let registeredFiles = []
       const processCode = current.code
       let storedData = null
 
       await db.sequelize.transaction(async (dbTransaction) => {
+        if (requiresSignature && submitSignature) {
+          await persistVerifiedSignature({
+            challengeId: submitSignature.challengeId,
+            signature: submitSignature.signature,
+            userId,
+            clientMeta,
+            dbTransaction
+          })
+        }
+
         if (Array.isArray(normalized.files) && normalized.files.length) {
           registeredFiles = await registerTransactionFiles({
             transactionId: current.id,
@@ -414,6 +528,7 @@ module.exports = {
   UpdateDraft,
   createDraft,
   upsertDraft,
+  ensureDraftForProcess,
   getUserDraftByProcess,
   getTransactionById,
   submitTransaction,

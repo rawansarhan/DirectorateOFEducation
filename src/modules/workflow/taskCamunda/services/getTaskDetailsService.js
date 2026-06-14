@@ -2,6 +2,9 @@
 
 const camundaClient = require('../../../../core/shared/clients/camunda/camundaClient')
 const taskDetailsRepository = require('../repositories/taskDetailsRepository')
+const processInstanceRepository = require('../repositories/processInstanceRepository')
+const stageRepository = require('../../processDefinition/repositories/stageRepository')
+const stageConfigRepository = require('../../stageConfig/repositories/stageConfigRepository')
 const transactionClient = require('../../../../core/shared/clients/transaction/transactionClient')
 const { acquireTaskLock } = require('./taskLockService')
 const { toTaskDetails } = require('../mappers/taskCamundaMapper')
@@ -9,6 +12,7 @@ const { retryWithBackoff } = require('../../../../core/utils/retryWithBackoff')
 const {
   formatTransactionHistoryForDisplay
 } = require('../utils/transactionHistoryDisplay')
+const documentInstanceRepository = require('../../../transaction/document/repositories/documentInstanceRepository')
 const { enrichCamundaTaskNotFoundError } = require('../../../../core/utils/errorMessageHelper')
 
 function createTaskDetailsError (code, message) {
@@ -93,6 +97,68 @@ async function resolveTransaction (processInstance) {
   return transaction
 }
 
+async function resolveActiveStageConfig ({ task, processInstance }) {
+  if (!task?.taskDefinitionKey || !processInstance?.process_definition_id) {
+    return {
+      activeStage: processInstance?.current_stage || null,
+      stageConfig: processInstance?.current_stage?.stage_config || null
+    }
+  }
+
+  const activeStage = await stageRepository.findByCodeAndProcess(
+    processInstance.process_definition_id,
+    task.taskDefinitionKey
+  )
+
+  if (!activeStage) {
+    return {
+      activeStage: processInstance?.current_stage || null,
+      stageConfig: processInstance?.current_stage?.stage_config || null
+    }
+  }
+
+  if (processInstance.current_stage_id !== activeStage.id) {
+    await processInstanceRepository.update(processInstance.id, {
+      current_stage_id: activeStage.id
+    })
+    processInstance.current_stage_id = activeStage.id
+  }
+
+  const stageConfig = await stageConfigRepository.findByStageId(activeStage.id)
+
+  return { activeStage, stageConfig }
+}
+
+async function enrichHistoryTemplatesWithGeneratedPdf (historyData = {}) {
+  const stages = historyData?.stages
+
+  if (!Array.isArray(stages) || !stages.length) {
+    return historyData
+  }
+
+  for (const stage of stages) {
+    if (!Array.isArray(stage.templates)) {
+      continue
+    }
+
+    for (const template of stage.templates) {
+      const instanceId = template.id_document_instance
+
+      if (!instanceId || template.generated_pdf_path) {
+        continue
+      }
+
+      const instance = await documentInstanceRepository.findById(instanceId)
+
+      if (instance?.generated_pdf_path) {
+        template.generated_pdf_path = instance.generated_pdf_path
+      }
+    }
+  }
+
+  return historyData
+}
+
 async function getTaskDetails ({ taskId, userId }) {
   if (!taskId || !String(taskId).trim()) {
     throw createTaskDetailsError(
@@ -113,17 +179,24 @@ async function getTaskDetails ({ taskId, userId }) {
   const processInstance = await fetchProcessInstance(task.processInstanceId)
   const transaction = await resolveTransaction(processInstance)
 
-  const taskLock = await acquireTaskLock({
+  await acquireTaskLock({
     processInstanceId: processInstance.id,
     taskId: task.id,
     userId,
     taskDefinitionKey: task.taskDefinitionKey
   })
 
+  const { activeStage, stageConfig } = await resolveActiveStageConfig({
+    task,
+    processInstance
+  })
+
   const previousStagesData = formatTransactionHistoryForDisplay(
     transaction?.data || {},
     transaction
   )
+
+  await enrichHistoryTemplatesWithGeneratedPdf(previousStagesData)
 
   return {
     message: 'تم جلب تفاصيل المهمة بنجاح',
@@ -132,6 +205,8 @@ async function getTaskDetails ({ taskId, userId }) {
       processInstance,
       transaction,
       previousStagesData,
+      activeStage,
+      currentStageConfig: stageConfig?.config_json || {},
       processDefinition: processInstance.process_definition
     })
   }

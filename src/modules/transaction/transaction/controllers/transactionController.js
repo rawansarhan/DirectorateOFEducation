@@ -19,6 +19,7 @@ const {
   httpStatusForError
 } = require('../utils/transactionErrors')
 const { hasUpsertFormPayload } = require('../validations/draftFormValidation')
+const { getClientMeta } = require('../../../../core/security/securityConfig')
 const { parsePaginationQuery } = require('../../../../core/utils/pagination')
 
 function handleTransactionError (res, err) {
@@ -184,7 +185,10 @@ async function submitTransactionController (req, res) {
     const result = await submitTransaction(
       req.params.transactionId,
       req.body,
-      { userId: req.user.id }
+      {
+        userId: req.user.id,
+        clientMeta: getClientMeta(req)
+      }
     )
 
     return successResponse(res, {

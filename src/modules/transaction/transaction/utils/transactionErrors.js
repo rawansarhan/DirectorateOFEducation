@@ -11,6 +11,7 @@ const MESSAGES = {
   TRANSACTION_NOT_FOUND: 'المعاملة غير موجودة',
   UNAUTHORIZED: 'لا تملك صلاحية الوصول إلى هذه المعاملة',
   SUBMIT_NOT_DRAFT: 'لا يمكن تقديم المعاملة إلا وهي في حالة مسودة',
+  SIGNATURE_REQUIRED: 'التوقيع الرقمي مطلوب للموظف — أنشئ تحدي التوقيع أولاً',
   TRANSACTION_IN_PROGRESS: 'لديك معاملة قيد التنفيذ لهذه العملية — لا يمكن إنشاء تقديم جديد',
   VALIDATION_ERROR: 'بيانات الطلب غير صالحة',
   WORKFLOW_UNAVAILABLE: 'تعذّر الاتصال بخدمة سير العمل، حاول لاحقاً',
@@ -94,6 +95,7 @@ function httpStatusForError (error) {
   if (
     error?.code === 'PROCESS_INACTIVE' ||
     error?.code === 'SUBMIT_NOT_DRAFT' ||
+    error?.code === 'SIGNATURE_REQUIRED' ||
     error?.code === 'TRANSACTION_IN_PROGRESS' ||
     error?.code === 'VALIDATION_ERROR' ||
     msg.includes('not active') ||

@@ -46,7 +46,7 @@ class CompleteTaskOutputDTO {
     if (signatureRequest?.challengeId) {
       this.signature = {
         challenge_id: signatureRequest.challengeId,
-        signature: signingRequest.signature
+        signature: signatureRequest.signature
       }
     }
 

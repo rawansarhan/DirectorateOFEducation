@@ -7,6 +7,7 @@ const transactionClient = require('../../../../core/shared/clients/transaction/t
 const securityGuardService = require('../../../../core/security/securityGuardService')
 
 const processInstanceRepository = require('../repositories/processInstanceRepository')
+const processRepository = require('../../processDefinition/repositories/processRepository')
 const stageRepository = require('../../processDefinition/repositories/stageRepository')
 const stageConfigRepository = require('../../stageConfig/repositories/stageConfigRepository')
 const userRepository = require('../../../auth/repositories/userRepository')
@@ -119,6 +120,16 @@ function buildSigningPayload ({
     stageId: stage.id,
     decision
   }
+}
+
+const DRAFT_SUBMIT_TASK_PREFIX = 'draft-submit'
+
+function buildDraftSubmitTaskId (transactionId) {
+  return `${DRAFT_SUBMIT_TASK_PREFIX}:${transactionId}`
+}
+
+function isDraftSubmitTaskId (taskId) {
+  return String(taskId || '').startsWith(`${DRAFT_SUBMIT_TASK_PREFIX}:`)
 }
 
 async function assertValidPinForSigning ({
@@ -264,6 +275,142 @@ async function createSigningChallenge ({
     task: context.task,
     transaction: context.transaction,
     stage: context.stage,
+    userKey,
+    payloadHash,
+    expiresInSeconds: Math.floor(TX_SIGN_TTL_MS / 1000)
+  })
+}
+
+async function createDraftSubmitSigningChallenge ({
+  transactionId,
+  userId,
+  payload = {},
+  clientMeta = {}
+}) {
+  await securityGuardService.assertAccountNotLocked(userId)
+
+  const numericTransactionId = Number(transactionId)
+
+  if (!Number.isInteger(numericTransactionId) || numericTransactionId < 1) {
+    throw new Error('معرّف المعاملة غير صالح')
+  }
+
+  const transaction = await transactionClient.getTransactionById(numericTransactionId)
+
+  if (!transaction) {
+    const error = new Error('المعاملة غير موجودة')
+    error.code = 'TRANSACTION_NOT_FOUND'
+    throw error
+  }
+
+  if (userId && transaction.user_id !== userId) {
+    const error = new Error('لا تملك صلاحية الوصول إلى هذه المعاملة')
+    error.code = 'UNAUTHORIZED'
+    throw error
+  }
+
+  if (transaction.status !== 'draft') {
+    const error = new Error(
+      'تحدي التوقيع للمسودة متاح فقط عندما تكون المعاملة draft'
+    )
+    error.code = 'SUBMIT_NOT_DRAFT'
+    throw error
+  }
+
+  const process = await processRepository.findByCode(transaction.code)
+
+  if (!process) {
+    throw new Error('العملية المرتبطة بالمعاملة غير موجودة')
+  }
+
+  const stage = await stageRepository.findFirstAuthStage(process.id)
+
+  if (!stage) {
+    throw new Error('لا توجد مرحلة AUTH لهذه العملية')
+  }
+
+  const pin = payload.pin
+
+  if (!pin) {
+    throw new Error('رمز PIN مطلوب')
+  }
+
+  const syntheticTaskId = buildDraftSubmitTaskId(numericTransactionId)
+
+  await assertValidPinForSigning({
+    userId,
+    pin,
+    clientMeta,
+    taskId: syntheticTaskId
+  })
+
+  const userKey = await userKeyRepository.findActiveLatestByUserId(userId)
+
+  if (!userKey) {
+    throw new Error('لا يوجد مفتاح رقمي مرتبط بهذا الموظف')
+  }
+
+  const signingPayload = buildSigningPayload({
+    task: { id: syntheticTaskId },
+    transaction,
+    stage,
+    decision: 'approve'
+  })
+
+  const payloadHash = buildCanonicalPayloadHash(signingPayload)
+
+  await transactionSigningChallengeRepository.invalidateActiveByTaskAndUser(
+    syntheticTaskId,
+    userId
+  )
+
+  const signingId = uuidv4()
+  const expiresAt = getTransactionSignExpiresAt()
+  const message = buildTransactionSignMessage({
+    signingId,
+    taskId: syntheticTaskId,
+    transactionId: transaction.id,
+    stageCode: stage.code,
+    payloadHash,
+    expiresAt,
+    userId,
+    keyFingerprint: userKey.key_fingerprint
+  })
+
+  const challenge = await transactionSigningChallengeRepository.create({
+    id: signingId,
+    user_id: userId,
+    user_key_id: userKey.id,
+    task_id: syntheticTaskId,
+    transaction_id: transaction.id,
+    stage_id: stage.id,
+    payload_hash: payloadHash,
+    message,
+    message_hash: hashValue(message),
+    expires_at: expiresAt
+  })
+
+  await securityGuardService.recordSuccess({
+    userId,
+    action: 'TX_SIGN_CHALLENGE_CREATED',
+    resourceType: 'transaction',
+    resourceId: String(transaction.id),
+    ipAddress: clientMeta.ip,
+    userAgent: clientMeta.userAgent,
+    details: {
+      signingId: challenge.id,
+      transactionId: transaction.id,
+      stageCode: stage.code,
+      decision: 'approve',
+      draft_submit: true
+    }
+  })
+
+  return toSigningChallenge({
+    challenge,
+    task: { id: syntheticTaskId },
+    transaction,
+    stage,
     userKey,
     payloadHash,
     expiresInSeconds: Math.floor(TX_SIGN_TTL_MS / 1000)
@@ -585,7 +732,10 @@ function appendSignatureToTransactionData (
 module.exports = {
   loadTaskContext,
   requiresDigitalSignature,
+  buildDraftSubmitTaskId,
+  isDraftSubmitTaskId,
   createSigningChallenge,
+  createDraftSubmitSigningChallenge,
   verifySignatureForComplete,
   persistVerifiedSignature,
   verifyAndPersistSignature,

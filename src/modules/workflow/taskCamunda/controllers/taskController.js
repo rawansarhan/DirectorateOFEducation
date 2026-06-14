@@ -7,6 +7,7 @@ const { startWorkflow } = require('../services/startWorkflowService')
 const { createSigningChallenge } = require('../services/transactionSigningService')
 const {
   createDocumentSubmitSigningChallenge,
+  createDocumentSubmitSigningChallengeByProcess,
   completeDocumentSubmit
 } = require('../services/documentSubmitService')
 const { getClientMeta } = require('../../../../core/security/securityConfig')
@@ -260,6 +261,52 @@ async function createDocumentSubmitSigningChallengeController (req, res) {
   }
 }
 
+async function createDocumentSubmitSigningChallengeByProcessController (req, res) {
+  try {
+    const result = await createDocumentSubmitSigningChallengeByProcess({
+      processId: req.params.processId,
+      userId: req.user.id,
+      payload: req.body || {},
+      clientMeta: getClientMeta(req)
+    })
+
+    return sendWorkflowSuccess(res, result.data, result.message)
+  } catch (error) {
+    const status =
+      error.code === 'FORBIDDEN' || error.code === 'UNAUTHORIZED'
+        ? 403
+        : ['PROCESS_NOT_FOUND', 'TRANSACTION_NOT_FOUND'].includes(error.code)
+          ? 404
+          : 400
+
+    return handleWorkflowError(res, error, status)
+  }
+}
+
+async function createDocumentSubmitSigningChallengeByTransactionController (req, res) {
+  try {
+    const result = await createDocumentSubmitSigningChallenge({
+      transactionId: req.params.transactionId,
+      userId: req.user.id,
+      payload: req.body || {},
+      clientMeta: getClientMeta(req)
+    })
+
+    return sendWorkflowSuccess(res, result.data, result.message)
+  } catch (error) {
+    const status =
+      error.code === 'FORBIDDEN' || error.code === 'UNAUTHORIZED'
+        ? 403
+        : ['TRANSACTION_NOT_FOUND', 'PROCESS_INSTANCE_NOT_FOUND', 'NO_ACTIVE_TASK'].includes(
+          error.code
+        )
+          ? 404
+          : 400
+
+    return handleWorkflowError(res, error, status)
+  }
+}
+
 async function completeDocumentSubmitController (req, res) {
   try {
     const result = await completeDocumentSubmit({
@@ -283,6 +330,44 @@ async function completeDocumentSubmitController (req, res) {
   }
 }
 
+async function completeDocumentSubmitByTransactionController (req, res) {
+  try {
+    const result = await completeDocumentSubmit({
+      transactionId: req.params.transactionId,
+      userId: req.user.id,
+      payload: req.body || {},
+      clientMeta: getClientMeta(req)
+    })
+
+    return sendWorkflowSuccess(res, result.data, result.message)
+  } catch (error) {
+    if (error.code === 'IDEMPOTENT_REPLAY' && error.result) {
+      return sendWorkflowSuccess(
+        res,
+        error.result.data,
+        error.result.message
+      )
+    }
+
+    const status =
+      error.code === 'FORBIDDEN' || error.code === 'UNAUTHORIZED'
+        ? 403
+        : ['TRANSACTION_NOT_FOUND', 'PROCESS_INSTANCE_NOT_FOUND', 'NO_ACTIVE_TASK'].includes(
+          error.code
+        )
+          ? 404
+          : ['VALIDATION_ERROR', 'SIGNATURE_REQUIRED', 'SUBMIT_NOT_DRAFT'].includes(
+            error.code
+          )
+            ? 400
+            : error.code === 'WORKFLOW_START_FAILED'
+              ? 502
+              : 500
+
+    return handleWorkflowError(res, error, status)
+  }
+}
+
 async function getTaskDetailsController (req, res) {
   try {
     const result = await getTaskDetailsService.getTaskDetails({
@@ -300,7 +385,10 @@ module.exports = {
   startWorkflowController,
   createSigningChallengeController,
   createDocumentSubmitSigningChallengeController,
+  createDocumentSubmitSigningChallengeByProcessController,
+  createDocumentSubmitSigningChallengeByTransactionController,
   completeDocumentSubmitController,
+  completeDocumentSubmitByTransactionController,
   completeTaskController,
   getAllTasksController,
   getInProgressTasksController,

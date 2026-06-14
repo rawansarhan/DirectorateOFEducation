@@ -117,6 +117,22 @@ function buildHistoryStageEntry (stageData = {}) {
   return entry
 }
 
+function isDisplayableHistoryStage (stageData = {}) {
+  if (stageData.form_id || stageData.stage_name) {
+    return true
+  }
+
+  if (Array.isArray(stageData.widgets) && stageData.widgets.length) {
+    return true
+  }
+
+  if (Array.isArray(stageData.templates) && stageData.templates.length) {
+    return true
+  }
+
+  return false
+}
+
 function omitActivityStageKeys (data = {}) {
   const cleaned = {}
 
@@ -136,6 +152,10 @@ function buildCompletedStagesFromData (rawData = {}) {
 
   for (const [key, value] of Object.entries(rawData)) {
     if (!isActivityStageKey(key) || !value || typeof value !== 'object') {
+      continue
+    }
+
+    if (!isDisplayableHistoryStage(value)) {
       continue
     }
 

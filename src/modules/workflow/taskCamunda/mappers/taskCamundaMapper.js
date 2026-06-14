@@ -35,16 +35,23 @@ function toTaskDetails ({
   processInstance,
   transaction,
   previousStagesData,
+  activeStage = null,
+  currentStageConfig = null,
   processDefinition = null
 }) {
-  const stageConfigRow = processInstance.current_stage?.stage_config
+  const resolvedStage = activeStage || processInstance.current_stage
+  const resolvedConfig =
+    currentStageConfig ??
+    processInstance.current_stage?.stage_config?.config_json ??
+    {}
 
   return new TaskDetailsOutputDTO({
     task,
     processInstance,
     transaction,
     previousStagesData,
-    currentStageConfig: stageConfigRow?.config_json || {},
+    activeStage: resolvedStage,
+    currentStageConfig: resolvedConfig,
     processDefinition
   })
 }

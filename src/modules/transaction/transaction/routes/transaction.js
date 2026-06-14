@@ -20,7 +20,12 @@ const {
 } = require('../../integrityChain/controllers/integrityChainController')
 
 const { authMiddleware } = require('../../../../core/middleware/authMiddleware')
-const { submitTransactionLimiter } = require('../../../../core/security/rateLimitMiddleware')
+const { submitTransactionLimiter, signingChallengeLimiter, completeTaskLimiter } = require('../../../../core/security/rateLimitMiddleware')
+const {
+  createDocumentSubmitSigningChallengeByProcessController,
+  createDocumentSubmitSigningChallengeByTransactionController,
+  completeDocumentSubmitByTransactionController
+} = require('../../../workflow/taskCamunda/controllers/taskController')
 
 /**
  * @swagger
@@ -144,7 +149,15 @@ router.post(
  *       3. يُولَّد `id_process` (مثل STUTR-2026-001) ويُبدأ Camunda workflow
  *
  *       **قالب الطلب (إلزامي):** `form_id`, `form_name`, `widgets[]` (config_json + value), `templates[]` ({ id, value }), `note`
- *       **مرفوض:** `fields`, `files`, `signature`, `variables`, `employee`, `decision`, `stage_name`
+ *
+ *       **مواطن:** بدون `signature`
+ *
+ *       **موظف (يبدأ المعاملة):**
+ *       1. `POST /api/transaction/{transactionId}/submit-documents/signing-challenge` — PIN
+ *       2. وقّع `message` عبر USB
+ *       3. `POST /api/transaction/submit/{transactionId}` — نفس body + `signature: { challenge_id, signature }`
+ *
+ *       **مرفوض:** `fields`, `files`, `variables`, `employee`, `decision`, `stage_name`
  *       **القالب الفارغ:** GET `/api/stage_config/config/{processId}`
  *       - Idempotency تلقائي على مستوى `transactionId` — لا ترسل Idempotency-Key
  *
@@ -190,6 +203,127 @@ router.post(
   authMiddleware,
   submitTransactionLimiter,
   submitTransactionController
+)
+
+/**
+ * @swagger
+ * /api/transaction/process/{processId}/submit-documents/signing-challenge:
+ *   post:
+ *     summary: تحدي توقيع لتقديم معاملة موظف (approve) — بمعرّف العملية
+ *     description: |
+ *       1. يبحث عن **مسودة draft** للموظف على `processId`
+ *       2. إن وُجدت → ينشئ challenge عليها
+ *       3. إن لم توجد → ينشئ draft جديد وينسخ هوية الموظف من حسابه:
+ *          `first_name`, `last_name`, `father_name`, `mother_name`, `national_id`
+ *       4. يتحقق من PIN ويرجع `transaction_id` للخطوة التالية (complete/submit)
+ *
+ *       **تسلسل:** signing-challenge → وقّع `message` → `POST .../submit-documents/complete` (بـ `transaction_id` من الرد)
+ *     tags: [Transaction]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: processId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *         description: معرّف تعريف العملية (process definition id)
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/DocumentSubmitSigningChallengePayload'
+ *     responses:
+ *       200:
+ *         description: تم إنشاء تحدي التوقيع — `data.transaction_id` للخطوة التالية
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SigningChallengeResponse'
+ */
+router.post(
+  '/process/:processId/submit-documents/signing-challenge',
+  authMiddleware,
+  signingChallengeLimiter,
+  createDocumentSubmitSigningChallengeByProcessController
+)
+
+/**
+ * @swagger
+ * /api/transaction/{transactionId}/submit-documents/signing-challenge:
+ *   post:
+ *     summary: (legacy) تحدي توقيع — بمعرّف المعاملة
+ *     deprecated: true
+ *     description: يُفضّل `POST /api/transaction/process/{processId}/submit-documents/signing-challenge`
+ *     tags: [Transaction]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: transactionId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/DocumentSubmitSigningChallengePayload'
+ *     responses:
+ *       200:
+ *         description: تم إنشاء تحدي التوقيع
+ */
+router.post(
+  '/:transactionId/submit-documents/signing-challenge',
+  authMiddleware,
+  signingChallengeLimiter,
+  createDocumentSubmitSigningChallengeByTransactionController
+)
+
+/**
+ * @swagger
+ * /api/transaction/{transactionId}/submit-documents/complete:
+ *   post:
+ *     summary: إكمال تقديم وثائق موقّعة — بمعرّف المعاملة
+ *     description: |
+ *       **مسودة draft:** يقدّم المعاملة ويبدأ workflow (نفس submit + signature).
+ *
+ *       **in_progress:** يكمل مهمة Camunda النشطة.
+ *
+ *       **تسلسل الموظف:** signing-challenge → وقّع `message` → POST هذا المسار
+ *     tags: [Transaction]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: transactionId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/DocumentSubmitCompletePayload'
+ *     responses:
+ *       200:
+ *         description: تم تقديم الوثائق الموقّعة بنجاح
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/CompleteTaskResponse'
+ */
+router.post(
+  '/:transactionId/submit-documents/complete',
+  authMiddleware,
+  completeTaskLimiter,
+  completeDocumentSubmitByTransactionController
 )
 
 /**

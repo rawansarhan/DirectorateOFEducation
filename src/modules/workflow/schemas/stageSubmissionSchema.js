@@ -14,7 +14,8 @@ const SUBMISSION_SCHEMA_VERSION = '1.0'
 
 const submitTransactionPayloadSchema = buildStrictFormPayloadSchema({
   includeTemplates: true,
-  includeExpectedVersion: true
+  includeExpectedVersion: true,
+  allowSignature: true
 })
 
 function validateSubmitTransactionPayload (payload = {}) {

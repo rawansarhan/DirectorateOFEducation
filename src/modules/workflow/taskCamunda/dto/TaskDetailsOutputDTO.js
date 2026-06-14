@@ -11,12 +11,13 @@ class TaskDetailsOutputDTO {
     processInstance,
     transaction,
     previousStagesData,
+    activeStage = null,
     currentStageConfig,
     processDefinition = null
   }) {
     const processDef = processDefinition || processInstance?.process_definition
     const user = transaction?.user
-    const currentStage = processInstance?.current_stage
+    const currentStage = activeStage || processInstance?.current_stage
 
     this.process_definition_name = processDef?.name ?? null
     this.id_task = task?.id ?? null

@@ -31,6 +31,13 @@ class ProcessInstanceRepository {
     })
   }
 
+  async findByTransactionId (transactionId, dbTransaction = null) {
+    return ProcessInstance.findOne({
+      where: { transaction_id: transactionId },
+      transaction: dbTransaction
+    })
+  }
+
   async updateInstance (instance, data, transaction) {
     return instance.update(data, { transaction })
   }

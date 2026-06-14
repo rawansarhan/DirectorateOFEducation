@@ -8,7 +8,8 @@ const SUBMIT_PAYLOAD_ALLOWED_FIELDS = [
   'widgets',
   'templates',
   'note',
-  'expected_version'
+  'expected_version',
+  'signature'
 ]
 
 const SUBMIT_UNKNOWN_FIELD_HINTS = {
@@ -16,7 +17,7 @@ const SUBMIT_UNKNOWN_FIELD_HINTS = {
   decision:
     'decision لا يُرسل في submit — يُثبت تلقائياً على السيرفر',
   signature:
-    'signature مطلوب فقط عند إكمال مهمة موظف POST /api/workflow/tasks/{taskId}/complete',
+    'signature مطلوب للموظف عند POST /api/transaction/submit/{transactionId} — بعد POST .../submit-documents/signing-challenge',
   notes: 'استخدم note بدلاً من notes'
 }
 
