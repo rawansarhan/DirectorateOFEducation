@@ -259,14 +259,14 @@ async function verifyIntegrityChain (transactionId, hints = {}) {
   }
 }
 
-async function getIntegrityChain (transactionId, { userId = null } = {}) {
+async function getIntegrityChain (transactionId, { userId = null, skipOwnerCheck = false } = {}) {
   const transaction = await transactionRepository.findById(transactionId)
 
   if (!transaction) {
-    throw new Error('Transaction not found')
+    throw new Error('الطلب غير موجود')
   }
 
-  if (userId && transaction.user_id !== userId) {
+  if (!skipOwnerCheck && userId && transaction.user_id !== userId) {
     throw new Error('Unauthorized access')
   }
 

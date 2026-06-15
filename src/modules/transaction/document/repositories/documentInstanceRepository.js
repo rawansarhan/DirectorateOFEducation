@@ -28,6 +28,13 @@ async function findByTransactionAndTemplate (transactionId, documentTemplateId) 
   })
 }
 
+async function findAllByTransactionId (transactionId) {
+  return DocumentInstance.findAll({
+    where: { transaction_id: transactionId },
+    order: [['id', 'ASC']]
+  })
+}
+
 async function updateInstance (instance, data, options = {}) {
   return instance.update(data, options)
 }
@@ -36,5 +43,6 @@ module.exports = {
   create,
   findById,
   findByTransactionAndTemplate,
+  findAllByTransactionId,
   updateInstance
 }

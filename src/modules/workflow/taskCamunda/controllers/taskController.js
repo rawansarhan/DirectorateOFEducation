@@ -1,7 +1,7 @@
 const completeTaskService = require('../services/completeTaskService')
 const getAllTasksService = require('../services/getAllTasksService')
 const getTaskStatsService = require('../services/getTaskStatsService')
-const { EMPLOYEE_STATUS_FILTERS, parseDepartmentIds, parseDateRange } = getAllTasksService
+const { EMPLOYEE_STATUS_FILTERS, parseDepartmentIds, parseDateRange, parseActiveTasksRefresh } = getAllTasksService
 const getTaskDetailsService = require('../services/getTaskDetailsService')
 const { startWorkflow } = require('../services/startWorkflowService')
 const { createSigningChallenge } = require('../services/transactionSigningService')
@@ -19,6 +19,9 @@ const {
 const { validateCompleteTaskPayload } = require('../../schemas/completeTaskSchema')
 const { validateSigningChallengePayload } = require('../../schemas/signingChallengeSchema')
 const { parsePaginationQuery } = require('../../../../core/utils/pagination')
+const {
+  getCertificateBundle
+} = require('../../../transaction/certificate/services/transactionCertificateService')
 
 function handleWorkflowError (res, error, defaultStatus = 400) {
   return sendWorkflowError(res, error, defaultStatus)
@@ -101,13 +104,15 @@ async function getAllTasksController (req, res) {
   try {
     const { page, limit, offset } = parsePaginationQuery(req.query)
     const status = String(req.query.status || 'active').trim()
+    const refresh = parseActiveTasksRefresh(req.query)
 
     const result = await getAllTasksService.getAllTasks({
       userId: req.user.id,
       page,
       limit,
       offset,
-      status
+      status,
+      refresh: status === 'active' ? refresh : false
     })
 
     return sendWorkflowSuccess(res, result.data, result.message)
@@ -119,12 +124,14 @@ async function getAllTasksController (req, res) {
 async function getInProgressTasksController (req, res) {
   try {
     const { page, limit, offset } = parsePaginationQuery(req.query)
+    const refresh = parseActiveTasksRefresh(req.query)
 
     const result = await getAllTasksService.getActiveEmployeeTasks({
       userId: req.user.id,
       page,
       limit,
       offset,
+      refresh,
       employeeStatusFilter: EMPLOYEE_STATUS_FILTERS.IN_PROGRESS
     })
 
@@ -137,12 +144,14 @@ async function getInProgressTasksController (req, res) {
 async function getPendingPickupTasksController (req, res) {
   try {
     const { page, limit, offset } = parsePaginationQuery(req.query)
+    const refresh = parseActiveTasksRefresh(req.query)
 
     const result = await getAllTasksService.getActiveEmployeeTasks({
       userId: req.user.id,
       page,
       limit,
       offset,
+      refresh,
       employeeStatusFilter: EMPLOYEE_STATUS_FILTERS.PENDING_PICKUP
     })
 
@@ -368,6 +377,26 @@ async function completeDocumentSubmitByTransactionController (req, res) {
   }
 }
 
+async function getEmployeeCertificateController (req, res) {
+  try {
+    const data = await getCertificateBundle(req.params.transactionId, {
+      userId: req.user.id,
+      audience: 'employee'
+    })
+
+    return sendWorkflowSuccess(res, data, 'تم جلب بيانات الشهادة بنجاح')
+  } catch (error) {
+    const status =
+      error.code === 'UNAUTHORIZED'
+        ? 403
+        : error.code === 'TRANSACTION_NOT_FOUND' || error.code === 'NOT_FOUND'
+          ? 404
+          : 400
+
+    return handleWorkflowError(res, error, status)
+  }
+}
+
 async function getTaskDetailsController (req, res) {
   try {
     const result = await getTaskDetailsService.getTaskDetails({
@@ -398,5 +427,6 @@ module.exports = {
   getCompletedLastMonthStatsController,
   getRejectedLastMonthStatsController,
   getActiveStatsController,
+  getEmployeeCertificateController,
   getTaskDetailsController
 }

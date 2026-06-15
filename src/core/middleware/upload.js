@@ -111,6 +111,35 @@ const uploadTransactionFile = multer({
   }
 })
 
+const finalTransactionPdfFilter = (req, file, cb) => {
+  const ext = path.extname(file.originalname).toLowerCase()
+
+  if (ext !== '.pdf' && file.mimetype !== 'application/pdf') {
+    return cb(new Error('فقط ملفات PDF مسموحة للوثيقة النهائية'))
+  }
+
+  cb(null, true)
+}
+
+const finalTransactionStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, 'uploads/')
+  },
+  filename: (req, file, cb) => {
+    const txId = String(req.params?.transactionId || 'unknown')
+    cb(null, `final-${txId}-${Date.now()}.pdf`)
+  }
+})
+
+const uploadFinalTransactionPdf = multer({
+  storage: finalTransactionStorage,
+  fileFilter: finalTransactionPdfFilter,
+  limits: {
+    fileSize: TRANSACTION_FILE_MAX_MB * 1024 * 1024,
+    files: 1
+  }
+})
+
 function runMulterUpload (middleware) {
   return (req, res, next) => {
     middleware(req, res, (err) => {
@@ -127,6 +156,7 @@ module.exports = {
   uploadBPMN,
   uploadDocumentTemplate,
   uploadTransactionFile,
+  uploadFinalTransactionPdf,
   TRANSACTION_FILE_MAX_MB,
   TRANSACTION_FILE_EXTENSIONS,
   runMulterUpload

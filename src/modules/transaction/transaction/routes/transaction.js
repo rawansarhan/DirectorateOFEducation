@@ -19,6 +19,17 @@ const {
   verifyIntegrityChainController
 } = require('../../integrityChain/controllers/integrityChainController')
 
+const {
+  getCertificateController,
+  uploadFinalDocumentController,
+  getFinalDocumentController
+} = require('../../certificate/controllers/transactionCertificateController')
+
+const {
+  uploadFinalTransactionPdf,
+  runMulterUpload
+} = require('../../../../core/middleware/upload')
+
 const { authMiddleware } = require('../../../../core/middleware/authMiddleware')
 const { submitTransactionLimiter, signingChallengeLimiter, completeTaskLimiter } = require('../../../../core/security/rateLimitMiddleware')
 const {
@@ -508,6 +519,94 @@ router.get(
   '/my',
   authMiddleware,
   getMyTransactionsController
+)
+
+/**
+ * @swagger
+ * /api/transaction/{transactionId}/certificate:
+ *   get:
+ *     summary: بيانات الشهادة للطباعة (transaction_history + QR)
+ *     description: |
+ *       يجمع كل ما يحتاجه الفرونت لبناء PDF:
+ *       transaction_history (id_process + applicant + stages + templates.generated_pdf_path), integrity_chain.qr_payload, final_document
+ *       **للمواطن (مالك المعاملة) فقط** — للموظف استخدم GET /api/workflow/transactions/{transactionId}/certificate
+ *       **متاح فقط للمعاملات completed**
+ *     tags: [Transaction]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: transactionId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: بيانات الشهادة
+ */
+router.get(
+  '/:transactionId/certificate',
+  authMiddleware,
+  getCertificateController
+)
+
+/**
+ * @swagger
+ * /api/transaction/{transactionId}/final-document:
+ *   post:
+ *     summary: رفع وحفظ PDF النهائي بعد توليده من الفرونت
+ *     tags: [Transaction]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: transactionId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required: [file]
+ *             properties:
+ *               file:
+ *                 type: string
+ *                 format: binary
+ *               qr_payload:
+ *                 type: string
+ *                 description: JSON string — snapshot QR عند الطباعة (اختياري)
+ *     responses:
+ *       200:
+ *         description: تم الحفظ
+ *   get:
+ *     summary: جلب الوثيقة النهائية المحفوظة
+ *     tags: [Transaction]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: transactionId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: مسار PDF النهائي
+ */
+router.post(
+  '/:transactionId/final-document',
+  authMiddleware,
+  runMulterUpload(uploadFinalTransactionPdf.single('file')),
+  uploadFinalDocumentController
+)
+
+router.get(
+  '/:transactionId/final-document',
+  authMiddleware,
+  getFinalDocumentController
 )
 
 /**

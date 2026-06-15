@@ -32,6 +32,8 @@ const {
 
   getActiveStatsController,
 
+  getEmployeeCertificateController,
+
   getTaskDetailsController
 
 } = require('../controllers/taskController')
@@ -93,6 +95,20 @@ const {
  *           enum: [active, completed, rejected]
 
  *           default: active
+
+ *       - in: query
+
+ *         name: refresh
+
+ *         schema:
+
+ *           type: boolean
+
+ *         description: |
+
+ *           للمهام النشطة (status=active) — refresh=true يمسح cache ويعيد بناء القائمة.
+
+ *           page=1 يبني cache؛ page>1 يقرأ من cache.
 
  *       - in: query
 
@@ -194,6 +210,14 @@ router.get('/tasks', authMiddleware, getAllTasksController)
 
  *       - in: query
 
+ *         name: refresh
+
+ *         schema: { type: boolean }
+
+ *         description: refresh=true يمسح cache ويعيد بناء القائمة
+
+ *       - in: query
+
  *         name: page
 
  *         schema: { type: integer, minimum: 1, default: 1 }
@@ -245,6 +269,14 @@ router.get('/tasks/in-progress', authMiddleware, getInProgressTasksController)
  *       - bearerAuth: []
 
  *     parameters:
+
+ *       - in: query
+
+ *         name: refresh
+
+ *         schema: { type: boolean }
+
+ *         description: refresh=true يمسح cache ويعيد بناء القائمة
 
  *       - in: query
 
@@ -620,6 +652,68 @@ router.get(
   '/tasks/stats/active',
   authMiddleware,
   getActiveStatsController
+)
+
+
+
+/**
+
+ * @swagger
+
+ * /api/workflow/transactions/{transactionId}/certificate:
+
+ *   get:
+
+ *     summary: بيانات الشهادة للطباعة (موظف)
+
+ *     description: |
+
+ *       نفس payload مسار `/api/transaction/{transactionId}/certificate` لكن للموظف:
+
+ *       transaction_history, integrity_chain.qr_payload, final_document
+
+ *       **صلاحية:** موظف لديه أدوار على process definition المعاملة (أو مالك المعاملة).
+
+ *       **متاح فقط للمعاملات completed**
+
+ *     tags: [Workflow]
+
+ *     security:
+
+ *       - bearerAuth: []
+
+ *     parameters:
+
+ *       - in: path
+
+ *         name: transactionId
+
+ *         required: true
+
+ *         schema:
+
+ *           type: integer
+
+ *     responses:
+
+ *       200:
+
+ *         description: بيانات الشهادة
+
+ *       403:
+
+ *         description: لا تملك صلاحية عرض شهادة هذه المعاملة
+
+ *       404:
+
+ *         description: المعاملة غير موجودة
+
+ */
+
+router.get(
+  '/transactions/:transactionId/certificate',
+  authMiddleware,
+  getEmployeeCertificateController
 )
 
 

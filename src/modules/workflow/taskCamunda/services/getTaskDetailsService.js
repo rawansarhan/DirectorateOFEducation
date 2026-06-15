@@ -10,7 +10,8 @@ const { acquireTaskLock } = require('./taskLockService')
 const { toTaskDetails } = require('../mappers/taskCamundaMapper')
 const { retryWithBackoff } = require('../../../../core/utils/retryWithBackoff')
 const {
-  formatTransactionHistoryForDisplay
+  formatTransactionHistoryForDisplay,
+  enrichHistoryTemplatesWithDocumentInstances
 } = require('../utils/transactionHistoryDisplay')
 const documentInstanceRepository = require('../../../transaction/document/repositories/documentInstanceRepository')
 const { enrichCamundaTaskNotFoundError } = require('../../../../core/utils/errorMessageHelper')
@@ -129,36 +130,6 @@ async function resolveActiveStageConfig ({ task, processInstance }) {
   return { activeStage, stageConfig }
 }
 
-async function enrichHistoryTemplatesWithGeneratedPdf (historyData = {}) {
-  const stages = historyData?.stages
-
-  if (!Array.isArray(stages) || !stages.length) {
-    return historyData
-  }
-
-  for (const stage of stages) {
-    if (!Array.isArray(stage.templates)) {
-      continue
-    }
-
-    for (const template of stage.templates) {
-      const instanceId = template.id_document_instance
-
-      if (!instanceId || template.generated_pdf_path) {
-        continue
-      }
-
-      const instance = await documentInstanceRepository.findById(instanceId)
-
-      if (instance?.generated_pdf_path) {
-        template.generated_pdf_path = instance.generated_pdf_path
-      }
-    }
-  }
-
-  return historyData
-}
-
 async function getTaskDetails ({ taskId, userId }) {
   if (!taskId || !String(taskId).trim()) {
     throw createTaskDetailsError(
@@ -191,12 +162,12 @@ async function getTaskDetails ({ taskId, userId }) {
     processInstance
   })
 
-  const previousStagesData = formatTransactionHistoryForDisplay(
-    transaction?.data || {},
-    transaction
+  const previousStagesData = enrichHistoryTemplatesWithDocumentInstances(
+    formatTransactionHistoryForDisplay(transaction?.data || {}, transaction),
+    transaction?.id
+      ? await documentInstanceRepository.findAllByTransactionId(transaction.id)
+      : []
   )
-
-  await enrichHistoryTemplatesWithGeneratedPdf(previousStagesData)
 
   return {
     message: 'تم جلب تفاصيل المهمة بنجاح',

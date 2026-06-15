@@ -205,8 +205,50 @@ function formatTransactionHistoryForDisplay (rawData = {}, transaction = null) {
   return display
 }
 
+/**
+ * Fills templates[].generated_pdf_path from document_instance rows
+ * when transaction.data snapshot still has null (PDF generated later).
+ */
+function enrichHistoryTemplatesWithDocumentInstances (
+  historyData = {},
+  documentInstances = []
+) {
+  const pathByInstanceId = new Map(
+    (documentInstances || [])
+      .filter(doc => doc?.id && doc.generated_pdf_path)
+      .map(doc => [doc.id, doc.generated_pdf_path])
+  )
+
+  if (!Array.isArray(historyData?.stages) || !pathByInstanceId.size) {
+    return historyData
+  }
+
+  for (const stage of historyData.stages) {
+    if (!Array.isArray(stage.templates)) {
+      continue
+    }
+
+    for (const template of stage.templates) {
+      const instanceId = template.id_document_instance
+
+      if (!instanceId || template.generated_pdf_path) {
+        continue
+      }
+
+      const path = pathByInstanceId.get(instanceId)
+
+      if (path) {
+        template.generated_pdf_path = path
+      }
+    }
+  }
+
+  return historyData
+}
+
 module.exports = {
   formatTransactionHistoryForDisplay,
+  enrichHistoryTemplatesWithDocumentInstances,
   isActivityStageKey,
   buildApplicantSnapshot,
   buildHistoryStageEntry

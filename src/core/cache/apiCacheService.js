@@ -36,6 +36,8 @@ const KEYS = {
   transactionById: (userId, transactionId) => `transaction:by-id:${userId}:${transactionId}`,
   employeeTasks: (userId, scope, page, limit) =>
     `employee-tasks:${userId}:${scope}:p${page}:l${limit}`,
+  employeeActiveTaskList: (userId, filterScope) =>
+    `employee-tasks:${userId}:active-list:${filterScope}`,
   employeeTasksByDepartments: (userId, departmentIds, status, page, limit, fromDate, toDate) => {
     const deptKey = [...departmentIds].sort((a, b) => a - b).join('-')
     const fromKey = fromDate ? fromDate.toISOString().slice(0, 10) : 'all'
@@ -158,6 +160,10 @@ function toPlain (value) {
   return value
 }
 
+function buildFullCacheKey (cacheKey) {
+  return `${API_CACHE_PREFIX}${cacheKey}`
+}
+
 async function getCachedJson (key) {
   if (!(await ensureConnected())) {
     return null
@@ -237,17 +243,17 @@ async function deleteKey (cacheKey) {
   }
 }
 
-function logHit ({ label, fullKey, itemCount }) {
+function logHit ({ label, fullKey, itemCount, source = 'REDIS' }) {
   const itemsSuffix =
     itemCount != null ? ` — items: ${itemCount}` : ''
 
-  console.log('⚡ data from Redis cache')
+  console.log(source === 'MEMORY' ? '⚡ data from memory cache' : '⚡ data from Redis cache')
   console.log(
-    `${LOG_PREFIX} CACHE HIT — source: REDIS — ${label} — key: ${fullKey}${itemsSuffix} — redis: ${redisStatusLabel()}`
+    `${LOG_PREFIX} CACHE HIT — source: ${source} — ${label} — key: ${fullKey}${itemsSuffix} — redis: ${redisStatusLabel()}`
   )
 }
 
-function logMiss ({ label, fullKey, durationMs, cached, itemCount }) {
+function logMiss ({ label, fullKey, durationMs, cached, itemCount, ttlSeconds = DEFAULT_TTL_SECONDS }) {
   const itemsSuffix =
     itemCount != null ? ` — items: ${itemCount}` : ''
 
@@ -255,8 +261,8 @@ function logMiss ({ label, fullKey, durationMs, cached, itemCount }) {
   console.log(
     `${LOG_PREFIX} CACHE MISS — source: DATABASE — ${label} — key: ${fullKey} — ${durationMs}ms${itemsSuffix}` +
     (cached
-      ? ` — saved to Redis (TTL=${DEFAULT_TTL_SECONDS}s, redis=${redisStatusLabel()})`
-      : ` — Redis unavailable, not cached (redis=${redisStatusLabel()})`)
+      ? ` — saved to Redis (TTL=${ttlSeconds}s, redis=${redisStatusLabel()})`
+      : ` — Redis unavailable, memory fallback only (redis=${redisStatusLabel()})`)
   )
 }
 
@@ -269,7 +275,8 @@ function logInvalidate ({ module, fullKey, deleted }) {
 
 async function getOrLoad (cacheKey, loader, options = {}) {
   const label = options.label || cacheKey
-  const fullKey = `${API_CACHE_PREFIX}${cacheKey}`
+  const fullKey = buildFullCacheKey(cacheKey)
+  const ttlSeconds = options.ttlSeconds ?? DEFAULT_TTL_SECONDS
   const cached = await getCachedJson(fullKey)
 
   if (cached !== null) {
@@ -285,14 +292,15 @@ async function getOrLoad (cacheKey, loader, options = {}) {
   const data = await loader()
   const plain = toPlain(data)
   const durationMs = Date.now() - start
-  const saved = await setCachedJson(fullKey, plain, options.ttlSeconds)
+  const saved = await setCachedJson(fullKey, plain, ttlSeconds)
 
   logMiss({
     label,
     fullKey,
     durationMs,
     cached: saved,
-    itemCount: countItems(plain)
+    itemCount: countItems(plain),
+    ttlSeconds
   })
 
   return plain
@@ -506,6 +514,32 @@ async function invalidateEmployeeTasksForUser (userId) {
   console.log(`${LOG_PREFIX} invalidate employee tasks for user ${userId} (${count} key(s))`)
 }
 
+async function invalidateEmployeeActiveTaskList (userId, filterScope = null) {
+  if (userId == null) {
+    return
+  }
+
+  if (filterScope) {
+    const cacheKey = KEYS.employeeActiveTaskList(userId, filterScope)
+    const deleted = await deleteKey(cacheKey)
+
+    logInvalidate({
+      module: `ActiveTaskList:${filterScope}`,
+      fullKey: buildFullCacheKey(cacheKey),
+      deleted
+    })
+    return
+  }
+
+  const count = await deleteKeysByPattern(`employee-tasks:${userId}:active-list:*`)
+
+  logInvalidate({
+    module: `ActiveTaskList:all:user${userId}`,
+    fullKey: buildFullCacheKey(`employee-tasks:${userId}:active-list:*`),
+    deleted: count
+  })
+}
+
 async function invalidateEmployeeTasksByDepartment (departmentId) {
   if (departmentId == null) {
     return
@@ -524,8 +558,15 @@ async function invalidateEmployeeTaskStats () {
 
 module.exports = {
   KEYS,
+  buildFullCacheKey,
+  deleteKey,
   deleteKeysByPattern,
+  getCachedJson,
+  setCachedJson,
   getOrLoad,
+  logCacheHit: logHit,
+  logCacheMiss: logMiss,
+  logCacheInvalidate: logInvalidate,
   invalidateOrganizations,
   invalidateTypeProcesses,
   invalidateTypeDocs,
@@ -548,6 +589,7 @@ module.exports = {
   invalidateUserTransactionDrafts,
   invalidateAllTransactionsForUser,
   invalidateEmployeeTasksForUser,
+  invalidateEmployeeActiveTaskList,
   invalidateEmployeeTasksByDepartment,
   invalidateEmployeeTaskStats
 }

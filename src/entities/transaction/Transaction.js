@@ -28,6 +28,11 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: 'transaction_id',
         as: 'signature_links'
       })
+
+      Transaction.hasOne(models.DocumentFinalTransaction, {
+        foreignKey: 'transaction_id',
+        as: 'final_document'
+      })
     }
   }
 
