@@ -12,13 +12,7 @@ const {
 const { retryWithBackoff } = require('../../../../core/utils/retryWithBackoff')
 const {
   KEYS,
-  getOrLoad,
-  getCachedJson,
-  setCachedJson,
-  buildFullCacheKey,
-  logCacheHit,
-  logCacheMiss,
-  invalidateEmployeeActiveTaskList
+  getOrLoad
 } = require('../../../../core/cache/apiCacheService')
 const { EMPLOYEE_TASKS_CACHE_TTL_SECONDS } = require('../../../../core/config/env')
 const {
@@ -36,123 +30,6 @@ const EMPLOYEE_STATUS_FILTERS = {
   ALL_ACTIVE: 'all_active',
   IN_PROGRESS: 'in_progress',
   PENDING_PICKUP: 'pending_pickup'
-}
-
-const activeTaskListMemoryCache = new Map()
-
-function parseActiveTasksRefresh (query = {}) {
-  const raw = query.refresh
-
-  if (raw === undefined || raw === null || String(raw).trim() === '') {
-    return false
-  }
-
-  const normalized = String(raw).trim().toLowerCase()
-  return normalized === '1' || normalized === 'true' || normalized === 'yes'
-}
-
-function activeTaskListMemoryKey (userId, filterScope) {
-  return `${userId}:${filterScope}`
-}
-
-function activeTaskCacheLabel (userId, filterScope) {
-  return `active-tasks:${filterScope}:user${userId}`
-}
-
-async function readCachedActiveTaskList (userId, filterScope) {
-  const cacheKey = KEYS.employeeActiveTaskList(userId, filterScope)
-  const fullKey = buildFullCacheKey(cacheKey)
-  const label = activeTaskCacheLabel(userId, filterScope)
-  const cached = await getCachedJson(fullKey)
-
-  if (Array.isArray(cached?.items)) {
-    logCacheHit({
-      label,
-      fullKey,
-      itemCount: cached.items.length,
-      source: 'REDIS'
-    })
-
-    return cached.items
-  }
-
-  const memoryEntry = activeTaskListMemoryCache.get(
-    activeTaskListMemoryKey(userId, filterScope)
-  )
-
-  if (memoryEntry?.expiresAt > Date.now() && Array.isArray(memoryEntry.items)) {
-    logCacheHit({
-      label,
-      fullKey,
-      itemCount: memoryEntry.items.length,
-      source: 'MEMORY'
-    })
-
-    return memoryEntry.items
-  }
-
-  if (memoryEntry) {
-    activeTaskListMemoryCache.delete(activeTaskListMemoryKey(userId, filterScope))
-  }
-
-  return null
-}
-
-async function writeCachedActiveTaskList (userId, filterScope, items) {
-  const cacheKey = KEYS.employeeActiveTaskList(userId, filterScope)
-  const fullKey = buildFullCacheKey(cacheKey)
-  const ttlSeconds = EMPLOYEE_TASKS_CACHE_TTL_SECONDS
-  const savedToRedis = await setCachedJson(fullKey, { items }, ttlSeconds)
-
-  activeTaskListMemoryCache.set(activeTaskListMemoryKey(userId, filterScope), {
-    items,
-    expiresAt: Date.now() + ttlSeconds * 1000
-  })
-
-  console.log(
-    `[ActiveTaskCache] SAVED — scope: ${filterScope} — user: ${userId} — items: ${items.length} — redis: ${savedToRedis ? 'yes' : 'memory-only'} — TTL: ${ttlSeconds}s — key: ${fullKey}`
-  )
-
-  return savedToRedis
-}
-
-async function clearCachedActiveTaskList (userId, filterScope) {
-  const cacheKey = KEYS.employeeActiveTaskList(userId, filterScope)
-  const fullKey = buildFullCacheKey(cacheKey)
-
-  console.log(
-    `[ActiveTaskCache] REFRESH — clearing cache — scope: ${filterScope} — user: ${userId} — key: ${fullKey}`
-  )
-
-  await invalidateEmployeeActiveTaskList(userId, filterScope)
-  activeTaskListMemoryCache.delete(activeTaskListMemoryKey(userId, filterScope))
-}
-
-function logActiveTaskPageSlice ({
-  userId,
-  filterScope,
-  page,
-  limit,
-  returnedCount,
-  totalCount,
-  fromCache
-}) {
-  console.log(
-    `[ActiveTaskCache] PAGE — scope: ${filterScope} — user: ${userId} — page: ${page} — limit: ${limit} — returned: ${returnedCount}/${totalCount} — source: ${fromCache ? 'CACHE_SLICE' : 'FRESH_BUILD'}`
-  )
-}
-
-function paginateTaskListItems (items, { page, limit, offset }) {
-  const pageItems = items.slice(offset, offset + limit)
-
-  return {
-    items: pageItems,
-    pagination: buildPaginationMeta({
-      page,
-      limit,
-      total: items.length
-    })
-  }
 }
 
 async function buildProgressMaps (instances = []) {
@@ -229,6 +106,22 @@ function mapInstanceToTask ({
     progressPercent,
     employeeStatus,
     stageNameOverride: resolveStageName(instance, activeTask, stageNameMap)
+  })
+}
+
+function sortActiveInstances (instances = []) {
+  return [...instances].sort((a, b) => {
+    const priorityA = normalizeProcessPriority(a.process_definition?.priority)
+    const priorityB = normalizeProcessPriority(b.process_definition?.priority)
+
+    if (priorityA !== priorityB) {
+      return priorityA - priorityB
+    }
+
+    const dateA = new Date(a.transaction?.created_at || a.created_at)
+    const dateB = new Date(b.transaction?.created_at || b.created_at)
+
+    return dateA - dateB
   })
 }
 
@@ -341,10 +234,13 @@ async function loadEmployeeStageContext (userId) {
   return context
 }
 
-async function buildActiveTaskListSnapshot ({
+async function getRunningTasks ({
   userId,
   stageIds,
   processDefinitionIds,
+  page,
+  limit,
+  offset,
   employeeStatusFilter = EMPLOYEE_STATUS_FILTERS.ALL_ACTIVE
 }) {
   const instances =
@@ -353,7 +249,7 @@ async function buildActiveTaskListSnapshot ({
     })
 
   if (!instances.length) {
-    return []
+    return emptyPaginatedResult({ page, limit })
   }
 
   await releaseExpiredTaskLocksForProcessInstances(instances)
@@ -381,7 +277,7 @@ async function buildActiveTaskListSnapshot ({
   })
 
   if (!matchedPairs.length) {
-    return []
+    return emptyPaginatedResult({ page, limit })
   }
 
   const sortedPairs = [...matchedPairs].sort((a, b) => {
@@ -423,9 +319,20 @@ async function buildActiveTaskListSnapshot ({
     })
   )
 
-  return allItems.filter(item =>
+  const filteredItems = allItems.filter(item =>
     matchesEmployeeStatusFilter(item, employeeStatusFilter)
   )
+
+  const pageItems = filteredItems.slice(offset, offset + limit)
+
+  return {
+    items: pageItems,
+    pagination: buildPaginationMeta({
+      page,
+      limit,
+      total: filteredItems.length
+    })
+  }
 }
 
 async function getTerminalTasks ({
@@ -610,8 +517,7 @@ async function loadActiveEmployeeTasks ({
   page,
   limit,
   offset,
-  employeeStatusFilter,
-  refresh = false
+  employeeStatusFilter
 }) {
   const context = await loadEmployeeStageContext(userId)
 
@@ -619,66 +525,15 @@ async function loadActiveEmployeeTasks ({
     return emptyPaginatedResult({ page, limit })
   }
 
-  const filterScope = employeeStatusFilter || EMPLOYEE_STATUS_FILTERS.ALL_ACTIVE
-
-  if (refresh) {
-    await clearCachedActiveTaskList(userId, filterScope)
-  }
-
-  let cachedItems = refresh
-    ? null
-    : await readCachedActiveTaskList(userId, filterScope)
-  let loadedFromCache = Boolean(cachedItems)
-
-  if (!cachedItems) {
-    const label = activeTaskCacheLabel(userId, filterScope)
-    const fullKey = buildFullCacheKey(
-      KEYS.employeeActiveTaskList(userId, filterScope)
-    )
-    const startedAt = Date.now()
-
-    cachedItems = await buildActiveTaskListSnapshot({
-      userId,
-      stageIds: context.stageIds,
-      processDefinitionIds: context.processDefinitionIds,
-      employeeStatusFilter: filterScope
-    })
-
-    const savedToRedis = await writeCachedActiveTaskList(
-      userId,
-      filterScope,
-      cachedItems
-    )
-
-    logCacheMiss({
-      label,
-      fullKey,
-      durationMs: Date.now() - startedAt,
-      cached: savedToRedis,
-      itemCount: cachedItems.length,
-      ttlSeconds: EMPLOYEE_TASKS_CACHE_TTL_SECONDS
-    })
-
-    loadedFromCache = false
-  }
-
-  if (!cachedItems.length) {
-    return emptyPaginatedResult({ page, limit })
-  }
-
-  const result = paginateTaskListItems(cachedItems, { page, limit, offset })
-
-  logActiveTaskPageSlice({
+  return getRunningTasks({
     userId,
-    filterScope,
+    stageIds: context.stageIds,
+    processDefinitionIds: context.processDefinitionIds,
     page,
     limit,
-    returnedCount: result.items.length,
-    totalCount: cachedItems.length,
-    fromCache: loadedFromCache
+    offset,
+    employeeStatusFilter
   })
-
-  return result
 }
 
 async function loadCachedEmployeeTasks ({
@@ -748,16 +603,17 @@ async function getActiveEmployeeTasks ({
   page,
   limit,
   offset,
-  employeeStatusFilter = EMPLOYEE_STATUS_FILTERS.ALL_ACTIVE,
-  refresh = false
+  employeeStatusFilter = EMPLOYEE_STATUS_FILTERS.ALL_ACTIVE
 }) {
+  // Active lists (pending_pickup / in_progress) change on every submit, complete,
+  // and lock — per-user Redis cache was not invalidated for other assignees, so
+  // new tasks could stay hidden until TTL expired. Always load fresh from DB+Camunda.
   const data = await loadActiveEmployeeTasks({
     userId,
     page,
     limit,
     offset,
-    employeeStatusFilter,
-    refresh
+    employeeStatusFilter
   })
 
   return {
@@ -818,14 +674,7 @@ async function getRejectedByDepartment ({
   }
 }
 
-async function getAllTasks ({
-  userId,
-  page,
-  limit,
-  offset,
-  status = 'active',
-  refresh = false
-}) {
+async function getAllTasks ({ userId, page, limit, offset, status = 'active' }) {
   const paginationInput = { page, limit, offset }
 
   if (status === 'completed' || status === 'rejected') {
@@ -868,8 +717,7 @@ async function getAllTasks ({
     page,
     limit,
     offset,
-    employeeStatusFilter: EMPLOYEE_STATUS_FILTERS.ALL_ACTIVE,
-    refresh
+    employeeStatusFilter: EMPLOYEE_STATUS_FILTERS.ALL_ACTIVE
   })
 }
 
@@ -877,7 +725,6 @@ module.exports = {
   EMPLOYEE_STATUS_FILTERS,
   parseDepartmentIds,
   parseDateRange,
-  parseActiveTasksRefresh,
   getAllTasks,
   getActiveEmployeeTasks,
   getCompletedByDepartment,

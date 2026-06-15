@@ -98,20 +98,6 @@ const {
 
  *       - in: query
 
- *         name: refresh
-
- *         schema:
-
- *           type: boolean
-
- *         description: |
-
- *           للمهام النشطة (status=active) — refresh=true يمسح cache ويعيد بناء القائمة.
-
- *           page=1 يبني cache؛ page>1 يقرأ من cache.
-
- *       - in: query
-
  *         name: page
 
  *         schema:
@@ -210,14 +196,6 @@ router.get('/tasks', authMiddleware, getAllTasksController)
 
  *       - in: query
 
- *         name: refresh
-
- *         schema: { type: boolean }
-
- *         description: refresh=true يمسح cache ويعيد بناء القائمة
-
- *       - in: query
-
  *         name: page
 
  *         schema: { type: integer, minimum: 1, default: 1 }
@@ -269,14 +247,6 @@ router.get('/tasks/in-progress', authMiddleware, getInProgressTasksController)
  *       - bearerAuth: []
 
  *     parameters:
-
- *       - in: query
-
- *         name: refresh
-
- *         schema: { type: boolean }
-
- *         description: refresh=true يمسح cache ويعيد بناء القائمة
 
  *       - in: query
 

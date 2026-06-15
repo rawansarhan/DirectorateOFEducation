@@ -1,7 +1,7 @@
 const completeTaskService = require('../services/completeTaskService')
 const getAllTasksService = require('../services/getAllTasksService')
 const getTaskStatsService = require('../services/getTaskStatsService')
-const { EMPLOYEE_STATUS_FILTERS, parseDepartmentIds, parseDateRange, parseActiveTasksRefresh } = getAllTasksService
+const { EMPLOYEE_STATUS_FILTERS, parseDepartmentIds, parseDateRange} = getAllTasksService
 const getTaskDetailsService = require('../services/getTaskDetailsService')
 const { startWorkflow } = require('../services/startWorkflowService')
 const { createSigningChallenge } = require('../services/transactionSigningService')
@@ -104,15 +104,12 @@ async function getAllTasksController (req, res) {
   try {
     const { page, limit, offset } = parsePaginationQuery(req.query)
     const status = String(req.query.status || 'active').trim()
-    const refresh = parseActiveTasksRefresh(req.query)
-
     const result = await getAllTasksService.getAllTasks({
       userId: req.user.id,
       page,
       limit,
       offset,
-      status,
-      refresh: status === 'active' ? refresh : false
+      status
     })
 
     return sendWorkflowSuccess(res, result.data, result.message)
@@ -124,14 +121,12 @@ async function getAllTasksController (req, res) {
 async function getInProgressTasksController (req, res) {
   try {
     const { page, limit, offset } = parsePaginationQuery(req.query)
-    const refresh = parseActiveTasksRefresh(req.query)
 
     const result = await getAllTasksService.getActiveEmployeeTasks({
       userId: req.user.id,
       page,
       limit,
       offset,
-      refresh,
       employeeStatusFilter: EMPLOYEE_STATUS_FILTERS.IN_PROGRESS
     })
 
@@ -144,14 +139,12 @@ async function getInProgressTasksController (req, res) {
 async function getPendingPickupTasksController (req, res) {
   try {
     const { page, limit, offset } = parsePaginationQuery(req.query)
-    const refresh = parseActiveTasksRefresh(req.query)
 
     const result = await getAllTasksService.getActiveEmployeeTasks({
       userId: req.user.id,
       page,
       limit,
       offset,
-      refresh,
       employeeStatusFilter: EMPLOYEE_STATUS_FILTERS.PENDING_PICKUP
     })
 
@@ -160,7 +153,7 @@ async function getPendingPickupTasksController (req, res) {
     return handleWorkflowError(res, error, 500)
   }
 }
-
+///////////////////////////////////////////////////////////////////////////////////
 async function getCompletedByDepartmentController (req, res) {
   try {
     const { page, limit, offset } = parsePaginationQuery(req.query)
