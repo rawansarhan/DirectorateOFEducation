@@ -338,24 +338,7 @@ async function getConfig_json (processId, { userId } = {}) {
         'NOT_FOUND'
       )
     }
-     let draft = null
 
-    if (userId) {
-      draft = await transactionRepository.findDraftByCode(userId, process.code)
-    }
-
-    const config_json = draft?.data ?? stageConfig.config_json
-    const data = { config_json }
-
-    if (draft) {
-      data.transaction_id = draft.id
-    
-    return 
-      message: draft?.data
-        ? 'تم جلب استمارة المسودة بنجاح'
-        : 'تم جلب إعدادات العملية بنجاح',
-      data
-    }
     const stage = await stageRepository.findFirstAuthStage(numericProcessId)
 
     if (!stage) {
@@ -379,7 +362,25 @@ async function getConfig_json (processId, { userId } = {}) {
       )
     }
 
-   
+    let draft = null
+
+    if (userId) {
+      draft = await transactionRepository.findDraftByCode(userId, process.code)
+    }
+
+    const config_json = draft?.data ?? stageConfig.config_json
+    const data = { config_json }
+
+    if (draft) {
+      data.transaction_id = draft.id
+    }
+
+    return {
+      message: draft?.data
+        ? 'تم جلب استمارة المسودة بنجاح'
+        : 'تم جلب إعدادات العملية بنجاح',
+      data
+    }
   }, { label: 'stageConfig.getConfig_json' })
 }
 module.exports = {
