@@ -362,25 +362,24 @@ async function getConfig_json (processId, { userId } = {}) {
       )
     }
 
-    let draft = null
+    // let draft = null
 
-    if (userId) {
-      draft = await transactionRepository.findDraftByCode(userId, process.code)
-    }
+    // if (userId) {
+    //   draft = await transactionRepository.findDraftByCode(userId, process.code)
+    // }
 
-    const config_json = draft?.data ?? stageConfig.config_json
-    const data = { config_json }
+    // const config_json = draft?.data ?? stageConfig.config_json
+    // const data = { config_json }
 
-    if (draft) {
-      data.transaction_id = draft.id
-    }
+    // if (draft) {
+    //   data.transaction_id = draft.id
+    // }
 
     return {
-      message: draft?.data
-        ? 'تم جلب استمارة المسودة بنجاح'
-        : 'تم جلب إعدادات العملية بنجاح',
-      data
-    }
+      message: 'تم جلب إعدادات العملية بنجاح',
+      data: {
+        config_json: stageConfig.config_json
+      }}
   }, { label: 'stageConfig.getConfig_json' })
 }
 module.exports = {
