@@ -15,6 +15,7 @@ const DEFAULT_TTL_SECONDS = API_CACHE_TTL_SECONDS
 const KEYS = {
   organizations: () => 'organization:all',
   typeProcesses: () => 'typeProcess:all',
+  typeProcessesAll: () => 'typeProcess:all-active-and-inactive',
   typeDocs: () => 'typeDoc:all',
   typeDocById: (id) => `typeDoc:id:${id}`,
   departmentLeaves: (organizationId) => `department:leaves:${organizationId}`,
@@ -311,6 +312,15 @@ async function invalidateTypeProcesses () {
     module: 'TypeProcess',
     fullKey: `${API_CACHE_PREFIX}${cacheKey}`,
     deleted
+  })
+
+  const allKey = KEYS.typeProcessesAll()
+  const allDeleted = await deleteKey(allKey)
+
+  logInvalidate({
+    module: 'TypeProcess',
+    fullKey: `${API_CACHE_PREFIX}${allKey}`,
+    deleted: allDeleted
   })
 }
 
