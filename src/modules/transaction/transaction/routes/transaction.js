@@ -150,7 +150,7 @@ router.post(
  * @swagger
  * /api/transaction/submit/process/{processId}:
  *   post:
- *     summary: Submit transaction by processId and start workflow
+ *     summary: Submit transaction by processId (citizen only) and start workflow
  *     description: |
  *       يقدّم المعاملة بمعرّف العملية في خطوة واحدة ويبدأ الـ workflow مباشرة.
  *
@@ -161,12 +161,9 @@ router.post(
  *
  *       **قالب الطلب (إلزامي):** `form_id`, `form_name`, `widgets[]` (config_json + value), `templates[]` ({ id, value }), `note`
  *
- *       **مواطن:** بدون `signature`
- *
- *       **موظف (يبدأ المعاملة):**
- *       1. `POST /api/transaction/process/{processId}/submit-documents/signing-challenge` — PIN
- *       2. وقّع `message` عبر USB
- *       3. `POST /api/transaction/submit/process/{processId}` — نفس body + `signature: { challenge_id, signature }`
+ *       **للمواطن فقط — بدون `signature`.** أرسل بيانات الهوية مع الـ body.
+ *       الموظف يُرفض على هذا المسار بـ 403؛ له مساره الخاص:
+ *       `POST /api/transaction/process/{processId}/submit-documents/signing-challenge` ثم تقديم موقّع.
  *
  *       **مرفوض:** `fields`, `files`, `variables`, `employee`, `decision`, `stage_name`
  *       **القالب الفارغ:** GET `/api/stage_config/config/{processId}`
@@ -198,9 +195,9 @@ router.post(
  *             schema:
  *               $ref: '#/components/schemas/SubmitTransactionResponse'
  *       400:
- *         description: خطأ تحقق أو معاملة قيد التنفيذ
+ *         description: خطأ تحقق أو توقيع غير مسموح للمواطن أو معاملة قيد التنفيذ
  *       403:
- *         description: غير مصرّح
+ *         description: المسار للمواطن فقط — الموظف يُرفض هنا ويستخدم مسار التوقيع
  *       404:
  *         description: العملية غير موجودة
  *       502:

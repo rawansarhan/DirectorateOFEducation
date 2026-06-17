@@ -11,6 +11,10 @@ const MESSAGES = {
   TRANSACTION_NOT_FOUND: 'المعاملة غير موجودة',
   UNAUTHORIZED: 'لا تملك صلاحية الوصول إلى هذه المعاملة',
   SUBMIT_NOT_DRAFT: 'لا يمكن تقديم المعاملة إلا وهي في حالة مسودة',
+  EMPLOYEE_FORBIDDEN_CITIZEN_ROUTE:
+    'هذا المسار مخصّص للمواطن فقط. كموظف، قدّم معاملتك عبر مسار الموظف: أنشئ تحدي التوقيع أولاً عبر POST /api/transaction/process/{processId}/submit-documents/signing-challenge ثم وقّع وأرسل التقديم مع التوقيع',
+  CITIZEN_SIGNATURE_NOT_ALLOWED:
+    'التوقيع الرقمي غير مسموح في تقديم المواطن — احذف حقل signature من الطلب',
   SIGNATURE_REQUIRED: 'التوقيع الرقمي مطلوب للموظف — أنشئ تحدي التوقيع أولاً',
   TRANSACTION_IN_PROGRESS: 'لديك معاملة قيد التنفيذ لهذه العملية — لا يمكن إنشاء تقديم جديد',
   VALIDATION_ERROR: 'بيانات الطلب غير صالحة',
@@ -80,7 +84,11 @@ function mapErrorToArabic (error) {
 function httpStatusForError (error) {
   const msg = String(error?.message || '')
 
-  if (error?.code === 'UNAUTHORIZED' || msg.includes('Unauthorized')) {
+  if (
+    error?.code === 'UNAUTHORIZED' ||
+    error?.code === 'EMPLOYEE_FORBIDDEN_CITIZEN_ROUTE' ||
+    msg.includes('Unauthorized')
+  ) {
     return 403
   }
   if (
@@ -96,6 +104,7 @@ function httpStatusForError (error) {
     error?.code === 'PROCESS_INACTIVE' ||
     error?.code === 'SUBMIT_NOT_DRAFT' ||
     error?.code === 'SIGNATURE_REQUIRED' ||
+    error?.code === 'CITIZEN_SIGNATURE_NOT_ALLOWED' ||
     error?.code === 'TRANSACTION_IN_PROGRESS' ||
     error?.code === 'VALIDATION_ERROR' ||
     msg.includes('not active') ||

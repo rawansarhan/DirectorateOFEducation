@@ -381,8 +381,8 @@ async function resolveSubmitDraftForProcess ({ userId, process }) {
   return { draft, isNew: true }
 }
 
-// مدخل التقديم بمعرّف العملية: يجهّز/يحدّث المسودة ثم يفوّض التقديم الفعلي
-// للدالة الأساسية submitTransaction (إيدمبوتنسي/توقيع/معاملة ذرّية/تراجع)
+// مدخل التقديم بمعرّف العملية — للمواطن فقط: يجهّز/يحدّث المسودة ثم يفوّض
+// التقديم الفعلي للدالة الأساسية submitTransaction (إيدمبوتنسي/معاملة ذرّية/تراجع)
 async function submitTransactionByProcess (
   processId,
   body = {},
@@ -392,6 +392,16 @@ async function submitTransactionByProcess (
     clientMeta = {}
   } = {}
 ) {
+  // هذا المسار للمواطن فقط — الموظف (مَن له أدوار) له مساره الخاص بالتوقيع
+  if (await userRequiresSubmitSignature(userId)) {
+    throw createTransactionError('EMPLOYEE_FORBIDDEN_CITIZEN_ROUTE')
+  }
+
+  // المواطن لا يوقّع — ارفض أي توقيع مُرسل قبل لمس قاعدة البيانات
+  if (extractSubmitSignature(body)) {
+    throw createTransactionError('CITIZEN_SIGNATURE_NOT_ALLOWED')
+  }
+
   const { draft } = await retryWithBackoff(async () => {
     // 1) التأكد أن العملية موجودة ونشطة
     const process = await fetchActiveProcess(processId)
