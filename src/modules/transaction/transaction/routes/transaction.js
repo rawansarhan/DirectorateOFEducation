@@ -148,29 +148,29 @@ router.post(
 
 /**
  * @swagger
- * /api/transaction/submit/{transactionId}:
+ * /api/transaction/submit/process/{processId}:
  *   post:
- *     summary: Submit transaction and start workflow
+ *     summary: Submit transaction by processId and start workflow
  *     description: |
- *       يقدّم المعاملة ويبدأ الـ workflow مباشرة.
+ *       يقدّم المعاملة بمعرّف العملية في خطوة واحدة ويبدأ الـ workflow مباشرة.
  *
  *       **التدفق:**
- *       1. أولاً: `POST /api/transaction/updateDraft/{processId}` — حفظ بيانات الهوية والحصول على `draft.id`
- *       2. ثانياً: `POST /api/transaction/submit/{transactionId}` — إرسال الاستمارة على المسودة نفسها
- *       3. يُولَّد `id_process` (مثل STUTR-2026-001) ويُبدأ Camunda workflow
+ *       1. يبحث عن مسودة المستخدم على `processId`؛ إن وُجدت يُعيد استخدامها وإلا يُنشئ ترانزكشن جديد
+ *       2. يتحقق من بيانات الهوية المرسلة في الطلب (first_name, last_name, father_name, mother_name, national_id) ويطبّقها على المسودة — على جذر الـ body أو ضمن كائن `identity`
+ *       3. يقدّم الاستمارة ويُولَّد `id_process` (مثل STUTR-2026-001) ويُبدأ Camunda workflow
  *
  *       **قالب الطلب (إلزامي):** `form_id`, `form_name`, `widgets[]` (config_json + value), `templates[]` ({ id, value }), `note`
  *
  *       **مواطن:** بدون `signature`
  *
  *       **موظف (يبدأ المعاملة):**
- *       1. `POST /api/transaction/{transactionId}/submit-documents/signing-challenge` — PIN
+ *       1. `POST /api/transaction/process/{processId}/submit-documents/signing-challenge` — PIN
  *       2. وقّع `message` عبر USB
- *       3. `POST /api/transaction/submit/{transactionId}` — نفس body + `signature: { challenge_id, signature }`
+ *       3. `POST /api/transaction/submit/process/{processId}` — نفس body + `signature: { challenge_id, signature }`
  *
  *       **مرفوض:** `fields`, `files`, `variables`, `employee`, `decision`, `stage_name`
  *       **القالب الفارغ:** GET `/api/stage_config/config/{processId}`
- *       - Idempotency تلقائي على مستوى `transactionId` — لا ترسل Idempotency-Key
+ *       - Idempotency تلقائي على مستوى المعاملة — لا ترسل Idempotency-Key
  *
  *       **Response `data`:** `id`, `id_process`, `status`, `idempotency_key`, ...
  *     tags: [Transaction]
@@ -178,21 +178,18 @@ router.post(
  *       - bearerAuth: []
  *     parameters:
  *       - in: path
- *         name: transactionId
+ *         name: processId
  *         required: true
  *         schema:
  *           type: integer
  *           minimum: 1
- *         description: معرّف المسودة (transaction id) من خطوة updateDraft
+ *         description: معرّف العملية (process id)
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/SubmitTransactionPayload'
- *           examples:
- *             leave_auth:
- *               $ref: '#/components/examples/LeaveProcessAuthSubmit'
+ *             $ref: '#/components/schemas/SubmitTransactionByProcessPayload'
  *     responses:
  *       200:
  *         description: تم تقديم المعاملة بنجاح
@@ -210,7 +207,7 @@ router.post(
  *         description: فشل بدء workflow
  */
 router.post(
-  '/submit/:transactionId',
+  '/submit/process/:processId',
   authMiddleware,
   submitTransactionLimiter,
   submitTransactionController

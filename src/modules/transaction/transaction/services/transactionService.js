@@ -6,7 +6,8 @@ const { TransactionIdentityInputDTO } = require('../dto/TransactionDraftInputDTO
 const {
   parsePositiveInt,
   validateIdentityBody,
-  validateIdentityCompleteForSubmit
+  validateIdentityCompleteForSubmit,
+  IDENTITY_KEYS
 } = require('../validations/transactionValidations')
 const {
   validateUpsertDraftBody,
@@ -321,6 +322,103 @@ async function getTransactionById (transactionId, userId) {
   return toDTO(transaction)
 }
 
+// يلتقط حقول الهوية من الطلب سواء أُرسلت ضمن كائن identity أو على جذر الـ body
+function extractIdentityPayload (body = {}) {
+  const source = body?.identity ?? body
+
+  const identity = {}
+
+  for (const key of IDENTITY_KEYS) {
+    if (Object.prototype.hasOwnProperty.call(source, key)) {
+      identity[key] = source[key]
+    }
+  }
+
+  return identity
+}
+
+// يفصل حقول الهوية عن باقي الـ body حتى لا تصل للـ form payload الصارم فيُرفض
+function stripIdentityFromBody (body = {}) {
+  const { identity, ...rest } = body
+
+  for (const key of IDENTITY_KEYS) {
+    delete rest[key]
+  }
+
+  return rest
+}
+
+// يعيد استخدام مسودة المستخدم على نفس العملية إن وُجدت، وإلا ينشئ ترانزكشن
+// جديد وينسخ هوية المستخدم من حسابه كأساس (نفس نمط ensureDraftForProcess)
+async function resolveSubmitDraftForProcess ({ userId, process }) {
+  let draft = await repo.findDraftByCode(userId, process.code)
+
+  if (draft) {
+    if (draft.user_id !== userId) {
+      throw createTransactionError('UNAUTHORIZED')
+    }
+
+    return { draft, isNew: false }
+  }
+
+  const user = await userRepository.findById(userId)
+
+  if (!user || !user.is_active) {
+    throw createTransactionError('UNAUTHORIZED')
+  }
+
+  draft = await repo.create({
+    code: process.code,
+    user_id: userId,
+    status: 'draft',
+    first_name: user.first_name ?? null,
+    last_name: user.last_name ?? null,
+    father_name: user.father_name ?? null,
+    mother_name: user.mother_name ?? null,
+    national_id: user.national_id ?? null
+  })
+
+  return { draft, isNew: true }
+}
+
+// مدخل التقديم بمعرّف العملية: يجهّز/يحدّث المسودة ثم يفوّض التقديم الفعلي
+// للدالة الأساسية submitTransaction (إيدمبوتنسي/توقيع/معاملة ذرّية/تراجع)
+async function submitTransactionByProcess (
+  processId,
+  body = {},
+  {
+    userId,
+    idempotencyKey = null,
+    clientMeta = {}
+  } = {}
+) {
+  const { draft } = await retryWithBackoff(async () => {
+    // 1) التأكد أن العملية موجودة ونشطة
+    const process = await fetchActiveProcess(processId)
+
+    // 2) إيجاد/إنشاء المسودة لهذا المستخدم على هذه العملية
+    const { draft, isNew } = await resolveSubmitDraftForProcess({ userId, process })
+
+    // 3) التحقق من بيانات الهوية القادمة في الطلب وتطبيقها (نفس فالديت UpdateDraft)
+    const identityBody = extractIdentityPayload(body)
+
+    if (Object.keys(identityBody).length) {
+      await applyIdentityUpdate(draft, identityBody, userId)
+    }
+
+    return { draft, isNew }
+  }, { label: 'transaction.submitTransactionByProcess' })
+
+  // 4) تمرير الـ form payload (بدون حقول الهوية) للدالة الأساسية للتقديم
+  const formPayload = stripIdentityFromBody(body)
+
+  return submitTransaction(draft.id, formPayload, {
+    userId,
+    idempotencyKey,
+    clientMeta
+  })
+}
+
 async function submitTransaction (
   transactionId,
   data,
@@ -532,5 +630,6 @@ module.exports = {
   getUserDraftByProcess,
   getTransactionById,
   submitTransaction,
+  submitTransactionByProcess,
   MESSAGES
 }

@@ -1925,6 +1925,53 @@ const swaggerOptions = {
           }
         },
 
+        SubmitTransactionByProcessPayload: {
+          allOf: [{ $ref: '#/components/schemas/UnifiedFormPayload' }],
+          description:
+            'POST /transaction/submit/process/{processId} — تقديم بمعرّف العملية في خطوة واحدة. ' +
+            'يحمل نفس الـ form payload (form_id, form_name, widgets, templates, note) ' +
+            'بالإضافة إلى حقول الهوية (first_name, last_name, father_name, mother_name, national_id) ' +
+            'على جذر الـ body — تُخزَّن في أعمدة المعاملة، بينما يُخزَّن الـ form في data كما هو. ' +
+            'مواطن: بدون signature. موظف: أضف signature: { challenge_id, signature }.',
+          properties: {
+            first_name: { type: 'string', maxLength: 100, example: 'أحمد' },
+            last_name: { type: 'string', maxLength: 100, example: 'محمد' },
+            father_name: { type: 'string', maxLength: 100, example: 'علي' },
+            mother_name: { type: 'string', maxLength: 100, example: 'فاطمة' },
+            national_id: {
+              type: 'string',
+              maxLength: 50,
+              pattern: '^[0-9]*$',
+              example: '12345678901'
+            }
+          },
+          example: {
+            first_name: 'أحمد',
+            last_name: 'محمد',
+            father_name: 'علي',
+            mother_name: 'فاطمة',
+            national_id: '12345678901',
+            form_id: 'leave_process_auth',
+            form_name: 'الوثائق المطلوبة للمواطن',
+            widgets: [
+              {
+                widget_type: 'text_field',
+                data: {
+                  id: 'student_first_name',
+                  label: 'اسم الطالب',
+                  is_required: true,
+                  input_type: 'text',
+                  max_length: 100,
+                  min_length: 2
+                },
+                value: 'روان'
+              }
+            ],
+            templates: [],
+            note: ''
+          }
+        },
+
         TransactionDraftFormData: {
           type: 'object',
           required: ['form_id', 'form_name', 'widgets'],

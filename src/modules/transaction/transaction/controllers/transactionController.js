@@ -6,7 +6,7 @@ const {
   upsertDraft,
   getUserDraftByProcess,
   getTransactionById,
-  submitTransaction,
+  submitTransactionByProcess,
   MESSAGES
 } = require('../services/transactionService')
 const { getMyTransactions, getMyTransactionCounts } = require('../services/userTransactionsService')
@@ -182,8 +182,8 @@ async function getTransactionController (req, res) {
 
 async function submitTransactionController (req, res) {
   try {
-    const result = await submitTransaction(
-      req.params.transactionId,
+    const result = await submitTransactionByProcess(
+      req.params.processId,
       req.body,
       {
         userId: req.user.id,
