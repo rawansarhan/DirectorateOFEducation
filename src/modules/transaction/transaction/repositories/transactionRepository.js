@@ -22,7 +22,7 @@ async function findDraft (typeTransId) {
     order: [['created_at', 'DESC']]
   })
 }
-
+//
 async function findInFlightByUserAndCode (userId, code) {
   return Transaction.findOne({
     where: {

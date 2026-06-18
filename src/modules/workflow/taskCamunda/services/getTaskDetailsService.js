@@ -6,7 +6,11 @@ const processInstanceRepository = require('../repositories/processInstanceReposi
 const stageRepository = require('../../processDefinition/repositories/stageRepository')
 const stageConfigRepository = require('../../stageConfig/repositories/stageConfigRepository')
 const transactionClient = require('../../../../core/shared/clients/transaction/transactionClient')
-const { acquireTaskLock } = require('./taskLockService')
+const {
+  acquireTaskLock,
+  releaseTaskLockStrict,
+  buildTaskLockStatus
+} = require('./taskLockService')
 const { toTaskDetails } = require('../mappers/taskCamundaMapper')
 const { retryWithBackoff } = require('../../../../core/utils/retryWithBackoff')
 const {
@@ -130,7 +134,7 @@ async function resolveActiveStageConfig ({ task, processInstance }) {
   return { activeStage, stageConfig }
 }
 
-async function getTaskDetails ({ taskId, userId }) {
+async function loadTaskDetailsContext ({ taskId, userId }) {
   if (!taskId || !String(taskId).trim()) {
     throw createTaskDetailsError(
       'VALIDATION_ERROR',
@@ -150,13 +154,6 @@ async function getTaskDetails ({ taskId, userId }) {
   const processInstance = await fetchProcessInstance(task.processInstanceId)
   const transaction = await resolveTransaction(processInstance)
 
-  await acquireTaskLock({
-    processInstanceId: processInstance.id,
-    taskId: task.id,
-    userId,
-    taskDefinitionKey: task.taskDefinitionKey
-  })
-
   const { activeStage, stageConfig } = await resolveActiveStageConfig({
     task,
     processInstance
@@ -169,20 +166,101 @@ async function getTaskDetails ({ taskId, userId }) {
       : []
   )
 
+  const details = toTaskDetails({
+    task,
+    processInstance,
+    transaction,
+    previousStagesData,
+    activeStage,
+    currentStageConfig: stageConfig?.config_json || {},
+    processDefinition: processInstance.process_definition
+  })
+
+  const task_lock = buildTaskLockStatus(processInstance, task.id, userId)
+
+  return {
+    task,
+    processInstance,
+    details,
+    task_lock
+  }
+}
+
+async function getTaskDetails ({ taskId, userId }) {
+  const { details, task_lock } = await loadTaskDetailsContext({ taskId, userId })
+
   return {
     message: 'تم جلب تفاصيل المهمة بنجاح',
-    data: toTaskDetails({
-      task,
-      processInstance,
-      transaction,
-      previousStagesData,
-      activeStage,
-      currentStageConfig: stageConfig?.config_json || {},
-      processDefinition: processInstance.process_definition
-    })
+    data: {
+      ...details,
+      task_lock
+    }
+  }
+}
+
+async function pickupTask ({ taskId, userId }) {
+  const task = await fetchCamundaTask(taskId)
+
+  if (!task) {
+    throw createTaskDetailsError(
+      'TASK_NOT_FOUND',
+      'المهمة غير موجودة أو لم تعد نشطة في Camunda'
+    )
+  }
+
+  const processInstance = await fetchProcessInstance(task.processInstanceId)
+  const initialLock = buildTaskLockStatus(processInstance, task.id, userId)
+
+  if (initialLock.is_locked && !initialLock.locked_by_me) {
+    throw createTaskDetailsError(
+      'TASK_LOCKED_BY_ANOTHER',
+      'هذه المعاملة قد تم استلامها من قبل موظف آخر'
+    )
+  }
+
+  await acquireTaskLock({
+    processInstanceId: processInstance.id,
+    taskId: task.id,
+    userId,
+    taskDefinitionKey: task.taskDefinitionKey
+  })
+
+  const { details } = await loadTaskDetailsContext({ taskId, userId })
+  const refreshedInstance = await processInstanceRepository.findById(processInstance.id)
+  const task_lock = buildTaskLockStatus(refreshedInstance, task.id, userId)
+
+  return {
+    message: 'تم استلام المعاملة بنجاح',
+    data: {
+      ...details,
+      task_lock
+    }
+  }
+}
+
+async function releaseTask ({ taskId, userId }) {
+  const { task, processInstance } = await loadTaskDetailsContext({ taskId, userId })
+
+  await releaseTaskLockStrict({
+    processInstanceId: processInstance.id,
+    taskId: task.id,
+    userId
+  })
+
+  const refreshedInstance = await processInstanceRepository.findById(processInstance.id)
+  const task_lock = buildTaskLockStatus(refreshedInstance, task.id, userId)
+
+  return {
+    message: 'تم إلغاء استلام المعاملة بنجاح',
+    data: {
+      task_id: task.id,
+      task_lock
+    }
   }
 }
 
 module.exports = {
-  getTaskDetails
+  getTaskDetails,
+  pickupTask,
+  releaseTask
 }

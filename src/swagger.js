@@ -1332,11 +1332,11 @@ const swaggerOptions = {
         },
 
         WorkflowTaskLockErrorExample: {
-          summary: 'المهمة غير مقفلة لديك',
+          summary: 'المعاملة غير مستلمة',
           value: {
             success: false,
             status_code: 409,
-            message: 'يجب فتح تفاصيل المهمة أولاً (GET /tasks/{taskId}) للحصول على قفل المهمة.',
+            message: 'يجب استلام المعاملة أولاً عبر POST /api/workflow/tasks/{taskId}/pickup.',
             error: 'TASK_LOCK_REQUIRED',
             data: null
           }
@@ -2719,6 +2719,23 @@ const swaggerOptions = {
                         name: { type: 'string', example: 'التشيك على المعلومات المدخلة' },
                         config: { type: 'object', description: 'stage_config.config_json للمرحلة الحالية' }
                       }
+                    },
+                    task_lock: {
+                      type: 'object',
+                      description: 'حالة قفل الاستلام — GET عرض فقط؛ POST pickup لإنشاء القفل',
+                      properties: {
+                        is_locked: { type: 'boolean', example: false },
+                        locked_by_me: { type: 'boolean', example: false },
+                        locked_by_user_id: { type: 'integer', nullable: true, example: null },
+                        locked_at: {
+                          type: 'string',
+                          nullable: true,
+                          example: '18/06/2026',
+                          description: 'تاريخ الاستلام (يوم/شهر/سنة)'
+                        },
+                        can_pickup: { type: 'boolean', example: true },
+                        can_release: { type: 'boolean', example: false }
+                      }
                     }
                   }
                 }
@@ -2779,6 +2796,14 @@ const swaggerOptions = {
                   form_name: 'التشيك على المعلومات المدخلة',
                   widgets: []
                 }
+              },
+              task_lock: {
+                is_locked: false,
+                locked_by_me: false,
+                locked_by_user_id: null,
+                locked_at: null,
+                can_pickup: true,
+                can_release: false
               }
             }
           }
