@@ -182,12 +182,15 @@ async function getTransactionController (req, res) {
 
 async function submitTransactionController (req, res) {
   try {
+    const clientMeta = getClientMeta(req)
+
     const result = await submitTransactionByProcess(
       req.params.processId,
       req.body,
       {
         userId: req.user.id,
-        clientMeta: getClientMeta(req)
+        idempotencyKey: clientMeta.idempotencyKey || null,
+        clientMeta
       }
     )
 

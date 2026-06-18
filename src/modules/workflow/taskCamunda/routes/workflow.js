@@ -34,7 +34,11 @@ const {
 
   getEmployeeCertificateController,
 
-  getTaskDetailsController
+  getTaskDetailsController,
+
+  pickupTaskController,
+
+  releaseTaskController
 
 } = require('../controllers/taskController')
 
@@ -696,11 +700,13 @@ router.get(
 
  *   get:
 
- *     summary: Get task details (task lock)
+ *     summary: Get task details (preview — no lock)
 
  *     description: |
 
- *       الخطوة 1 قبل complete أو signing-challenge — يُنشئ/يُجدّد **task lock** على السيرفر (لا يُعاد في الـ response).
+ *       **عرض فقط** — لا يُنشئ قفلاً على المعاملة.
+
+ *       استخدم `POST /api/workflow/tasks/{taskId}/pickup` لاستلام المعاملة قبل complete أو signing-challenge.
 
  *
 
@@ -714,9 +720,7 @@ router.get(
 
  *       - `currentStage`: المرحلة الحالية + `config` (استمارة الإكمال)
 
- *
-
- *       **لا يُعاد:** `taskLock`, `task`, `process`, `transaction` — القفل داخلي فقط.
+ *       - `task_lock`: حالة القفل (`can_pickup`, `can_release`, `locked_by_me`, ...)
 
  *
 
@@ -724,7 +728,7 @@ router.get(
 
  *       **خطأ:** `{ success, status_code, message, error, data: null }`
 
- *     tags: [Workflow]
+ *     tags: [Workflow, Task Lock]
 
  *     security:
 
@@ -807,6 +811,136 @@ router.get(
  */
 
 router.get('/tasks/:taskId', authMiddleware, getTaskDetailsController)
+
+
+
+/**
+
+ * @swagger
+
+ * /api/workflow/tasks/{taskId}/pickup:
+
+ *   post:
+
+ *     summary: استلام المعاملة (task lock)
+
+ *     description: |
+
+ *       يُنشئ قفلاً على المعاملة لصالح الموظف الحالي حتى:
+
+ *       - إكمال المهمة (`POST /tasks/{taskId}/complete`)، أو
+
+ *       - إلغاء الاستلام (`POST /tasks/{taskId}/release`)
+
+ *
+
+ *       القفل **بدون مدة زمنية** — يبقى مفتوحاً حتى complete أو release.
+
+ *     tags: [Workflow, Task Lock]
+
+ *     security:
+
+ *       - bearerAuth: []
+
+ *     parameters:
+
+ *       - in: path
+
+ *         name: taskId
+
+ *         required: true
+
+ *         schema:
+
+ *           type: string
+
+ *     responses:
+
+ *       200:
+
+ *         description: تم استلام المعاملة بنجاح
+
+ *       409:
+
+ *         description: المعاملة مستلمة من موظف آخر — لا تُعاد تفاصيل المعاملة
+
+ *         content:
+
+ *           application/json:
+
+ *             schema:
+
+ *               $ref: '#/components/schemas/ApiErrorResponse'
+
+ *             example:
+
+ *               success: false
+
+ *               status_code: 409
+
+ *               message: هذه المعاملة قد تم استلامها من قبل موظف آخر
+
+ *               error: TASK_LOCKED_BY_ANOTHER
+
+ *               data: null
+
+ */
+
+router.post('/tasks/:taskId/pickup', authMiddleware, pickupTaskController)
+
+
+
+/**
+
+ * @swagger
+
+ * /api/workflow/tasks/{taskId}/release:
+
+ *   post:
+
+ *     summary: إلغاء استلام المعاملة (release task lock)
+
+ *     description: |
+
+ *       يفك القفل عن المعاملة لصاحب القفل فقط.
+
+ *       يُستخدم عند الضغط على «إلغاء الاستلام» في الواجهة.
+
+ *     tags: [Workflow, Task Lock]
+
+ *     security:
+
+ *       - bearerAuth: []
+
+ *     parameters:
+
+ *       - in: path
+
+ *         name: taskId
+
+ *         required: true
+
+ *         schema:
+
+ *           type: string
+
+ *     responses:
+
+ *       200:
+
+ *         description: تم إلغاء الاستلام بنجاح
+
+ *       403:
+
+ *         description: لست صاحب القفل
+
+ *       409:
+
+ *         description: لا يوجد قفل نشط
+
+ */
+
+router.post('/tasks/:taskId/release', authMiddleware, releaseTaskController)
 
 
 

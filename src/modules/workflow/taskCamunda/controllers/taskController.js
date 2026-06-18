@@ -403,6 +403,40 @@ async function getTaskDetailsController (req, res) {
   }
 }
 
+async function pickupTaskController (req, res) {
+  try {
+    const result = await getTaskDetailsService.pickupTask({
+      taskId: req.params.taskId,
+      userId: req.user.id
+    })
+
+    return sendWorkflowSuccess(res, result.data, result.message)
+  } catch (error) {
+    const status = error.code === 'TASK_LOCKED_BY_ANOTHER' ? 409 : 400
+    return handleWorkflowError(res, error, status)
+  }
+}
+
+async function releaseTaskController (req, res) {
+  try {
+    const result = await getTaskDetailsService.releaseTask({
+      taskId: req.params.taskId,
+      userId: req.user.id
+    })
+
+    return sendWorkflowSuccess(res, result.data, result.message)
+  } catch (error) {
+    const status =
+      error.code === 'TASK_LOCK_NOT_OWNER' || error.code === 'FORBIDDEN'
+        ? 403
+        : error.code === 'TASK_LOCK_NOT_HELD'
+          ? 409
+          : 400
+
+    return handleWorkflowError(res, error, status)
+  }
+}
+
 module.exports = {
   startWorkflowController,
   createSigningChallengeController,
@@ -421,5 +455,7 @@ module.exports = {
   getRejectedLastMonthStatsController,
   getActiveStatsController,
   getEmployeeCertificateController,
-  getTaskDetailsController
+  getTaskDetailsController,
+  pickupTaskController,
+  releaseTaskController
 }

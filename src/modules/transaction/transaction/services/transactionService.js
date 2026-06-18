@@ -37,29 +37,39 @@ const {
 } = require('../../../workflow/services/stageSubmissionService')
 
 const operationGuardService = require('../../../../core/security/operationGuardService')
-const employeeTaskRepository = require('../../../workflow/taskCamunda/repositories/employeeTaskRepository')
 const userRepository = require('../../../auth/repositories/userRepository')
+const userRoleAssignmentRepository = require('../../../auth/repositories/userRoleAssignmentRepository')
 const {
   verifySignatureForComplete,
   persistVerifiedSignature,
   buildDraftSubmitTaskId
 } = require('../../../workflow/taskCamunda/services/transactionSigningService')
-
+const { ensureGenesisHash } =
+  require('../../integrityChain/services/integrityChainService')
+const { ensureTransactionIdProcess } =
+  require('../services/transactionIdProcessService')
 const SUBMIT_IDEMPOTENCY_SCOPE = 'submit_transaction'
 
+
+//يعيد مفتاح الرقمي للمعاملة
 function buildSubmitGuardKey (transactionId) {
   return `txn-${transactionId}`
 }
-
+//
 async function userRequiresSubmitSignature (userId) {
   if (!userId) {
     return false
   }
+//يعيد الموظفين الذين يحتاجون لتوقيع رقمي 
+  const assignments =
+    await userRoleAssignmentRepository.findActiveWithOrgDeptRole(userId)
 
-  const roleIds = await employeeTaskRepository.getUserRoleIds(userId)
-  return roleIds.length > 0
+  return assignments.some(item => {
+    const groupKey = item.org_department_role?.camunda_group_key
+    return Boolean(groupKey) && groupKey !== 'CITIZEN'
+  })
 }
-
+//يعيد التوقيع الرقمي من الطلب 
 function extractSubmitSignature (payload = {}) {
   const signature = payload?.signature
 
@@ -79,7 +89,7 @@ function extractSubmitSignature (payload = {}) {
     signature: signatureValue
   }
 }
-
+//يعيد النتيجة المحتوية على المعاملة والتوقيع الرقمي و الايدمبوتنسي 
 function wrapSubmitResult (dto, idempotencyKey, idempotentReplay = false, extra = {}) {
   return {
     ...dto,
@@ -89,11 +99,8 @@ function wrapSubmitResult (dto, idempotencyKey, idempotentReplay = false, extra 
   }
 }
 
-const { ensureGenesisHash } =
-  require('../../integrityChain/services/integrityChainService')
-const { ensureTransactionIdProcess } =
-  require('../services/transactionIdProcessService')
 
+//يعيد المعاملة النشطة
 async function fetchActiveProcess (processId) {
   const numericProcessId = parsePositiveInt(processId, 'معرّف العملية')
   const process = await workflowClient.getProcessById(numericProcessId)
@@ -108,7 +115,7 @@ async function fetchActiveProcess (processId) {
 
   return process
 }
-
+//يعيد المعاملة المكتملة
 function assertSubmitIdentityComplete (transaction) {
   const { error, missing_keys: missingKeys } =
     validateIdentityCompleteForSubmit(transaction)
@@ -119,7 +126,7 @@ function assertSubmitIdentityComplete (transaction) {
     })
   }
 }
-
+//يعيد تحديث الهوية للمعاملة
 async function applyIdentityUpdate (draft, body, userId = null) {
   if (userId != null && draft.user_id !== userId) {
     throw createTransactionError('UNAUTHORIZED')
@@ -141,7 +148,7 @@ async function applyIdentityUpdate (draft, body, userId = null) {
 
   return draft
 }
-
+//يعيد تحديث المعاملة المكتملة 
 async function applyDraftFormUpdate (draft, body, processCode, userId = null) {
   if (userId != null && draft.user_id !== userId) {
     throw createTransactionError('UNAUTHORIZED')
@@ -170,7 +177,7 @@ async function applyDraftFormUpdate (draft, body, processCode, userId = null) {
 
   return draft
 }
-
+//يعيد انشاء المعاملة المسودة 
 async function createDraft ({ userId, processId }) {
   return retryWithBackoff(async () => {
     const process = await fetchActiveProcess(processId)
@@ -195,10 +202,12 @@ async function createDraft ({ userId, processId }) {
     }
   }, { label: 'transaction.createDraft' })
 }
-
+//يعيد انشاء المعاملة المسودة لللعملية المحددة 
 async function ensureDraftForProcess ({ userId, processId }) {
   return retryWithBackoff(async () => {
+    //يعيد العملية النشطة
     const process = await fetchActiveProcess(processId)
+    //يعيد المعاملة مسودة من قبل المستخدم على العملية المحددة
     let draft = await repo.findDraftByCode(userId, process.code)
     let isNew = false
 
@@ -211,7 +220,7 @@ async function ensureDraftForProcess ({ userId, processId }) {
     }
 
     const user = await userRepository.findById(userId)
-
+//يعيد المستخدم الموجود او غير المفعل 
     if (!user || !user.is_active) {
       throw createTransactionError('UNAUTHORIZED')
     }
@@ -402,9 +411,23 @@ async function submitTransactionByProcess (
     throw createTransactionError('CITIZEN_SIGNATURE_NOT_ALLOWED')
   }
 
-  const { draft } = await retryWithBackoff(async () => {
+  const { draft, replayResult } = await retryWithBackoff(async () => {
     // 1) التأكد أن العملية موجودة ونشطة
     const process = await fetchActiveProcess(processId)
+
+    // 1.1) idempotency على مستوى process:
+    // إذا كان لدى المستخدم معاملة in-flight لنفس العملية، نعيدها مباشرة
+    // بدل إنشاء draft جديد وتكرار التقديم.
+    const existingInFlight = await repo.findInFlightByUserAndCode(userId, process.code)
+    if (existingInFlight) {
+      return {
+        replayResult: wrapSubmitResult(
+          toDTO(existingInFlight),
+          buildSubmitGuardKey(existingInFlight.id),
+          true
+        )
+      }
+    }
 
     // 2) إيجاد/إنشاء المسودة لهذا المستخدم على هذه العملية
     const { draft, isNew } = await resolveSubmitDraftForProcess({ userId, process })
@@ -416,8 +439,12 @@ async function submitTransactionByProcess (
       await applyIdentityUpdate(draft, identityBody, userId)
     }
 
-    return { draft, isNew }
+    return { draft, isNew, replayResult: null }
   }, { label: 'transaction.submitTransactionByProcess' })
+
+  if (replayResult) {
+    return replayResult
+  }
 
   // 4) تمرير الـ form payload (بدون حقول الهوية) للدالة الأساسية للتقديم
   const formPayload = stripIdentityFromBody(body)

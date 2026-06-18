@@ -106,9 +106,11 @@ const WORKFLOW_ERROR_CATALOG = {
 }
 
 const CONFLICT_ERROR_MESSAGES = {
-  TASK_LOCKED_BY_ANOTHER: 'المهمة مقفلة من موظف آخر. افتح GET /tasks/{taskId} للحصول على القفل.',
-  TASK_LOCK_REQUIRED: 'يجب فتح تفاصيل المهمة أولاً (GET /tasks/{taskId}) للحصول على قفل المهمة.',
-  TASK_LOCK_EXPIRED: 'انتهت صلاحية قفل المعاملة (ربع ساعة). أعد فتح GET /tasks/{taskId} لاستلامها.',
+  TASK_LOCKED_BY_ANOTHER: 'هذه المعاملة قد تم استلامها من قبل موظف آخر',
+  TASK_LOCK_REQUIRED: 'يجب استلام المعاملة أولاً عبر POST /api/workflow/tasks/{taskId}/pickup.',
+  TASK_LOCK_EXPIRED: 'انتهت صلاحية قفل المعاملة. استلمها مجدداً عبر POST /api/workflow/tasks/{taskId}/pickup.',
+  TASK_LOCK_NOT_HELD: 'لا يوجد قفل نشط على هذه المهمة.',
+  TASK_LOCK_NOT_OWNER: 'لا يمكنك إلغاء استلام معاملة مقفولة لموظف آخر.',
   VERSION_CONFLICT: 'تعارض في إصدار المعاملة — أعد تحميل البيانات وأرسل expected_version الصحيح.',
   DUPLICATE_IN_FLIGHT: WORKFLOW_ERROR_CATALOG['Duplicate request is already in progress'].message,
   IDEMPOTENT_REPLAY: 'تمت معالجة هذا الطلب مسبقاً (idempotent replay).'
@@ -226,6 +228,7 @@ function resolveWorkflowStatusCode (error, defaultStatus = HTTP_STATUS.BAD_REQUE
     'TASK_LOCKED_BY_ANOTHER',
     'TASK_LOCK_REQUIRED',
     'TASK_LOCK_EXPIRED',
+    'TASK_LOCK_NOT_HELD',
     'VERSION_CONFLICT',
     'DUPLICATE_IN_FLIGHT',
     'IDEMPOTENT_REPLAY'
@@ -233,6 +236,10 @@ function resolveWorkflowStatusCode (error, defaultStatus = HTTP_STATUS.BAD_REQUE
 
   if (conflictCodes.includes(normalized.code)) {
     return HTTP_STATUS.CONFLICT
+  }
+
+  if (normalized.code === 'TASK_LOCK_NOT_OWNER') {
+    return HTTP_STATUS.FORBIDDEN
   }
 
   return resolveHttpStatusFromError(normalized, defaultStatus)
