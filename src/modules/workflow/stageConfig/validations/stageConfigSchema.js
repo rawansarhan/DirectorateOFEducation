@@ -134,20 +134,36 @@ const stageActionSchema = Joi.object({
       title: Joi.string().trim().max(255).allow('', null).optional(),
       subject: Joi.string().trim().max(255).allow('', null).optional(),
       type: Joi.string().trim().max(100).default('workflow_notification'),
-      to: Joi.number().integer().positive().optional(),
+      // المُستلِم عبر الدور: organization_id + department_id + role_id
+      organization_id: Joi.number().integer().positive().optional().messages({
+        'number.base': 'SEND_NOTIFICATION payload.organization_id يجب أن يكون رقماً',
+        'number.positive': 'SEND_NOTIFICATION payload.organization_id يجب أن يكون رقماً موجباً'
+      }),
+      department_id: Joi.number().integer().positive().optional().messages({
+        'number.base': 'SEND_NOTIFICATION payload.department_id يجب أن يكون رقماً',
+        'number.positive': 'SEND_NOTIFICATION payload.department_id يجب أن يكون رقماً موجباً'
+      }),
+      role_id: Joi.number().integer().positive().optional().messages({
+        'number.base': 'SEND_NOTIFICATION payload.role_id يجب أن يكون رقماً',
+        'number.positive': 'SEND_NOTIFICATION payload.role_id يجب أن يكون رقماً موجباً'
+      }),
+      // يُحسب لاحقاً من (organization_id, department_id, role_id) في الخدمة
       to_organization_department_roles_id: Joi.number().integer().positive().optional(),
       to_camunda_group_key: Joi.string().trim().max(64).optional(),
       to_organization_department_roles_camunda_group_key: Joi.string().trim().max(64).optional()
     })
       .or(
-        'to',
+        'role_id',
         'to_organization_department_roles_id',
         'to_camunda_group_key',
         'to_organization_department_roles_camunda_group_key'
       )
+      .and('organization_id', 'department_id', 'role_id')
       .messages({
         'object.missing':
-          'SEND_NOTIFICATION يحتاج to أو to_camunda_group_key (مثل AUTH لصاحب المعاملة)'
+          'SEND_NOTIFICATION يحتاج إما (organization_id, department_id, role_id) أو to_camunda_group_key (مثل AUTH لصاحب المعاملة)',
+        'object.and':
+          'SEND_NOTIFICATION: عند تحديد المُستلِم بالدور يجب إرسال organization_id و department_id و role_id معاً'
       }),
     otherwise: Joi.object().default({})
   }).default({})
