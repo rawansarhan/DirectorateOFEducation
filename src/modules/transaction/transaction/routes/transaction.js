@@ -11,6 +11,7 @@ const {
   getMyTransactionsController,
   getMyTransactionCountsController,
   getTransactionController,
+  getFirstStageContentController,
   submitTransactionController
 } = require('../controllers/transactionController')
 
@@ -521,11 +522,17 @@ router.get(
  *   get:
  *     summary: بيانات الشهادة للطباعة (transaction_history + QR)
  *     description: |
- *       يجمع كل ما يحتاجه الفرونت لبناء PDF:
- *       transaction_history (id_process + applicant + stages + templates.generated_pdf_path), integrity_chain.qr_payload, final_document
- *       **للمواطن (مالك المعاملة) فقط** — للموظف استخدم GET /api/workflow/transactions/{transactionId}/certificate
- *       **متاح فقط للمعاملات completed**
- *     tags: [Transaction]
+ *       **الترتيب المقترح:** 1) هذا الـ API → 2) الفرونت يبني PDF → 3) POST final-document
+ *
+ *       يجمع كل ما يحتاجه الفرونت:
+ *       - `transaction_history` (id_process + applicant + stages + templates.generated_pdf_path)
+ *       - `integrity_chain.qr_payload` + verify_url
+ *       - `final_document` إن وُجدت
+ *
+ *       **Auth:** Bearer — مالك المعاملة (المواطن) فقط
+ *       **الحالة:** completed فقط
+ *       **للموظف:** GET /api/workflow/transactions/{transactionId}/certificate
+ *     tags: [Certificate & Integrity Chain]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -534,9 +541,30 @@ router.get(
  *         required: true
  *         schema:
  *           type: integer
+ *           minimum: 1
+ *         example: 12
  *     responses:
  *       200:
- *         description: بيانات الشهادة
+ *         description: تم جلب بيانات الشهادة بنجاح
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/ApiSuccessResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       $ref: '#/components/schemas/CertificateBundleResponse'
+ *       400:
+ *         description: المعاملة ليست completed
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ApiErrorResponse'
+ *       403:
+ *         description: لا تملك صلاحية الوصول
+ *       404:
+ *         description: المعاملة غير موجودة
  */
 router.get(
   '/:transactionId/certificate',
@@ -549,7 +577,11 @@ router.get(
  * /api/transaction/{transactionId}/final-document:
  *   post:
  *     summary: رفع وحفظ PDF النهائي بعد توليده من الفرونت
- *     tags: [Transaction]
+ *     description: |
+ *       يرفع PDF الشهادة بعد أن يولّده الفرونت من بيانات GET /certificate.
+ *       **Auth:** Bearer — مالك المعاملة
+ *       **الحالة:** completed فقط
+ *     tags: [Certificate & Integrity Chain]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -558,6 +590,8 @@ router.get(
  *         required: true
  *         schema:
  *           type: integer
+ *           minimum: 1
+ *         example: 12
  *     requestBody:
  *       required: true
  *       content:
@@ -569,15 +603,38 @@ router.get(
  *               file:
  *                 type: string
  *                 format: binary
+ *                 description: ملف PDF النهائي (إلزامي)
  *               qr_payload:
  *                 type: string
- *                 description: JSON string — snapshot QR عند الطباعة (اختياري)
+ *                 description: JSON string — snapshot QR عند الطباعة (اختياري؛ إن تُرك فارغاً يُؤخذ من integrity chain)
+ *                 example: '{"v":1,"tx":12,"genesis":"abc","head":"def","links":2}'
  *     responses:
  *       200:
- *         description: تم الحفظ
+ *         description: تم حفظ الوثيقة النهائية بنجاح
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/ApiSuccessResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       $ref: '#/components/schemas/FinalDocumentRecord'
+ *       400:
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ApiErrorResponse'
+ *       403:
+ *         description: لا تملك صلاحية الوصول
+ *       404:
+ *         description: المعاملة غير موجودة
  *   get:
  *     summary: جلب الوثيقة النهائية المحفوظة
- *     tags: [Transaction]
+ *     description: |
+ *       يرجع سجل PDF النهائي المحفوظ سابقاً عبر POST.
+ *       **Auth:** Bearer — مالك المعاملة
+ *     tags: [Certificate & Integrity Chain]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -586,9 +643,26 @@ router.get(
  *         required: true
  *         schema:
  *           type: integer
+ *           minimum: 1
+ *         example: 12
  *     responses:
  *       200:
- *         description: مسار PDF النهائي
+ *         description: تم جلب الوثيقة النهائية بنجاح
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/ApiSuccessResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       $ref: '#/components/schemas/FinalDocumentRecord'
+ *       404:
+ *         description: لا توجد وثيقة نهائية محفوظة
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ApiErrorResponse'
  */
 router.post(
   '/:transactionId/final-document',
@@ -608,8 +682,10 @@ router.get(
  * /api/transaction/{transactionId}/integrity-chain/verify:
  *   get:
  *     summary: Verify transaction integrity chain (public — for QR scan)
- *     description: تحقق عام من سلسلة التواقيع. لا يتطلب تسجيل دخول.
- *     tags: [Transaction]
+ *     description: |
+ *       تحقق عام من سلسلة التواقيع — **لا يتطلب Bearer token**.
+ *       يُستخدم عند مسح QR على الشهادة.
+ *     tags: [Certificate & Integrity Chain]
  *     parameters:
  *       - in: path
  *         name: transactionId
@@ -617,6 +693,7 @@ router.get(
  *         schema:
  *           type: integer
  *           minimum: 1
+ *         example: 12
  *       - in: query
  *         name: head_hash
  *         schema:
@@ -629,7 +706,7 @@ router.get(
  *         description: اختياري — genesis hash من QR للمقارنة
  *     responses:
  *       200:
- *         description: نتيجة التحقق
+ *         description: نتيجة التحقق (valid=true/false)
  *         content:
  *           application/json:
  *             schema:
@@ -651,7 +728,9 @@ router.get(
  *               $ref: '#/components/schemas/ApiErrorResponse'
  *   post:
  *     summary: Verify transaction integrity chain (public — POST body)
- *     tags: [Transaction]
+ *     description: |
+ *       نفس GET verify — **بدون auth** — مع إرسال head_hash/genesis_hash في body.
+ *     tags: [Certificate & Integrity Chain]
  *     parameters:
  *       - in: path
  *         name: transactionId
@@ -659,19 +738,16 @@ router.get(
  *         schema:
  *           type: integer
  *           minimum: 1
+ *         example: 12
  *     requestBody:
  *       required: false
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             properties:
- *               head_hash:
- *                 type: string
- *               genesis_hash:
- *                 type: string
+ *             $ref: '#/components/schemas/IntegrityChainVerifyRequest'
  *     responses:
  *       200:
+ *         description: نتيجة التحقق
  *         content:
  *           application/json:
  *             schema:
@@ -681,6 +757,11 @@ router.get(
  *                   properties:
  *                     data:
  *                       $ref: '#/components/schemas/IntegrityChainVerifyResult'
+ *       404:
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ApiErrorResponse'
  */
 router.get(
   '/:transactionId/integrity-chain/verify',
@@ -697,8 +778,10 @@ router.post(
  * /api/transaction/{transactionId}/integrity-chain:
  *   get:
  *     summary: Get transaction integrity chain (signature ledger + QR payload)
- *     description: يعرض سلسلة التواقيع الرقمية وبيانات QR للمعاملة. يتطلب Bearer token وملكية المعاملة.
- *     tags: [Transaction]
+ *     description: |
+ *       يعرض سلسلة التواقيع الرقمية الكاملة + qr_payload.
+ *       **Auth:** Bearer — مالك المعاملة
+ *     tags: [Certificate & Integrity Chain]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -708,6 +791,7 @@ router.post(
  *         schema:
  *           type: integer
  *           minimum: 1
+ *         example: 12
  *     responses:
  *       200:
  *         description: تم جلب سلسلة النزاهة بنجاح
@@ -737,6 +821,39 @@ router.get(
   '/:transactionId/integrity-chain',
   authMiddleware,
   getIntegrityChainController
+)
+
+/**
+ * @swagger
+ * /api/transaction/{transactionId}/first-stage:
+ *   get:
+ *     summary: عرض طلب مقدم الطلب (مرحلة AUTH الأولى)
+ *     description: |
+ *       يعرض محتوى مرحلة التقديم (AUTH) كما سُجّل في transaction.data.
+ *       يُرجع البيانات فقط إذا completed_by يساوي user_id المستخدم من التوكن.
+ *       للمالك فقط (transaction.user_id).
+ *     tags: [Transaction]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: transactionId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *     responses:
+ *       200:
+ *         description: تم جلب محتوى المرحلة الأولى
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: المعاملة غير موجودة أو لا تملك صلاحية الوصول
+ */
+router.get(
+  '/:transactionId/first-stage',
+  authMiddleware,
+  getFirstStageContentController
 )
 
 /**

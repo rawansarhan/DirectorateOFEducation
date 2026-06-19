@@ -37,6 +37,18 @@ function toUnapprovedOrInactiveProcessItem (process) {
   }
 }
 
+function toProcessMissingStageConfigItem (process) {
+  return {
+    id: process.id,
+    name: process.name,
+    status: process.approval_status,
+    is_approved: process.approval_status === 'APPROVED',
+    is_active: Boolean(process.is_active),
+    stages_total_count: Number(process.stages_total_count || 0),
+    stages_missing_config_count: Number(process.stages_missing_config_count || 0)
+  }
+}
+
 function toAdminProcessByTypeItem (process) {
   return {
     process_id: process.id,
@@ -109,6 +121,7 @@ function processDetailsMapper(process) {
 module.exports = {
   toAuthProcessResponse,
   toUnapprovedOrInactiveProcessItem,
+  toProcessMissingStageConfigItem,
   toAdminProcessByTypeItem,
   processDetailsMapper
 }

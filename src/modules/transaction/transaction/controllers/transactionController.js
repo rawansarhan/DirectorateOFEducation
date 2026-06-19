@@ -10,6 +10,7 @@ const {
   MESSAGES
 } = require('../services/transactionService')
 const { getMyTransactions, getMyTransactionCounts } = require('../services/userTransactionsService')
+const { getFirstStageContentByTransactionId } = require('../services/firstStageContentService')
 const {
   successResponse,
   errorResponse
@@ -180,6 +181,22 @@ async function getTransactionController (req, res) {
   }
 }
 
+async function getFirstStageContentController (req, res) {
+  try {
+    const result = await getFirstStageContentByTransactionId(
+      req.params.transactionId,
+      req.user.id
+    )
+
+    return successResponse(res, {
+      message: MESSAGES.FIRST_STAGE_RETRIEVED,
+      data: result
+    })
+  } catch (err) {
+    return handleTransactionError(res, err)
+  }
+}
+
 async function submitTransactionController (req, res) {
   try {
     const clientMeta = getClientMeta(req)
@@ -212,5 +229,6 @@ module.exports = {
   getMyTransactionsController,
   getMyTransactionCountsController,
   getTransactionController,
+  getFirstStageContentController,
   submitTransactionController
 }

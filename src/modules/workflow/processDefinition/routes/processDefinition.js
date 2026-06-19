@@ -7,6 +7,7 @@ const {
   createProcessDefinition,
   getAuthProcessesController,
   getUnapprovedOrInactiveProcessesController,
+  getProcessesWithMissingStageConfigController,
   getProcessesByTypeForAdminController,
   getProcessDetails,
   reviewProcessController,
@@ -81,8 +82,12 @@ router.post(
  *   get:
  *     summary: عمليات غير موافق عليها أو غير نشطة => (المسؤول التقني)
  *     description: |
- *       يعرض process definitions حيث approval_status ≠ APPROVED أو is_active = false (أو الاثنان).
- *       الحقول: id, name, status (approval_status), is_approved, is_active
+ *       يعرض process definitions حيث:
+ *       - `is_approved = false` (approval_status ≠ APPROVED) **أو** `is_active = false`
+ *       - **و** جميع مراحل العملية لها `stage_config` (إن وُجدت مرحلة واحدة بدون config تُستبعد)
+ *       - **و** يوجد مرحلة واحدة على الأقل
+ *
+ *       للعمليات التي تحتاج إعداد stage_config: GET /admin/missing-stage-config
  *     tags: [Process Definition]
  *     security:
  *       - bearerAuth: []
@@ -111,6 +116,47 @@ router.get(
   authMiddleware,
   authorize('PROCESS_VIEW'),
   getUnapprovedOrInactiveProcessesController
+)
+
+/**
+ * @swagger
+ * /api/process_definitions/admin/missing-stage-config:
+ *   get:
+ *     summary: عمليات بمراحل بدون stage_config => (المسؤول التقني)
+ *     description: |
+ *       يعرض process definitions حيث:
+ *       - لا توجد مراحل أصلاً، **أو**
+ *       - توجد مرحلة واحدة على الأقل بدون `stage_config`
+ *
+ *       الحقول الإضافية: stages_total_count, stages_missing_config_count
+ *     tags: [Process Definition]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 70
+ *           default: 20
+ *     responses:
+ *       200:
+ *         description: تم الجلب بنجاح
+ *       403:
+ *         description: PROCESS_VIEW مطلوب
+ */
+router.get(
+  '/admin/missing-stage-config',
+  authMiddleware,
+  authorize('PROCESS_VIEW'),
+  getProcessesWithMissingStageConfigController
 )
 
 /**

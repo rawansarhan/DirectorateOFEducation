@@ -59,6 +59,15 @@ class StageRepository {
       order: [['id', 'ASC']]
     })
   }
+
+  async findFirstByProcessId (processId) {
+    return Stage.findOne({
+      where: {
+        process_definition_id: processId
+      },
+      order: [['id', 'ASC']]
+    })
+  }
 }
 
 module.exports = new StageRepository()

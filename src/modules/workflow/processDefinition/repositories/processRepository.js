@@ -5,7 +5,9 @@ const {
   StageConfig,
   TypeTrans
 } = require('../../../../entities')
-const { Op } = require('sequelize')
+const { Op, QueryTypes } = require('sequelize')
+
+const db = require('../../../../entities')
 
 class ProcessRepository {
 
@@ -98,16 +100,75 @@ class ProcessRepository {
   }
 
   async findUnapprovedOrInactiveProcesses () {
-    return ProcessDefinition.findAll({
-      where: {
-        [Op.or]: [
-          { approval_status: { [Op.ne]: 'APPROVED' } },
-          { is_active: false }
-        ]
-      },
-      attributes: ['id', 'name', 'approval_status', 'is_active'],
-      order: [['updated_at', 'DESC']]
-    })
+    return db.sequelize.query(
+      `
+      SELECT
+        pd.id,
+        pd.name,
+        pd.approval_status,
+        pd.is_active,
+        pd.updated_at
+      FROM process_definitions pd
+      WHERE (
+        pd.approval_status != 'APPROVED'
+        OR pd.is_active = false
+      )
+      AND EXISTS (
+        SELECT 1
+        FROM stages s
+        WHERE s.process_definition_id = pd.id
+      )
+      AND NOT EXISTS (
+        SELECT 1
+        FROM stages s
+        LEFT JOIN stage_configs sc ON sc.stage_id = s.id
+        WHERE s.process_definition_id = pd.id
+          AND sc.id IS NULL
+      )
+      ORDER BY pd.updated_at DESC
+      `,
+      { type: QueryTypes.SELECT }
+    )
+  }
+
+  async findProcessesWithMissingStageConfig () {
+    return db.sequelize.query(
+      `
+      SELECT
+        pd.id,
+        pd.name,
+        pd.approval_status,
+        pd.is_active,
+        pd.updated_at,
+        (
+          SELECT COUNT(*)::int
+          FROM stages s
+          WHERE s.process_definition_id = pd.id
+        ) AS stages_total_count,
+        (
+          SELECT COUNT(*)::int
+          FROM stages s
+          LEFT JOIN stage_configs sc ON sc.stage_id = s.id
+          WHERE s.process_definition_id = pd.id
+            AND sc.id IS NULL
+        ) AS stages_missing_config_count
+      FROM process_definitions pd
+      WHERE NOT EXISTS (
+        SELECT 1
+        FROM stages s
+        WHERE s.process_definition_id = pd.id
+      )
+      OR EXISTS (
+        SELECT 1
+        FROM stages s
+        LEFT JOIN stage_configs sc ON sc.stage_id = s.id
+        WHERE s.process_definition_id = pd.id
+          AND sc.id IS NULL
+      )
+      ORDER BY pd.updated_at DESC
+      `,
+      { type: QueryTypes.SELECT }
+    )
   }
 
   _buildProcessesByTypeAdminQuery ({ typeTransId = null, allTypes = false } = {}) {

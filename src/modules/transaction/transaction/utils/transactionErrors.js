@@ -29,7 +29,10 @@ const MESSAGES = {
   TRANSACTION_RETRIEVED: 'تم جلب المعاملة بنجاح',
   TRANSACTION_SUBMITTED: 'تم تقديم المعاملة بنجاح',
   TRANSACTIONS_LIST_RETRIEVED: 'تم جلب معاملاتك بنجاح',
-  TRANSACTION_COUNTS_RETRIEVED: 'تم جلب أعداد معاملاتك بنجاح'
+  TRANSACTION_COUNTS_RETRIEVED: 'تم جلب أعداد معاملاتك بنجاح',
+  FIRST_STAGE_RETRIEVED: 'تم جلب محتوى المرحلة الأولى بنجاح',
+  FIRST_STAGE_NOT_FOUND: 'لا توجد مرحلة أولى لهذه العملية',
+  FIRST_STAGE_CONTENT_NOT_FOUND: 'لا يوجد محتوى محفوظ للمرحلة الأولى'
 }
 
 function createTransactionError (code, detail, meta = null) {
@@ -95,6 +98,8 @@ function httpStatusForError (error) {
     error?.code === 'PROCESS_NOT_FOUND' ||
     error?.code === 'DRAFT_NOT_FOUND' ||
     error?.code === 'TRANSACTION_NOT_FOUND' ||
+    error?.code === 'FIRST_STAGE_NOT_FOUND' ||
+    error?.code === 'FIRST_STAGE_CONTENT_NOT_FOUND' ||
     error?.code === 'NOT_FOUND' ||
     msg.includes('not found')
   ) {

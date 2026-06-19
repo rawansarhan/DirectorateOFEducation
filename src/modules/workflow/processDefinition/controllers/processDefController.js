@@ -13,6 +13,7 @@ const {
   setupProcessAfterCreation,
   getAuthProcesses,
   getUnapprovedOrInactiveProcesses,
+  getProcessesWithMissingStageConfig,
   getProcessesByTypeForAdmin,
   getProcessDetailsWithValidation,
   reviewProcess,
@@ -106,6 +107,17 @@ const getUnapprovedOrInactiveProcessesController = asyncHandler(async (req, res)
   }
 })
 
+const getProcessesWithMissingStageConfigController = asyncHandler(async (req, res) => {
+  try {
+    const { page, limit, offset } = parsePaginationQuery(req.query)
+    const result = await getProcessesWithMissingStageConfig({ page, limit, offset })
+
+    return ApiResponder.okResponse(res, result.data, result.message)
+  } catch (err) {
+    return ApiResponder.badRequestResponse(res, err.message)
+  }
+})
+
 const getProcessesByTypeForAdminController = asyncHandler(async (req, res) => {
   try {
     const { page, limit, offset } = parsePaginationQuery(req.query)
@@ -169,6 +181,7 @@ module.exports = {
   createProcessDefinition,
   getAuthProcessesController,
   getUnapprovedOrInactiveProcessesController,
+  getProcessesWithMissingStageConfigController,
   getProcessesByTypeForAdminController,
   getProcessDetails,
   reviewProcessController,

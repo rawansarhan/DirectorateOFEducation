@@ -29,6 +29,10 @@ const swaggerOptions = {
       { name: 'Workflow', description: 'إدارة سير العمل مع Camunda (Workflow Tasks)' },
       { name: 'Transaction', description: 'المعاملات — مسودات، تقديم، وسلسلة التواقيع (Transactions)' },
       {
+        name: 'Certificate & Integrity Chain',
+        description: 'الشهادة، الوثيقة النهائية، وسلسلة النزاهة (QR) — Certificate, Final Document, Integrity Chain'
+      },
+      {
         name: 'TypeProcess',
         description: 'أنواع العمليات (Type Process)'
       },
@@ -2181,6 +2185,125 @@ const swaggerOptions = {
               items: { $ref: '#/components/schemas/IntegrityChainLink' }
             },
             last_verification: { $ref: '#/components/schemas/IntegrityChainVerifyResult' }
+          }
+        },
+
+        CertificateTransactionHistoryData: {
+          type: 'object',
+          description: 'applicant + stages[] — نفس transaction_history في task details',
+          properties: {
+            applicant: {
+              type: 'object',
+              properties: {
+                first_name_employee: { type: 'string' },
+                father_name_employee: { type: 'string' },
+                last_name_employee: { type: 'string' },
+                national_id_employee: { type: 'string' },
+                phone_number_employee: { type: 'string' }
+              }
+            },
+            stages: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  stage_name: { type: 'string', nullable: true },
+                  form_id: { type: 'string' },
+                  form_name: { type: 'string' },
+                  widgets: {
+                    type: 'array',
+                    items: { $ref: '#/components/schemas/TransactionDraftWidgetWithValue' }
+                  },
+                  templates: {
+                    type: 'array',
+                    items: { $ref: '#/components/schemas/CompleteTaskTemplateResponseItem' }
+                  },
+                  note: { type: 'string' },
+                  decision: { type: 'string', nullable: true },
+                  completed_by: { type: 'integer', nullable: true },
+                  completed_at: { type: 'string', nullable: true }
+                }
+              }
+            }
+          }
+        },
+
+        CertificateTransactionHistoryBlock: {
+          type: 'object',
+          properties: {
+            id_process: { type: 'string', nullable: true, example: 'STUTR-2026-001' },
+            priority: { type: 'integer', enum: [1, 2, 3], example: 1 },
+            data: { $ref: '#/components/schemas/CertificateTransactionHistoryData' }
+          }
+        },
+
+        CertificateIntegrityChainSummary: {
+          type: 'object',
+          properties: {
+            genesis_hash: { type: 'string' },
+            head_hash: { type: 'string', nullable: true },
+            chain_status: {
+              type: 'string',
+              enum: ['incomplete', 'valid', 'forged'],
+              example: 'valid'
+            },
+            total_links: { type: 'integer', example: 2 },
+            qr_payload: { $ref: '#/components/schemas/IntegrityChainQrPayload' },
+            verify_url: {
+              type: 'string',
+              nullable: true,
+              example: 'http://localhost:4000/api/transaction/12/integrity-chain/verify'
+            }
+          }
+        },
+
+        FinalDocumentRecord: {
+          type: 'object',
+          nullable: true,
+          properties: {
+            id: { type: 'integer', example: 1 },
+            file_path: { type: 'string', example: '/uploads/final-txn-12.pdf' },
+            file_url: { type: 'string', example: '/uploads/final-txn-12.pdf' },
+            original_name: { type: 'string', example: 'certificate-12.pdf' },
+            mime_type: { type: 'string', example: 'application/pdf' },
+            file_size_bytes: { type: 'integer', nullable: true, example: 245760 },
+            generated_at: { type: 'string', format: 'date-time' },
+            qr_payload_snapshot: {
+              oneOf: [
+                { $ref: '#/components/schemas/IntegrityChainQrPayload' },
+                { type: 'null' }
+              ]
+            }
+          }
+        },
+
+        CertificateBundleResponse: {
+          type: 'object',
+          description: 'بيانات الشهادة للطباعة — للفرونت لبناء PDF + QR',
+          properties: {
+            transaction_id: { type: 'integer', example: 12 },
+            status: { type: 'string', example: 'completed' },
+            process_name: { type: 'string', nullable: true, example: 'معاملة إجازة' },
+            process_priority: { type: 'integer', enum: [1, 2, 3], example: 1 },
+            submitted_at: { type: 'string', example: '12/06/2026' },
+            completed_at: { type: 'string', example: '18/06/2026' },
+            transaction_history: { $ref: '#/components/schemas/CertificateTransactionHistoryBlock' },
+            integrity_chain: { $ref: '#/components/schemas/CertificateIntegrityChainSummary' },
+            final_document: { $ref: '#/components/schemas/FinalDocumentRecord' }
+          }
+        },
+
+        IntegrityChainVerifyRequest: {
+          type: 'object',
+          properties: {
+            head_hash: {
+              type: 'string',
+              description: 'اختياري — head hash من QR للمقارنة'
+            },
+            genesis_hash: {
+              type: 'string',
+              description: 'اختياري — genesis hash من QR للمقارنة'
+            }
           }
         },
 

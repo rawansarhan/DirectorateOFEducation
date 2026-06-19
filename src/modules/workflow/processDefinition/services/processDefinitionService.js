@@ -7,6 +7,7 @@ const organizationClient =
 const {
   toAuthProcessResponse,
   toUnapprovedOrInactiveProcessItem,
+  toProcessMissingStageConfigItem,
   toAdminProcessByTypeItem,
   processDetailsMapper
 } = require('../mappers/processMapper')
@@ -265,7 +266,22 @@ async function getUnapprovedOrInactiveProcesses (paginationInput) {
   const { items: pageItems, pagination } = paginateArray(items, paginationInput)
 
   return {
-    message: 'تم جلب العمليات غير الموافق عليها أو غير النشطة',
+    message:
+      'تم جلب العمليات غير الموافق عليها أو غير النشطة (جميع مراحلها لها stage_config)',
+    data: {
+      items: pageItems,
+      pagination
+    }
+  }
+}
+
+async function getProcessesWithMissingStageConfig (paginationInput) {
+  const rows = await processRepository.findProcessesWithMissingStageConfig()
+  const items = rows.map(toProcessMissingStageConfigItem)
+  const { items: pageItems, pagination } = paginateArray(items, paginationInput)
+
+  return {
+    message: 'تم جلب العمليات التي تحتوي مراحل بدون stage_config',
     data: {
       items: pageItems,
       pagination
@@ -440,6 +456,7 @@ module.exports = {
   createProcessDefinitionService,
   getAuthProcesses,
   getUnapprovedOrInactiveProcesses,
+  getProcessesWithMissingStageConfig,
   getProcessesByTypeForAdmin,
   getProcessDetailsWithValidation,
   reviewProcess
