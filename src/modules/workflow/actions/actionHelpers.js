@@ -3,24 +3,84 @@
 const Joi = require('joi')
 
 const sendNotificationPayloadSchema = Joi.object({
-  message: Joi.string().trim().min(1).max(2000).required(),
-  title: Joi.string().trim().max(255).allow('', null).optional(),
+  title: Joi.string().trim().min(1).max(255).required().messages({
+    'any.required': 'SEND_NOTIFICATION payload.title مطلوب',
+    'string.empty': 'SEND_NOTIFICATION payload.title مطلوب ولا يجوز أن يكون فارغاً',
+    'string.base': 'SEND_NOTIFICATION payload.title مطلوب ويجب أن يكون نصاً'
+  }),
+  message: Joi.string().trim().min(1).max(2000).required().messages({
+    'any.required': 'SEND_NOTIFICATION payload.message مطلوب',
+    'string.empty': 'SEND_NOTIFICATION payload.message مطلوب ولا يجوز أن يكون فارغاً',
+    'string.base': 'SEND_NOTIFICATION payload.message مطلوب ويجب أن يكون نصاً'
+  }),
   subject: Joi.string().trim().max(255).allow('', null).optional(),
-  type: Joi.string().trim().max(100).default('workflow_notification'),
-  to: Joi.number().integer().positive().optional(),
-  to_organization_department_roles_id: Joi.number().integer().positive().optional(),
-  to_camunda_group_key: Joi.string().trim().max(64).optional(),
-  to_organization_department_roles_camunda_group_key: Joi.string().trim().max(64).optional()
+  type: Joi.string().trim().min(1).max(100).default('workflow_notification').messages({
+    'string.empty': 'SEND_NOTIFICATION payload.type لا يجوز أن يكون فارغاً',
+    'string.base': 'SEND_NOTIFICATION payload.type يجب أن يكون نصاً'
+  }),
+  // المُستلِم عبر الدور: organization_id + department_id + role_id (الثلاثة معاً)
+  organization_id: Joi.number().integer().positive().allow(null).optional().messages({
+    'number.base': 'SEND_NOTIFICATION payload.organization_id يجب أن يكون رقماً',
+    'number.positive': 'SEND_NOTIFICATION payload.organization_id يجب أن يكون رقماً موجباً'
+  }),
+  department_id: Joi.number().integer().positive().allow(null).optional().messages({
+    'number.base': 'SEND_NOTIFICATION payload.department_id يجب أن يكون رقماً',
+    'number.positive': 'SEND_NOTIFICATION payload.department_id يجب أن يكون رقماً موجباً'
+  }),
+  role_id: Joi.number().integer().positive().allow(null).optional().messages({
+    'number.base': 'SEND_NOTIFICATION payload.role_id يجب أن يكون رقماً',
+    'number.positive': 'SEND_NOTIFICATION payload.role_id يجب أن يكون رقماً موجباً'
+  }),
+  // يُحسب لاحقاً من (organization_id, department_id, role_id) في الخدمة
+  to_organization_department_roles_id: Joi.number().integer().positive().allow(null).optional().messages({
+    'number.base': 'SEND_NOTIFICATION payload.to_organization_department_roles_id يجب أن يكون رقماً',
+    'number.positive': 'SEND_NOTIFICATION payload.to_organization_department_roles_id يجب أن يكون رقماً موجباً'
+  }),
+  to_camunda_group_key: Joi.string().trim().max(64).allow(null).optional(),
+  to_organization_department_roles_camunda_group_key: Joi.string().trim().max(64).allow(null).optional().messages({
+    'string.base': 'SEND_NOTIFICATION payload.to_camunda_group_key يجب أن يكون نصاً'
+  })
 })
-  .or(
-    'to',
-    'to_organization_department_roles_id',
-    'to_camunda_group_key',
-    'to_organization_department_roles_camunda_group_key'
-  )
+  // لازم يكون فيه مُستلِم: إما (organization_id, department_id, role_id) معاً أو to_camunda_group_key (مثل AUTH).
+  // نستخدم custom لأن .or() في Joi يعتبر القيمة null كأنها موجودة، بينما normalizeActionPayload
+  // يملأ الحقول الفارغة بـ null.
+  .custom((value, helpers) => {
+    const hasRoleParts =
+      value.organization_id != null ||
+      value.department_id != null ||
+      value.role_id != null
+
+    const hasGroupKey =
+      (typeof value.to_camunda_group_key === 'string' && value.to_camunda_group_key.trim() !== '') ||
+      (typeof value.to_organization_department_roles_camunda_group_key === 'string' &&
+        value.to_organization_department_roles_camunda_group_key.trim() !== '')
+
+    const hasResolvedRoleId = value.to_organization_department_roles_id != null
+
+    // إذا بدأ بتحديد المُستلِم بالدور، لازم الثلاثة معاً
+    if (hasRoleParts) {
+      if (
+        value.organization_id == null ||
+        value.department_id == null ||
+        value.role_id == null
+      ) {
+        return helpers.error('any.custom.incompleteRole')
+      }
+
+      return value
+    }
+
+    if (!hasGroupKey && !hasResolvedRoleId) {
+      return helpers.error('any.custom.noTarget')
+    }
+
+    return value
+  })
   .messages({
-    'object.missing':
-      'SEND_NOTIFICATION payload يحتاج to (organization_department_roles_id) أو to_camunda_group_key (مثل AUTH)'
+    'any.custom.noTarget':
+      'SEND_NOTIFICATION payload يحتاج إما (organization_id, department_id, role_id) أو to_camunda_group_key (مثل "AUTH")',
+    'any.custom.incompleteRole':
+      'SEND_NOTIFICATION: عند تحديد المُستلِم بالدور يجب إرسال organization_id و department_id و role_id معاً'
   })
 
 const generatePdfPayloadSchema = Joi.object({
@@ -28,9 +88,11 @@ const generatePdfPayloadSchema = Joi.object({
   template_id: Joi.number().integer().positive().required().messages({
     'any.required': 'GENERATE_PDF payload.template_id مطلوب',
     'number.base': 'GENERATE_PDF payload.template_id يجب أن يكون رقماً',
-    'number.positive': 'GENERATE_PDF payload.template_id يجب أن يكون موجباً'
+    'number.positive': 'GENERATE_PDF payload.template_id يجب أن يكون رقماً موجباً'
   })
-}).unknown(false)
+}).unknown(false).messages({
+  'object.unknown': 'GENERATE_PDF payload يقبل فقط template_id — الحقل {#label} غير مسموح'
+})
 
 function normalizeActionPayload (action = {}) {
   const payload = action.payload || {}
@@ -51,6 +113,9 @@ function normalizeActionPayload (action = {}) {
 
   return {
     ...payload,
+    organization_id: action.organization_id ?? payload.organization_id ?? null,
+    department_id: action.department_id ?? payload.department_id ?? null,
+    role_id: action.role_id ?? payload.role_id ?? null,
     to_organization_department_roles_id: roleId,
     to_organization_department_roles_camunda_group_key: camundaGroupKey,
     title: action.title ?? payload.title ?? null,
@@ -94,15 +159,21 @@ function validateSendNotificationPayload (payload = {}) {
 function validateGeneratePdfPayload (payload = {}) {
   const { error } = generatePdfPayloadSchema.validate(payload, {
     abortEarly: false,
-    stripUnknown: true
+    stripUnknown: false
   })
 
   return error || null
 }
 
+const ALLOWED_ACTION_NAMES = ['SEND_NOTIFICATION', 'GENERATE_PDF']
+
 function validateStageAction (action = {}, stageId = null) {
   if (!action?.name) {
     return `المرحلة ${stageId}: كل action في config_json يحتاج name`
+  }
+
+  if (!ALLOWED_ACTION_NAMES.includes(action.name)) {
+    return `المرحلة ${stageId}: نوع الـ action "${action.name}" غير مدعوم — المسموح فقط: ${ALLOWED_ACTION_NAMES.join(' أو ')}`
   }
 
   if (action.name === 'SEND_NOTIFICATION') {

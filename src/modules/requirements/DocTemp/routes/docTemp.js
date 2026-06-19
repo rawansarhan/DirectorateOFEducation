@@ -245,7 +245,6 @@ router.post(
 router.get(
   '/:id',
   authMiddleware,
-  authorize('GET_ONE_TEMPLATE'),
   getOneActiveDocumentTemplate
 )
 

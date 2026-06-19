@@ -53,6 +53,9 @@ function throwBusinessError (message, statusCode = HTTP_STATUS.BAD_REQUEST) {
   throw err
 }
 
+// 0 / '0' تعني "لا يوجد" عند البحث عن الدور (مؤسسة/قسم عامّ)
+const normalizeOrgId = (v) => (v === 0 || v === '0' ? null : v)
+
 async function assertFilePickerTypeDocsExist (configJson = {}) {
   for (const widget of configJson.widgets || []) {
     if (widget.widget_type !== 'file_picker') {
@@ -201,6 +204,35 @@ async function createStageConfigService (data) {
         if (actionError) {
           throwBusinessError(actionError)
         }
+
+        // SEND_NOTIFICATION: حوّل (organization_id, department_id, role_id)
+        // إلى organization_department_roles_id ليعمل الإرسال الفعلي وقت التنفيذ
+        if (action.name === 'SEND_NOTIFICATION') {
+          const payload = action.payload || {}
+
+          if (payload.role_id != null) {
+            const orgDeptRole = await orgDeptRolesClient.findOrgDeptRole({
+              organization_id: normalizeOrgId(payload.organization_id),
+              department_id: normalizeOrgId(payload.department_id),
+              role_id: payload.role_id
+            })
+
+            if (!orgDeptRole) {
+              throwBusinessError(
+                `المرحلة ${item.stage_id}: SEND_NOTIFICATION — لم يتم العثور على دور (role_id=${payload.role_id}) للمؤسسة ${payload.organization_id} والقسم ${payload.department_id}`
+              )
+            }
+
+            payload.to_organization_department_roles_id = orgDeptRole.id
+
+            // نظّف الحقول المدخلة بعد تحويلها
+            delete payload.organization_id
+            delete payload.department_id
+            delete payload.role_id
+
+            action.payload = payload
+          }
+        }
       }
     }
 
@@ -236,12 +268,10 @@ async function createStageConfigService (data) {
       // CALL ORGANIZATION SERVICE
       // =============================
 
- const normalize = (v) => (v === 0 || v === '0' ? null : v)
-
 for (const a of assignments) {
   const orgDeptRole = await orgDeptRolesClient.findOrgDeptRole({
-    organization_id: normalize(a.organization_id),
-    department_id: normalize(a.department_id),
+    organization_id: normalizeOrgId(a.organization_id),
+    department_id: normalizeOrgId(a.department_id),
     role_id: a.role_id
   })
 

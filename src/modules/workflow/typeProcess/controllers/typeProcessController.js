@@ -5,7 +5,8 @@ const ApiResponder = require('../../../../core/utils/apiResponder')
 const {
   createTypeProcessService,
   updateTypeProcessService,
-  getAllTypeProcessesService
+  getAllTypeProcessesService,
+  getEveryTypeProcessService
 } = require('../services/typeProcessService')
 
 // ================= CREATE =================
@@ -47,8 +48,20 @@ const getAlltype = asyncHandler(async (req, res) => {
   }
 })
 
+// ================= GET ALL (active AND inactive) =================
+const getEverytype = asyncHandler(async (req, res) => {
+  try {
+    const result = await getEveryTypeProcessService()
+
+    return ApiResponder.okResponse(res, result, 'تم جلب البيانات بنجاح')
+  } catch (err) {
+    return ApiResponder.badRequestResponse(res, err.message)
+  }
+})
+
 module.exports = {
   createTypeProcess,
   updateTypeProcess,
-  getAlltype
+  getAlltype,
+  getEverytype
 }

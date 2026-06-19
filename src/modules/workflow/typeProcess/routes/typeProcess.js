@@ -4,7 +4,8 @@ const router = express.Router()
 const {
   createTypeProcess,
   updateTypeProcess,
-  getAlltype
+  getAlltype,
+  getEverytype
 } = require('../controllers/typeProcessController')
 
 const { authMiddleware ,authorize } = require('../../../../core/middleware/authMiddleware')
@@ -97,6 +98,30 @@ router.get(
   authMiddleware,
   // authorize('TYPETPROCESS_VIEW'),
   getAlltype
+)
+
+/**
+ * @swagger
+ * /api/typeProcess/all:
+ *   get:
+ *     summary: جلب كل أنواع العمليات (الفعّالة وغير الفعّالة)
+ *     description: يرجع جميع أنواع العمليات بغض النظر عن قيمة is_active (true أو false).
+ *     tags: [TypeProcess]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: list
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/TypeProcessListEnvelope'
+ */
+router.get(
+  '/all',
+  authMiddleware,
+  // authorize('TYPETPROCESS_VIEW'),
+  getEverytype
 )
 
 module.exports = router

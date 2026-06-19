@@ -185,6 +185,29 @@ async function getAllTypeProcessesService () {
 }
 
 // ======================================================
+// GET ALL (active AND inactive)
+// ======================================================
+
+async function loadEveryTypeProcess () {
+  const rows =
+    await typeTransRepository.findAll()
+
+  return rows.map(typeProcessMapper.toDTO)
+}
+
+async function getEveryTypeProcessService () {
+  console.log(
+    `${LOG_PREFIX} GET /api/typeProcess/all — loading list active+inactive (cache key: api:${KEYS.typeProcessesAll()})`
+  )
+
+  return getOrLoad(
+    KEYS.typeProcessesAll(),
+    loadEveryTypeProcess,
+    { label: 'TypeProcess GET /api/typeProcess/all' }
+  )
+}
+
+// ======================================================
 // GET ALL EXCEPT COMPLAINT
 // ======================================================
 
@@ -196,5 +219,6 @@ module.exports = {
   createTypeProcessService,
   updateTypeProcessService,
   getAllTypeProcessesService,
+  getEveryTypeProcessService,
   getAllTypeProcessesWithoutComplaintService
 }
