@@ -3236,21 +3236,68 @@ const swaggerOptions = {
           }
         },
 
+        DocumentTemplateWidgetCheckList: {
+          type: 'object',
+          description: 'ودجت قائمة اختيار متعدد — check_list',
+          required: ['widget_type', 'data'],
+          properties: {
+            widget_type: { type: 'string', enum: ['check_list'], example: 'check_list' },
+            data: {
+              type: 'object',
+              required: ['id', 'label', 'min_selected', 'max_selected', 'options'],
+              properties: {
+                id: { type: 'string', example: 'preferred_cycles' },
+                label: { type: 'string', example: 'حلقات التعليم للتدريس' },
+                is_required: { type: 'boolean', example: false },
+                min_selected: { type: 'integer', example: 1 },
+                max_selected: { type: 'integer', example: 2 },
+                options: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    required: ['key', 'value'],
+                    properties: {
+                      key: { type: 'string', example: 'cycle_1' },
+                      value: { type: 'string', example: 'أساسي' }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          example: {
+            widget_type: 'check_list',
+            data: {
+              id: 'preferred_cycles',
+              label: 'حلقات التعليم للتدريس',
+              is_required: false,
+              min_selected: 1,
+              max_selected: 2,
+              options: [
+                { key: 'cycle_1', value: 'أساسي' },
+                { key: 'cycle_2', value: 'أساسي' },
+                { key: 'secondary', value: 'التعليم الثانوي' }
+              ]
+            }
+          }
+        },
+
         DocumentTemplateConfigJson: {
           type: 'object',
-          description: 'إعدادات استمارة القالب — يُرسل في multipart/form-data كنص JSON في الحقل config_json',
+          description: 'إعدادات استمارة القالب — يُرسل في PUT /api/document-templates/{id} كـ application/json',
           required: ['form_id', 'form_name', 'widgets'],
           properties: {
             form_id: { type: 'string', example: 'civil_transaction_55' },
             form_name: { type: 'string', example: 'استمارة معاملة المواطن' },
             widgets: {
               type: 'array',
-              description: 'text_field | date_picker | dropdown | radio_group | check_list | file_picker',
+              description: 'text_field | date_picker | dropdown | check_list',
               items: {
                 oneOf: [
                   { $ref: '#/components/schemas/DocumentTemplateWidgetTextField' },
                   { $ref: '#/components/schemas/DocumentTemplateWidgetDatePicker' },
-                  { $ref: '#/components/schemas/DocumentTemplateWidgetDropdown' }
+                  { $ref: '#/components/schemas/DocumentTemplateWidgetDropdown' },
+                  { $ref: '#/components/schemas/DocumentTemplateWidgetCheckList' }
                 ]
               }
             }
@@ -3292,6 +3339,21 @@ const swaggerOptions = {
                     { key: 'ALE', value: 'حلب' }
                   ]
                 }
+              },
+              {
+                widget_type: 'check_list',
+                data: {
+                  id: 'preferred_cycles',
+                  label: 'حلقات التعليم للتدريس',
+                  is_required: false,
+                  min_selected: 1,
+                  max_selected: 2,
+                  options: [
+                    { key: 'cycle_1', value: 'أساسي' },
+                    { key: 'cycle_2', value: 'أساسي' },
+                    { key: 'secondary', value: 'التعليم الثانوي' }
+                  ]
+                }
               }
             ]
           }
@@ -3317,7 +3379,13 @@ const swaggerOptions = {
                     name: { type: 'string', example: 'هوية شخصية' }
                   }
                 },
-                config_json: { $ref: '#/components/schemas/DocumentTemplateConfigJson' },
+                config_json: {
+                  oneOf: [
+                    { $ref: '#/components/schemas/DocumentTemplateConfigJson' },
+                    { type: 'null' }
+                  ],
+                  example: null
+                },
                 engine_type: { type: 'string', example: 'ACROFORM' },
                 version: { type: 'integer', example: 1 },
                 is_latest: { type: 'boolean', example: true },

@@ -6,7 +6,9 @@ const {
   createDocumentTemplateService,
   updateDocumentTemplateService,
   getAllActiveDocumentTemplatesService,
-  getOneActiveDocumentTemplateService
+  getOneActiveDocumentTemplateService,
+  extractTemplateFieldsFromUploadService,
+  extractTemplateFieldsByIdService
 } = require('../services/docTempService')
 
 function handleDocumentTemplateError (res, err) {
@@ -30,7 +32,8 @@ function handleDocumentTemplateError (res, err) {
 const createDocumentTemplate = asyncHandler(async (req, res) => {
   try {
     const data = {
-      ...req.body,
+      name: req.body?.name,
+      type_doc_id: req.body?.type_doc_id ?? req.body?.TypeDoc_id,
       file_path: req.file
         ? `/uploads/${req.file.filename}`
         : null
@@ -46,14 +49,7 @@ const createDocumentTemplate = asyncHandler(async (req, res) => {
 
 const updateDocumentTemplate = asyncHandler(async (req, res) => {
   try {
-    const data = {
-      ...req.body,
-      file_path: req.file
-        ? `/uploads/${req.file.filename}`
-        : undefined
-    }
-
-    const result = await updateDocumentTemplateService(req.params.id, data)
+    const result = await updateDocumentTemplateService(req.params.id, req.body)
 
     return ApiResponder.okResponse(res, result, 'تم تعديل قالب الوثيقة بنجاح')
   } catch (err) {
@@ -79,9 +75,37 @@ const getOneActiveDocumentTemplate = asyncHandler(async (req, res) => {
   }
 })
 
+const extractTemplateFieldsFromUpload = asyncHandler(async (req, res) => {
+  try {
+    const result = await extractTemplateFieldsFromUploadService(req.file)
+    return ApiResponder.okResponse(
+      res,
+      result,
+      'تم استخراج أسماء إفراغات القالب بنجاح'
+    )
+  } catch (err) {
+    return handleDocumentTemplateError(res, err)
+  }
+})
+
+const extractTemplateFieldsById = asyncHandler(async (req, res) => {
+  try {
+    const result = await extractTemplateFieldsByIdService(req.params.id)
+    return ApiResponder.okResponse(
+      res,
+      result,
+      'تم استخراج أسماء إفراغات القالب بنجاح'
+    )
+  } catch (err) {
+    return handleDocumentTemplateError(res, err)
+  }
+})
+
 module.exports = {
   createDocumentTemplate,
   updateDocumentTemplate,
   getAllActiveDocumentTemplates,
-  getOneActiveDocumentTemplate
+  getOneActiveDocumentTemplate,
+  extractTemplateFieldsFromUpload,
+  extractTemplateFieldsById
 }

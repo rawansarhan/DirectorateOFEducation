@@ -641,9 +641,126 @@ async function generatePdfFromTemplate ({
   }
 }
 
+function mapPdfFieldToWidgetType (field) {
+  const pdfFieldType = field?.constructor?.name || 'Unknown'
+
+  switch (pdfFieldType) {
+    case 'PDFTextField':
+      return { pdf_field_type: 'PDFTextField', widget_type: 'text_field' }
+    case 'PDFCheckBox':
+      return { pdf_field_type: 'PDFCheckBox', widget_type: 'checkbox' }
+    case 'PDFDropdown':
+      return { pdf_field_type: 'PDFDropdown', widget_type: 'dropdown' }
+    case 'PDFRadioGroup':
+      return { pdf_field_type: 'PDFRadioGroup', widget_type: 'radio_group' }
+    default:
+      return { pdf_field_type: pdfFieldType, widget_type: 'unknown' }
+  }
+}
+
+function buildSuggestedWidget (fieldMeta) {
+  const base = {
+    widget_type: fieldMeta.widget_type,
+    data: {
+      id: fieldMeta.id,
+      label: fieldMeta.id,
+      is_required: false
+    }
+  }
+
+  if (fieldMeta.widget_type === 'text_field') {
+    base.data.input_type = 'text'
+  }
+
+  if (fieldMeta.widget_type === 'dropdown' && fieldMeta.options?.length) {
+    base.data.options = fieldMeta.options
+  }
+
+  return base
+}
+
+function buildSuggestedConfigJson (fields = [], options = {}) {
+  const formId = options.form_id || 'template_form'
+  const formName = options.form_name || 'نموذج القالب'
+
+  return {
+    form_id: formId,
+    form_name: formName,
+    widgets: fields.map(buildSuggestedWidget)
+  }
+}
+
+function comparePdfFieldsWithConfig (pdfFields = [], configJson = {}) {
+  const pdfIds = pdfFields.map(field => field.id)
+  const configIds = [...collectWidgetKeys(configJson)]
+
+  const pdfSet = new Set(pdfIds)
+  const configSet = new Set(configIds)
+
+  return {
+    matched: pdfIds.filter(id => configSet.has(id)),
+    pdf_only: pdfIds.filter(id => !configSet.has(id)),
+    config_only: configIds.filter(id => !pdfSet.has(id))
+  }
+}
+
+/**
+ * يستخرج أسماء حقول AcroForm (الإفراغات) من ملف PDF — ليست labels الشاشة.
+ * مثال docs/file 1 (3).pdf: manager-name, employee, job, department
+ */
+async function extractPdfAcroFormFieldsFromBytes (templateBytes) {
+  if (!templateBytes?.length) {
+    throw new Error('ملف PDF فارغ أو غير صالح')
+  }
+
+  const pdfDoc = await PDFDocument.load(templateBytes)
+  const form = pdfDoc.getForm()
+  const fields = form.getFields()
+
+  return fields.map((field) => {
+    const fieldName = field.getName()
+    const mapped = mapPdfFieldToWidgetType(field)
+    const item = {
+      id: fieldName,
+      ...mapped
+    }
+
+    if (mapped.pdf_field_type === 'PDFDropdown') {
+      try {
+        const options = field.getOptions()
+
+        if (options?.length) {
+          item.options = options.map(option => ({
+            key: String(option),
+            value: String(option)
+          }))
+        }
+      } catch (_) {}
+    }
+
+    return item
+  })
+}
+
+async function extractPdfAcroFormFieldsFromPath (storedPath) {
+  const templateAbsolutePath = resolveAbsoluteUploadPath(storedPath)
+
+  if (!fs.existsSync(templateAbsolutePath)) {
+    throw new Error(`ملف القالب غير موجود على القرص: ${storedPath}`)
+  }
+
+  const templateBytes = fs.readFileSync(templateAbsolutePath)
+
+  return extractPdfAcroFormFieldsFromBytes(templateBytes)
+}
+
 module.exports = {
   generatePdfFromTemplate,
   collectWidgetKeys,
   filterValuesByTemplateKeys,
-  resolveAbsoluteUploadPath
+  resolveAbsoluteUploadPath,
+  extractPdfAcroFormFieldsFromBytes,
+  extractPdfAcroFormFieldsFromPath,
+  buildSuggestedConfigJson,
+  comparePdfFieldsWithConfig
 }

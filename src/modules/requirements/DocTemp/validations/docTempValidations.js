@@ -63,14 +63,36 @@ const createDocumentTemplateValidation = data => {
 
     TypeDoc_id: Joi.any().strip(),
 
-    config_json: Joi.any().required(),
-
     file_path: Joi.string().required()
       .messages({
         'any.required': 'ملف القالب مطلوب',
         'string.empty': 'ملف القالب مطلوب'
       })
-  })
+  }).unknown(true)
+
+  const { error, value } = schema.validate(data, { abortEarly: false })
+
+  if (error) {
+    return { error, value: null }
+  }
+
+  return {
+    error: null,
+    value: {
+      name: value.name,
+      type_doc_id: value.type_doc_id,
+      file_path: value.file_path
+    }
+  }
+}
+
+const updateDocumentTemplateValidation = data => {
+  const schema = Joi.object({
+    config_json: Joi.any().required()
+      .messages({
+        'any.required': 'حقل config_json مطلوب'
+      })
+  }).unknown(false)
 
   const { error, value } = schema.validate(data, { abortEarly: false })
 
@@ -92,50 +114,9 @@ const createDocumentTemplateValidation = data => {
   return {
     error: null,
     value: {
-      ...value,
       config_json: configResult.value
     }
   }
-}
-
-const updateDocumentTemplateValidation = data => {
-  const schema = Joi.object({
-    name: Joi.string().trim().min(1).max(255).optional(),
-
-    type_doc_id: Joi.number().integer().positive().optional(),
-
-    TypeDoc_id: Joi.any().strip(),
-
-    engine_type: Joi.string()
-      .valid('ACROFORM', 'POSITIONED')
-      .optional(),
-
-    config_json: Joi.any().optional(),
-    file_path: Joi.string().optional()
-  })
-
-  const { error, value } = schema.validate(data, { abortEarly: false })
-
-  if (error) {
-    return { error, value: null }
-  }
-
-  if (value.config_json != null) {
-    const configResult = validateConfigJson(value.config_json)
-
-    if (configResult.error) {
-      return {
-        error: {
-          details: [{ message: configResult.error }]
-        },
-        value: null
-      }
-    }
-
-    value.config_json = configResult.value
-  }
-
-  return { error: null, value }
 }
 
 module.exports = {

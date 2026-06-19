@@ -10,6 +10,30 @@ const {
   formatValidationError
 } = require('../validations/docTempValidations')
 const { invalidateDocumentTemplates } = require('../../../../core/cache/apiCacheService')
+const fs = require('fs')
+const {
+  extractPdfAcroFormFieldsFromBytes,
+  extractPdfAcroFormFieldsFromPath
+} = require('../../../transaction/document/services/pdfGenerationService')
+
+function mapFieldsForExtractResponse (fields = []) {
+  return fields.map(({ id, pdf_field_type, widget_type }) => ({
+    id,
+    pdf_field_type,
+    widget_type
+  }))
+}
+
+function buildExtractFieldsResponse (fields = [], source = 'upload') {
+  const normalizedFields = mapFieldsForExtractResponse(fields)
+
+  return {
+    source,
+    engine_type: 'ACROFORM',
+    field_count: normalizedFields.length,
+    fields: normalizedFields
+  }
+}
 
 function createDocTempError (code, message) {
   const err = new Error(message)
@@ -76,7 +100,7 @@ async function createDocumentTemplateService (data) {
     name: value.name,
     file_path: value.file_path,
     type_doc_id: value.type_doc_id,
-    config_json: value.config_json
+    config_json: null
   })
 
   const documentTemplate = await documentTemplateRepository.create({ ...input })
@@ -88,8 +112,20 @@ async function createDocumentTemplateService (data) {
   return toDTO(created || documentTemplate)
 }
 
+function normalizeUpdatePayload (body = {}) {
+  if (body.form_id && body.form_name && body.widgets) {
+    return { config_json: body }
+  }
+
+  if (body.config_json != null) {
+    return { config_json: body.config_json }
+  }
+
+  return { config_json: null }
+}
+
 async function updateDocumentTemplateService (id, data) {
-  const payload = normalizeCreatePayload(data)
+  const payload = normalizeUpdatePayload(data)
 
   const { error, value } = updateDocumentTemplateValidation(payload)
 
@@ -103,24 +139,20 @@ async function updateDocumentTemplateService (id, data) {
     throw createDocTempError('TEMPLATE_NOT_FOUND', 'قالب الوثيقة غير موجود')
   }
 
-  if (value.type_doc_id != null) {
-    await assertTypeDocExists(value.type_doc_id)
-  }
-
   await documentTemplateRepository.updateInstance(oldTemplate, {
     is_active: false,
     is_latest: false
   })
 
   const input = new DocumentTemplateInputDTO({
-    name: value.name ?? oldTemplate.name,
-    file_path: value.file_path ?? oldTemplate.file_path,
-    type_doc_id: value.type_doc_id ?? oldTemplate.type_doc_id,
-    engine_type: value.engine_type ?? oldTemplate.engine_type,
-    config_json: value.config_json ?? oldTemplate.config_json,
+    name: oldTemplate.name,
+    file_path: oldTemplate.file_path,
+    type_doc_id: oldTemplate.type_doc_id,
+    engine_type: oldTemplate.engine_type,
+    config_json: value.config_json,
     version: (oldTemplate.version || 1) + 1,
     is_latest: true,
-    is_active: value.is_active ?? true
+    is_active: true
   })
 
   const newTemplate = await documentTemplateRepository.create({ ...input })
@@ -147,9 +179,38 @@ async function getOneActiveDocumentTemplateService (id) {
   return toDTO(template)
 }
 
+async function extractTemplateFieldsFromUploadService (file) {
+  if (!file?.path) {
+    throw createDocTempError('FILE_REQUIRED', 'ملف PDF مطلوب')
+  }
+
+  const templateBytes = fs.readFileSync(file.path)
+  const fields = await extractPdfAcroFormFieldsFromBytes(templateBytes)
+
+  return buildExtractFieldsResponse(fields, 'upload')
+}
+
+async function extractTemplateFieldsByIdService (id) {
+  const template = await documentTemplateRepository.findOneActiveById(id)
+
+  if (!template) {
+    throw createDocTempError('TEMPLATE_NOT_FOUND', 'قالب الوثيقة غير موجود')
+  }
+
+  if (!template.file_path) {
+    throw createDocTempError('FILE_REQUIRED', 'قالب الوثيقة لا يحتوي ملف PDF')
+  }
+
+  const fields = await extractPdfAcroFormFieldsFromPath(template.file_path)
+
+  return buildExtractFieldsResponse(fields, 'template')
+}
+
 module.exports = {
   createDocumentTemplateService,
   updateDocumentTemplateService,
   getAllActiveDocumentTemplatesService,
-  getOneActiveDocumentTemplateService
+  getOneActiveDocumentTemplateService,
+  extractTemplateFieldsFromUploadService,
+  extractTemplateFieldsByIdService
 }

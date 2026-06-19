@@ -6,7 +6,9 @@ const {
   createDocumentTemplate,
   updateDocumentTemplate,
   getAllActiveDocumentTemplates,
-  getOneActiveDocumentTemplate
+  getOneActiveDocumentTemplate,
+  extractTemplateFieldsFromUpload,
+  extractTemplateFieldsById
 } = require('../controllers/docTempController')
 
 const { uploadDocumentTemplate } = require('../../../../core/middleware/upload')
@@ -24,6 +26,9 @@ const { authMiddleware, authorize } = require('../../../../core/middleware/authM
  * /api/document-templates:
  *   post:
  *     summary: Create new document template
+ *     description: |
+ *       يرفع ملف PDF فقط مع name و type_doc_id.
+ *       config_json يُضاف لاحقاً عبر PUT /api/document-templates/{id}.
  *     tags: [Document Templates]
  *     security:
  *       - bearerAuth: []
@@ -37,12 +42,11 @@ const { authMiddleware, authorize } = require('../../../../core/middleware/authM
  *               - file
  *               - name
  *               - type_doc_id
- *               - config_json
  *             properties:
  *               file:
  *                 type: string
  *                 format: binary
- *                 description: Template file (pdf, docx, html)
+ *                 description: ملف PDF للقالب (AcroForm)
  *
  *               name:
  *                 type: string
@@ -52,16 +56,6 @@ const { authMiddleware, authorize } = require('../../../../core/middleware/authM
  *                 type: integer
  *                 example: 1
  *                 description: معرّف نوع الوثيقة من جدول type_docs
- *
- *               config_json:
- *                 type: string
- *                 description: |
- *                   نص JSON — راجع schema DocumentTemplateConfigJson.
- *                   الحالات المدعومة في widgets:
- *                   1) text_field — حقل نص/هاتف (DocumentTemplateWidgetTextField)
- *                   2) date_picker — تاريخ (DocumentTemplateWidgetDatePicker)
- *                   3) dropdown — قائمة منسدلة (DocumentTemplateWidgetDropdown)
- *                 example: '{"form_id":"civil_transaction_55","form_name":"استمارة معاملة المواطن","widgets":[{"widget_type":"text_field","data":{"id":"citizen_phone","label":"رقم الموبايل","is_required":true,"input_type":"phone","regex":"^09[0-9]{8}$","max_length":10,"min_length":10}},{"widget_type":"date_picker","data":{"id":"birth_date","label":"تاريخ الولادة","is_required":true,"min_date":"1940-01-01","max_date":"2026-06-04"}},{"widget_type":"dropdown","data":{"id":"birth_governorate","label":"محافظة الولادة","is_required":true,"options":[{"key":"DAM","value":"دمشق"},{"key":"ALE","value":"حلب"}]}}]}'
  *
  *     responses:
  *       200:
@@ -90,7 +84,11 @@ router.post(
  * @swagger
  * /api/document-templates/{id}:
  *   put:
- *     summary: Update document template => (المسؤول التقني)
+ *     summary: Update document template config_json => (المسؤول التقني)
+ *     description: |
+ *       يحدّث config_json فقط (form_id, form_name, widgets).
+ *       يدعم widgets: text_field, date_picker, dropdown, check_list.
+ *       name و file و type_doc_id تبقى كما هي من القالب الأصلي.
  *     tags: [Document Templates]
  *     security:
  *       - bearerAuth: []
@@ -104,30 +102,11 @@ router.post(
  *         example: 1
  *
  *     requestBody:
- *       required: false
+ *       required: true
  *       content:
- *         multipart/form-data:
+ *         application/json:
  *           schema:
- *             type: object
- *             properties:
- *
- *               file:
- *                 type: string
- *                 format: binary
- *                 description: Template file
- *
- *               name:
- *                 type: string
- *                 example: Updated Template
- *
- *               type_doc_id:
- *                 type: integer
- *                 example: 1
- *
- *               config_json:
- *                 type: string
- *                 description: نص JSON — راجع DocumentTemplateConfigJson (text_field, date_picker, dropdown)
- *                 example: '{"form_id":"civil_transaction_55","form_name":"استمارة معاملة المواطن","widgets":[{"widget_type":"text_field","data":{"id":"citizen_phone","label":"رقم الموبايل","is_required":true,"input_type":"phone","regex":"^09[0-9]{8}$","max_length":10,"min_length":10}},{"widget_type":"date_picker","data":{"id":"birth_date","label":"تاريخ الولادة","is_required":true,"min_date":"1940-01-01","max_date":"2026-06-04"}},{"widget_type":"dropdown","data":{"id":"birth_governorate","label":"محافظة الولادة","is_required":true,"options":[{"key":"DAM","value":"دمشق"},{"key":"ALE","value":"حلب"}]}}]}'
+ *             $ref: '#/components/schemas/DocumentTemplateConfigJson'
  *
  *     responses:
  *       200:
@@ -138,7 +117,6 @@ router.post(
  */
 router.put(
   '/:id',
-  uploadDocumentTemplate.single('file'),
   authMiddleware,
   authorize('UPDATE_TEMPLATE'),
   updateDocumentTemplate
@@ -162,6 +140,82 @@ router.get(
   authMiddleware,
   authorize('GET_ALL_TEMPLATE'),
   getAllActiveDocumentTemplates
+)
+
+/**
+ * @swagger
+ * /api/document-templates/extract-fields:
+ *   post:
+ *     summary: استخراج أسماء إفراغات PDF (AcroForm) من ملف مرفوع
+ *     description: |
+ *       يقرأ الحقول الداخلية في PDF (مثل manager-name, employee, job, department)
+ *       وليس تسميات الشاشة. مفيد قبل إنشاء config_json عند رفع قالب جديد.
+ *     tags: [Document Templates]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - file
+ *             properties:
+ *               file:
+ *                 type: string
+ *                 format: binary
+ *                 description: ملف PDF يحتوي حقول AcroForm
+ *     responses:
+ *       200:
+ *         description: تم استخراج أسماء الإفراغات بنجاح
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 status_code:
+ *                   type: integer
+ *                   example: 200
+ *                 message:
+ *                   type: string
+ *                   example: تم استخراج أسماء إفراغات القالب بنجاح
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     source:
+ *                       type: string
+ *                       example: upload
+ *                     engine_type:
+ *                       type: string
+ *                       example: ACROFORM
+ *                     field_count:
+ *                       type: integer
+ *                       example: 4
+ *                     fields:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: string
+ *                             example: employee
+ *                           pdf_field_type:
+ *                             type: string
+ *                             example: PDFTextField
+ *                           widget_type:
+ *                             type: string
+ *                             example: text_field
+ */
+router.post(
+  '/extract-fields',
+  uploadDocumentTemplate.single('file'),
+  authMiddleware,
+  authorize('CREATE_TEMPLATE'),
+  extractTemplateFieldsFromUpload
 )
 
 /**
@@ -193,6 +247,75 @@ router.get(
   authMiddleware,
   authorize('GET_ONE_TEMPLATE'),
   getOneActiveDocumentTemplate
+)
+
+/**
+ * @swagger
+ * /api/document-templates/{id}/fields:
+ *   get:
+ *     summary: استخراج أسماء إفراغات PDF لقالب محفوظ
+ *     description: يقرأ حقول AcroForm من ملف القالب المحفوظ
+ *     tags: [Document Templates]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         example: 1
+ *     responses:
+ *       200:
+ *         description: تم استخراج أسماء الإفراغات بنجاح
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 status_code:
+ *                   type: integer
+ *                   example: 200
+ *                 message:
+ *                   type: string
+ *                   example: تم استخراج أسماء إفراغات القالب بنجاح
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     source:
+ *                       type: string
+ *                       example: template
+ *                     engine_type:
+ *                       type: string
+ *                       example: ACROFORM
+ *                     field_count:
+ *                       type: integer
+ *                       example: 4
+ *                     fields:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: string
+ *                             example: employee
+ *                           pdf_field_type:
+ *                             type: string
+ *                             example: PDFTextField
+ *                           widget_type:
+ *                             type: string
+ *                             example: text_field
+ *       404:
+ *         description: القالب غير موجود
+ */
+router.get(
+  '/:id/fields',
+  authMiddleware,
+  authorize('GET_ONE_TEMPLATE'),
+  extractTemplateFieldsById
 )
 
 module.exports = router
