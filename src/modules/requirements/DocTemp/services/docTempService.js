@@ -11,6 +11,7 @@ const {
 } = require('../validations/docTempValidations')
 const { invalidateDocumentTemplates } = require('../../../../core/cache/apiCacheService')
 const fs = require('fs')
+const { toPublicFileUrl } = require('../../../../core/utils/filePath')
 const {
   extractPdfAcroFormFieldsFromBytes,
   extractPdfAcroFormFieldsFromPath
@@ -24,14 +25,22 @@ function mapFieldsForExtractResponse (fields = []) {
   }))
 }
 
-function buildExtractFieldsResponse (fields = [], source = 'upload') {
+function buildStoredUploadPath (file) {
+  return file?.filename ? `/uploads/${file.filename}` : null
+}
+
+function buildExtractFieldsResponse (fields = [], { source = 'upload', file = null, storedPath = null } = {}) {
   const normalizedFields = mapFieldsForExtractResponse(fields)
+  const path = storedPath || buildStoredUploadPath(file)
+  const url = path ? toPublicFileUrl(path) : null
 
   return {
     source,
     engine_type: 'ACROFORM',
     field_count: normalizedFields.length,
-    fields: normalizedFields
+    fields: normalizedFields,
+    path,
+    url
   }
 }
 
@@ -55,9 +64,11 @@ function normalizeTypeDocId (data = {}) {
 
 function normalizeCreatePayload (data = {}) {
   return {
-    ...data,
+    name: data.name,
     type_doc_id: normalizeTypeDocId(data),
-    file_path: data.file_path || null
+    path: data.path ?? null,
+    url: data.url ?? null,
+    config_json: data.config_json ?? null
   }
 }
 
@@ -90,17 +101,13 @@ async function createDocumentTemplateService (data) {
     throw createDocTempError('VALIDATION_ERROR', formatValidationError(error))
   }
 
-  if (!value.file_path) {
-    throw createDocTempError('FILE_REQUIRED', 'ملف القالب مطلوب')
-  }
-
   await assertTypeDocExists(value.type_doc_id)
 
   const input = new DocumentTemplateInputDTO({
     name: value.name,
     file_path: value.file_path,
     type_doc_id: value.type_doc_id,
-    config_json: null
+    config_json: value.config_json
   })
 
   const documentTemplate = await documentTemplateRepository.create({ ...input })
@@ -112,22 +119,8 @@ async function createDocumentTemplateService (data) {
   return toDTO(created || documentTemplate)
 }
 
-function normalizeUpdatePayload (body = {}) {
-  if (body.form_id && body.form_name && body.widgets) {
-    return { config_json: body }
-  }
-
-  if (body.config_json != null) {
-    return { config_json: body.config_json }
-  }
-
-  return { config_json: null }
-}
-
 async function updateDocumentTemplateService (id, data) {
-  const payload = normalizeUpdatePayload(data)
-
-  const { error, value } = updateDocumentTemplateValidation(payload)
+  const { error, value } = updateDocumentTemplateValidation(data)
 
   if (error) {
     throw createDocTempError('VALIDATION_ERROR', formatValidationError(error))
@@ -187,7 +180,7 @@ async function extractTemplateFieldsFromUploadService (file) {
   const templateBytes = fs.readFileSync(file.path)
   const fields = await extractPdfAcroFormFieldsFromBytes(templateBytes)
 
-  return buildExtractFieldsResponse(fields, 'upload')
+  return buildExtractFieldsResponse(fields, { source: 'upload', file })
 }
 
 async function extractTemplateFieldsByIdService (id) {
@@ -203,7 +196,10 @@ async function extractTemplateFieldsByIdService (id) {
 
   const fields = await extractPdfAcroFormFieldsFromPath(template.file_path)
 
-  return buildExtractFieldsResponse(fields, 'template')
+  return buildExtractFieldsResponse(fields, {
+    source: 'template',
+    storedPath: template.file_path
+  })
 }
 
 module.exports = {

@@ -27,35 +27,41 @@ const { authMiddleware, authorize } = require('../../../../core/middleware/authM
  *   post:
  *     summary: Create new document template
  *     description: |
- *       يرفع ملف PDF فقط مع name و type_doc_id.
- *       config_json يُضاف لاحقاً عبر PUT /api/document-templates/{id}.
+ *       ينشئ قالباً باستخدام path و url المُرجَعين من POST /extract-fields
+ *       (بدون رفع ملف مجدداً) + config_json.
  *     tags: [Document Templates]
  *     security:
  *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
- *         multipart/form-data:
+ *         application/json:
  *           schema:
  *             type: object
  *             required:
- *               - file
  *               - name
  *               - type_doc_id
+ *               - path
+ *               - url
+ *               - config_json
  *             properties:
- *               file:
- *                 type: string
- *                 format: binary
- *                 description: ملف PDF للقالب (AcroForm)
- *
  *               name:
  *                 type: string
  *                 example: استمارة معاملة المواطن
- *
  *               type_doc_id:
  *                 type: integer
  *                 example: 1
- *                 description: معرّف نوع الوثيقة من جدول type_docs
+ *               path:
+ *                 type: string
+ *                 example: /uploads/1779540194357-518796726.pdf
+ *                 description: من استجابة extract-fields
+ *               url:
+ *                 type: string
+ *                 format: uri
+ *                 example: http://localhost:4000/uploads/1779540194357-518796726.pdf
+ *                 description: من استجابة extract-fields — يجب أن يطابق path
+ *               config_json:
+ *                 $ref: '#/components/schemas/DocumentTemplateConfigJson'
  *
  *     responses:
  *       200:
@@ -74,7 +80,6 @@ const { authMiddleware, authorize } = require('../../../../core/middleware/authM
  */
 router.post(
   '/',
-  uploadDocumentTemplate.single('file'),
   authMiddleware,
   authorize('CREATE_TEMPLATE'),
   createDocumentTemplate
@@ -86,9 +91,10 @@ router.post(
  *   put:
  *     summary: Update document template config_json => (المسؤول التقني)
  *     description: |
- *       يحدّث config_json فقط (form_id, form_name, widgets).
+ *       يحدّث config_json فقط.
+ *       **Body:** `form_id`, `form_name`, `widgets` (+ `pdf` اختياري)
+ *       **widget_type:** text_field | date_picker | dropdown | check_list فقط
  *       يدعم widgets: text_field, date_picker, dropdown, check_list.
- *       name و file و type_doc_id تبقى كما هي من القالب الأصلي.
  *     tags: [Document Templates]
  *     security:
  *       - bearerAuth: []
@@ -148,8 +154,8 @@ router.get(
  *   post:
  *     summary: استخراج أسماء إفراغات PDF (AcroForm) من ملف مرفوع
  *     description: |
- *       يقرأ الحقول الداخلية في PDF (مثل manager-name, employee, job, department)
- *       وليس تسميات الشاشة. مفيد قبل إنشاء config_json عند رفع قالب جديد.
+ *       يقرأ حقول AcroForm من PDF مرفوع، يحفظ الملف في uploads،
+ *       ويرجع أسماء الإفراغات مع path و url للملف.
  *     tags: [Document Templates]
  *     security:
  *       - bearerAuth: []
@@ -195,6 +201,12 @@ router.get(
  *                     field_count:
  *                       type: integer
  *                       example: 4
+ *                     path:
+ *                       type: string
+ *                       example: /uploads/1779540194357-518796726.pdf
+ *                     url:
+ *                       type: string
+ *                       example: http://localhost:4000/uploads/1779540194357-518796726.pdf
  *                     fields:
  *                       type: array
  *                       items:

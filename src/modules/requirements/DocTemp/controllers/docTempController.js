@@ -34,9 +34,9 @@ const createDocumentTemplate = asyncHandler(async (req, res) => {
     const data = {
       name: req.body?.name,
       type_doc_id: req.body?.type_doc_id ?? req.body?.TypeDoc_id,
-      file_path: req.file
-        ? `/uploads/${req.file.filename}`
-        : null
+      config_json: req.body?.config_json,
+      path: req.body?.path,
+      url: req.body?.url
     }
 
     const result = await createDocumentTemplateService(data)

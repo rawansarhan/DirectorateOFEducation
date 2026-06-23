@@ -324,6 +324,39 @@ const documentFormConfigJsonSchema = Joi.object({
   pdf: documentPdfSettingsSchema.optional()
 }).unknown(false)
 
+const DOCUMENT_TEMPLATE_WIDGET_TYPES = [
+  'text_field',
+  'date_picker',
+  'dropdown',
+  'check_list'
+]
+
+const documentTemplateWidgetSchema = Joi.object({
+  widget_type: Joi.string()
+    .valid(...DOCUMENT_TEMPLATE_WIDGET_TYPES)
+    .required()
+    .messages({
+      'any.only':
+        'widget_type غير مسموح — المسموح فقط: text_field, date_picker, dropdown, check_list'
+    }),
+  data: Joi.alternatives().conditional('widget_type', {
+    switch: [
+      { is: 'text_field', then: textFieldDataSchema },
+      { is: 'date_picker', then: datePickerDataSchema },
+      { is: 'dropdown', then: dropdownDataSchema },
+      { is: 'check_list', then: checkListDataSchema }
+    ],
+    otherwise: Joi.forbidden()
+  })
+}).unknown(false)
+
+const documentTemplateFormConfigJsonSchema = Joi.object({
+  form_id: Joi.string().trim().min(1).max(128).required(),
+  form_name: Joi.string().trim().min(1).max(255).required(),
+  widgets: Joi.array().items(documentTemplateWidgetSchema).default([]),
+  pdf: documentPdfSettingsSchema.optional()
+}).unknown(false)
+
 function validateDocumentFormConfigJson (value) {
   const { error, value: validated } = documentFormConfigJsonSchema.validate(value, {
     abortEarly: false,
@@ -348,15 +381,43 @@ function validateDocumentFormConfigJson (value) {
   return { error: null, value: validated }
 }
 
+function validateDocumentTemplateConfigJson (value) {
+  const { error, value: validated } = documentTemplateFormConfigJsonSchema.validate(value, {
+    abortEarly: false,
+    stripUnknown: true
+  })
+
+  if (error) {
+    return { error, value: null }
+  }
+
+  const widgetsError = validateWidgetsBusinessRules(validated.widgets)
+
+  if (widgetsError) {
+    return {
+      error: {
+        details: [{ message: widgetsError }]
+      },
+      value: null
+    }
+  }
+
+  return { error: null, value: validated }
+}
+
 module.exports = {
   WIDGET_TYPES,
+  DOCUMENT_TEMPLATE_WIDGET_TYPES,
   TEXT_FIELD_INPUT_TYPES,
   STAGE_ACTION_NAMES,
   stageActionSchema,
   stageConfigJsonSchema,
   documentFormConfigJsonSchema,
+  documentTemplateFormConfigJsonSchema,
   widgetSchema,
+  documentTemplateWidgetSchema,
   validateStageConfigJson,
   validateDocumentFormConfigJson,
+  validateDocumentTemplateConfigJson,
   validateWidgetsBusinessRules
 }
