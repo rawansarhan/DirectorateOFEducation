@@ -70,8 +70,7 @@ module.exports = (sequelize, DataTypes) => {
           'submitted',
           'in_progress',
           'completed',
-          'rejected',
-          'cancelled'
+          'rejected'
         ),
         defaultValue: 'draft'
       },

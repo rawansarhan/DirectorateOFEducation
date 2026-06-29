@@ -1504,7 +1504,7 @@ const swaggerOptions = {
             user_id: { type: 'integer', example: 3 },
             status: {
               type: 'string',
-              enum: ['draft', 'submitted', 'in_progress', 'completed', 'rejected', 'cancelled'],
+              enum: ['draft', 'submitted', 'in_progress', 'completed', 'rejected'],
               example: 'draft'
             },
             data: { $ref: '#/components/schemas/TransactionDraftFormData' },
@@ -1531,7 +1531,7 @@ const swaggerOptions = {
             priority: { type: 'integer', example: 1 },
             status: {
               type: 'string',
-              enum: ['draft', 'submitted', 'in_progress', 'completed', 'rejected', 'cancelled'],
+              enum: ['draft', 'submitted', 'in_progress', 'completed', 'rejected'],
               example: 'in_progress'
             },
             created_at: { type: 'string', format: 'date-time' },

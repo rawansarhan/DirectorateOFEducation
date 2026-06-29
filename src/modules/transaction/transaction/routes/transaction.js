@@ -493,7 +493,7 @@ router.get(
  *         name: status
  *         schema:
  *           type: string
- *           enum: [draft, submitted, in_progress, completed, rejected, cancelled]
+ *           enum: [draft, submitted, in_progress, completed, rejected]
  *         description: فلترة حسب حالة المعاملة (اختياري)
  *     responses:
  *       200:

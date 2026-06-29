@@ -8,6 +8,9 @@ const {
 const {
   extractFieldsFilesFromWidgets
 } = require('./stageFormSnapshotBuilder')
+const {
+  validateAndNormalizeTemplates
+} = require('../validators/templateSubmissionValidator')
 
 const formWidgetWithValueSchema = Joi.object({
   widget_type: Joi.string()
@@ -23,7 +26,14 @@ const formWidgetWithValueSchema = Joi.object({
 
 const formTemplateWithValueSchema = Joi.object({
   id: Joi.number().integer().positive().required(),
-  value: Joi.object().default({})
+  widgets: Joi.array()
+    .items(formWidgetWithValueSchema)
+    .required()
+    .messages({
+      'any.required':
+        'widgets[] مطلوب لكل قالب — أرسل widget لكل حقل في template.config_json مع value',
+      'array.base': 'widgets[] في القالب يجب أن يكون مصفوفة'
+    })
 }).unknown(false)
 
 const STRICT_FORM_UNKNOWN_HINTS = {
@@ -248,7 +258,7 @@ async function validateAndNormalizeUnifiedFormPayload (
   }
 
   const extracted = extractFieldsFilesFromWidgets(payload.widgets)
-  const templates = normalizeTemplateItems(payload.templates || [])
+  const templates = await validateAndNormalizeTemplates(payload.templates || [])
   const gatewayValue = extractGatewayValue(configJson, validationResult.widgets)
 
   return {

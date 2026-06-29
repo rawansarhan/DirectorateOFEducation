@@ -9,8 +9,7 @@ const VALID_USER_LIST_STATUSES = [
   'submitted',
   'in_progress',
   'completed',
-  'rejected',
-  'cancelled'
+  'rejected'
 ]
 
 async function findDraft (typeTransId) {

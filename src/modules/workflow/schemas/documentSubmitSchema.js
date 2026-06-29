@@ -72,7 +72,7 @@ function validateDocumentSubmitComplete (payload = {}) {
       note: value.note ?? '',
       templates: (value.templates || []).map(template => ({
         id: template.id,
-        value: template.value ?? {}
+        widgets: template.widgets || []
       }))
     },
     error: null

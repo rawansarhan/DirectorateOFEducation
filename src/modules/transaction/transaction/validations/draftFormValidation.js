@@ -259,6 +259,10 @@ function validateWidgetValue (widget, value) {
   const data = widget.data || {}
   const label = data.label || data.id
 
+  if (data.is_required && isEmptyValue(value)) {
+    return `"${label}" مطلوب`
+  }
+
   switch (widget.widget_type) {
     case 'text_field':
       return validateTextFieldValue(data, value, label)

@@ -47,6 +47,25 @@ function validateIdentityCompleteForSubmit (transaction = {}) {
   }
 }
 
+// يفرض إرسال جميع حقول الهوية في جسم طلب التقديم بالعملية (submit/process)
+// أي حقل غير مُرسل أو فارغ يُعدّ ناقصاً
+function validateIdentityBodyComplete (identity = {}) {
+  const missingKeys = IDENTITY_KEYS.filter(
+    key => !isNonEmptyIdentityValue(identity[key])
+  )
+
+  if (!missingKeys.length) {
+    return { error: null, missing_keys: [] }
+  }
+
+  const labels = missingKeys.map(key => IDENTITY_LABELS[key]).join('، ')
+
+  return {
+    error: `جميع بيانات الهوية مطلوبة في الطلب — الحقول الناقصة: ${labels}`,
+    missing_keys: missingKeys
+  }
+}
+
 function parsePositiveInt (value, label) {
   const numeric = Number(value)
 
@@ -57,22 +76,28 @@ function parsePositiveInt (value, label) {
   return numeric
 }
 
+// أحرف عربية ولاتينية فقط مع السماح بالمسافة للأسماء المركّبة (مثل: عبد الله)
+const NAME_ALLOWED_PATTERN = /^[A-Za-z\u0621-\u064A\u0671-\u06D3]+(?:\s[A-Za-z\u0621-\u064A\u0671-\u06D3]+)*$/
+
 const identityFieldSchema = Joi.string()
   .trim()
+  .min(3)
   .max(100)
+  .pattern(NAME_ALLOWED_PATTERN)
   .allow(null, '')
   .messages({
-    'string.max': 'حقل {#label} يتجاوز الحد المسموح ({#limit} حرف)'
+    'string.min': 'حقل {#label} يجب ألا يقل عن 3 أحرف',
+    'string.max': 'حقل {#label} يجب ألا يتجاوز {#limit} حرف',
+    'string.pattern.base':
+      'حقل {#label} يجب أن يحتوي أحرفاً فقط (بدون أرقام أو رموز)'
   })
 
 const nationalIdSchema = Joi.string()
   .trim()
-  .max(50)
   .allow(null, '')
-  .pattern(/^[0-9]*$/)
+  .pattern(/^[0-9]{11}$/)
   .messages({
-    'string.max': 'رقم الهوية يتجاوز الحد المسموح ({#limit} حرف)',
-    'string.pattern.base': 'رقم الهوية يجب أن يحتوي أرقاماً فقط'
+    'string.pattern.base': 'رقم الهوية يجب أن يكون 11 رقماً بالضبط'
   })
 
 const identityBodySchema = Joi.object({
@@ -115,6 +140,7 @@ module.exports = {
   parsePositiveInt,
   validateIdentityBody,
   validateIdentityCompleteForSubmit,
+  validateIdentityBodyComplete,
   IDENTITY_KEYS,
   IDENTITY_LABELS
 }

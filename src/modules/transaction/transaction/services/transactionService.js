@@ -7,6 +7,7 @@ const {
   parsePositiveInt,
   validateIdentityBody,
   validateIdentityCompleteForSubmit,
+  validateIdentityBodyComplete,
   IDENTITY_KEYS
 } = require('../validations/transactionValidations')
 const {
@@ -119,6 +120,17 @@ async function fetchActiveProcess (processId) {
 function assertSubmitIdentityComplete (transaction) {
   const { error, missing_keys: missingKeys } =
     validateIdentityCompleteForSubmit(transaction)
+
+  if (error) {
+    throw createTransactionError('VALIDATION_ERROR', error, {
+      details: { missing_fields: missingKeys }
+    })
+  }
+}
+// يفرض إرسال كل حقول الهوية في جسم طلب التقديم بالعملية (submit/process)
+function assertIdentityBodyComplete (identityBody) {
+  const { error, missing_keys: missingKeys } =
+    validateIdentityBodyComplete(identityBody)
 
   if (error) {
     throw createTransactionError('VALIDATION_ERROR', error, {
@@ -411,6 +423,10 @@ async function submitTransactionByProcess (
     throw createTransactionError('CITIZEN_SIGNATURE_NOT_ALLOWED')
   }
 
+  // جميع حقول الهوية إلزامية في جسم الطلب — أي حقل ناقص أو فارغ يرمي إيرور
+  const identityBody = extractIdentityPayload(body)
+  assertIdentityBodyComplete(identityBody)
+
   const { draft, replayResult } = await retryWithBackoff(async () => {
     // 1) التأكد أن العملية موجودة ونشطة
     const process = await fetchActiveProcess(processId)
@@ -432,12 +448,8 @@ async function submitTransactionByProcess (
     // 2) إيجاد/إنشاء المسودة لهذا المستخدم على هذه العملية
     const { draft, isNew } = await resolveSubmitDraftForProcess({ userId, process })
 
-    // 3) التحقق من بيانات الهوية القادمة في الطلب وتطبيقها (نفس فالديت UpdateDraft)
-    const identityBody = extractIdentityPayload(body)
-
-    if (Object.keys(identityBody).length) {
-      await applyIdentityUpdate(draft, identityBody, userId)
-    }
+    // 3) تطبيق بيانات الهوية المُرسلة (تم التحقق من اكتمالها وصحتها مسبقاً)
+    await applyIdentityUpdate(draft, identityBody, userId)
 
     return { draft, isNew, replayResult: null }
   }, { label: 'transaction.submitTransactionByProcess' })
