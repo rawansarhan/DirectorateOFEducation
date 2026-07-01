@@ -45,6 +45,12 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: true
       },
 
+      // SHA-256 (hex) لبايتات الـ PDF النهائي بعد حقن رمز QR — للتحقق العام
+      content_hash: {
+        type: DataTypes.STRING(64),
+        allowNull: true
+      },
+
       status: {
         type: DataTypes.ENUM('generated','signed','stamped','archived'),
         defaultValue: 'generated',

@@ -137,6 +137,10 @@ app.use('/api/transaction/files', documentUploadRoutes)
 const notificationRoutes = require('./modules/transaction/notification/routes/notification')
 app.use('/api/notifications', notificationRoutes)
 
+const verifyDocumentRoutes =
+  require('./modules/transaction/integrityChain/routes/verifyDocument')
+app.use('/api/verify', verifyDocumentRoutes)
+
 const internalTransactionRoutes =
   require('./modules/transaction/transaction/routes/transactionInternal')
 app.use(

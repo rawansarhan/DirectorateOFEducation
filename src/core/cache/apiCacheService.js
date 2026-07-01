@@ -32,6 +32,10 @@ const KEYS = {
   authProcessesAll: () => 'process:auth:all',
   authComplaintProcesses: () => 'process:auth:complaint:all',
   stageConfig: (processId) => `stage-config:process:${processId}`,
+  currentStage: (processDefinitionId, taskDefinitionKey) =>
+    `current-stage:${processDefinitionId}:${taskDefinitionKey}`,
+  finalDocument: (transactionId) => `final-document:tx:${transactionId}`,
+  taskDetails: (taskId, userId) => `task-details:${taskId}:user:${userId}`,
   transactionDraft: (userId, processId) => `transaction:draft:${userId}:${processId}`,
   createDraft: (userId, processId) => `transaction:create-draft:${userId}:${processId}`,
   transactionById: (userId, transactionId) => `transaction:by-id:${userId}:${transactionId}`,
@@ -458,12 +462,54 @@ async function invalidateAllAuthProcessCaches () {
 async function invalidateStageConfig (processId = null) {
   if (processId != null) {
     await deleteKey(KEYS.stageConfig(processId))
+    // إعداد المرحلة تغيّر → أبطل أيضاً كاش المرحلة الحالية لنفس العملية
+    await deleteKeysByPattern(`current-stage:${processId}:*`)
     console.log(`${LOG_PREFIX} invalidate stage config — process ${processId}`)
     return
   }
 
   const count = await deleteKeysByPattern('stage-config:process:*')
-  console.log(`${LOG_PREFIX} invalidate all stage configs (${count} key(s))`)
+  const stageCount = await deleteKeysByPattern('current-stage:*')
+  console.log(
+    `${LOG_PREFIX} invalidate all stage configs (${count} key(s)) + current stages (${stageCount} key(s))`
+  )
+}
+
+async function invalidateCurrentStage (processDefinitionId = null) {
+  if (processDefinitionId != null) {
+    const count = await deleteKeysByPattern(`current-stage:${processDefinitionId}:*`)
+    console.log(
+      `${LOG_PREFIX} invalidate current stage — process ${processDefinitionId} (${count} key(s))`
+    )
+    return
+  }
+
+  const count = await deleteKeysByPattern('current-stage:*')
+  console.log(`${LOG_PREFIX} invalidate all current stages (${count} key(s))`)
+}
+
+async function invalidateFinalDocument (transactionId) {
+  if (transactionId == null) {
+    return
+  }
+
+  const cacheKey = KEYS.finalDocument(transactionId)
+  const deleted = await deleteKey(cacheKey)
+
+  logInvalidate({
+    module: 'FinalDocument',
+    fullKey: `${API_CACHE_PREFIX}${cacheKey}`,
+    deleted
+  })
+}
+
+async function invalidateTaskDetails (taskId) {
+  if (taskId == null) {
+    return
+  }
+
+  const count = await deleteKeysByPattern(`task-details:${taskId}:*`)
+  console.log(`${LOG_PREFIX} invalidate task details — task ${taskId} (${count} key(s))`)
 }
 
 async function invalidateTransactionDraft (userId, processId) {
@@ -553,6 +599,9 @@ module.exports = {
   invalidateAuthComplaintProcesses,
   invalidateAllAuthProcessCaches,
   invalidateStageConfig,
+  invalidateCurrentStage,
+  invalidateFinalDocument,
+  invalidateTaskDetails,
   invalidateTransactionDraft,
   invalidateTransactionById,
   invalidateUserTransactionDrafts,

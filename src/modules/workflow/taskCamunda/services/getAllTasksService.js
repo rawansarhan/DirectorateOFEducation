@@ -17,13 +17,15 @@ const {
 const { EMPLOYEE_TASKS_CACHE_TTL_SECONDS } = require('../../../../core/config/env')
 const {
   resolveEmployeeTaskStatus,
-  calculateProgressPercent
+  calculateProgressPercent,
+  buildApplicantName
 } = require('../utils/employeeTaskStatus')
 const {
   releaseExpiredTaskLocksForProcessInstances
 } = require('./taskLockService')
 const {
-  normalizeProcessPriority
+  normalizeProcessPriority,
+  formatTransactionDate
 } = require('../utils/employeeTaskFormatters')
 
 const EMPLOYEE_STATUS_FILTERS = {
@@ -335,18 +337,37 @@ async function getRunningTasks ({
   }
 }
 
-async function getTerminalTasks ({
-  userId,
-  processDefinitionIds,
-  transactionStatus,
-  page,
-  limit,
-  offset
-}) {
+function mapUserStageToItem (row) {
+  const transaction = row.transaction
+  const user = transaction?.user
+  const processInstance = transaction?.process_instance
+  const processDefinition = processInstance?.process_definition
+  const typeTrans = processDefinition?.type_trans
+  const stageData = row.data || {}
+  const decision = stageData.decision ?? stageData.value ?? null
+
+  return {
+    transaction_id: transaction?.id ?? null,
+    transaction_number: transaction?.id_process ?? null,
+    type: typeTrans?.name ?? processDefinition?.name ?? null,
+    type_code: typeTrans?.code ?? null,
+    applicant_name: buildApplicantName(transaction, user),
+    process_name: processDefinition?.name ?? null,
+    date: formatTransactionDate(transaction?.created_at),
+    stage_code: row.stage_code ?? null,
+    stage_name: row.stage_name ?? null,
+    status: row.status,
+    decision,
+    transaction_status: transaction?.status ?? null,
+    completed_at: formatTransactionDate(row.created_at)
+  }
+}
+
+async function getUserCompletedStages ({ userId, status, page, limit, offset }) {
   const { rows, count } =
-    await employeeTaskRepository.getTerminalInstancesForStages({
-      processDefinitionIds,
-      transactionStatus,
+    await employeeTaskRepository.getStagesCompletedByUser({
+      userId,
+      status,
       limit,
       offset
     })
@@ -355,23 +376,8 @@ async function getTerminalTasks ({
     return emptyPaginatedResult({ page, limit })
   }
 
-  const { stageCountMap, completedStageCountMap } =
-    await buildProgressMaps(rows)
-  const stageNameMap = await buildStageNameMap(rows)
-
-  const items = rows.map(instance =>
-    mapInstanceToTask({
-      instance,
-      activeTask: null,
-      userId,
-      stageCountMap,
-      completedStageCountMap,
-      stageNameMap
-    })
-  )
-
   return {
-    items,
+    items: rows.map(mapUserStageToItem),
     pagination: buildPaginationMeta({ page, limit, total: count })
   }
 }
@@ -678,15 +684,6 @@ async function getAllTasks ({ userId, page, limit, offset, status = 'active' }) 
   const paginationInput = { page, limit, offset }
 
   if (status === 'completed' || status === 'rejected') {
-    const context = await loadEmployeeStageContext(userId)
-
-    if (!context) {
-      return {
-        message: 'لا توجد مهام',
-        data: emptyPaginatedResult(paginationInput)
-      }
-    }
-
     const cacheScope = `terminal:${status}`
 
     const data = await loadCachedEmployeeTasks({
@@ -696,10 +693,9 @@ async function getAllTasks ({ userId, page, limit, offset, status = 'active' }) 
       offset,
       cacheScope,
       loader: () =>
-        getTerminalTasks({
+        getUserCompletedStages({
           userId,
-          processDefinitionIds: context.processDefinitionIds,
-          transactionStatus: status,
+          status,
           page,
           limit,
           offset

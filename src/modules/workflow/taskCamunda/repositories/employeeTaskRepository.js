@@ -590,6 +590,64 @@ async function getTerminalInstancesForStages ({
   })
 }
 
+const USER_STAGE_INCLUDES = [
+  {
+    model: db.Transaction,
+    as: 'transaction',
+    required: true,
+    attributes: [
+      'id',
+      'id_process',
+      'status',
+      'first_name',
+      'father_name',
+      'last_name',
+      'created_at'
+    ],
+    include: [
+      {
+        model: db.User,
+        as: 'user',
+        attributes: ['first_name', 'father_name', 'last_name', 'userName']
+      },
+      {
+        model: db.ProcessInstance,
+        as: 'process_instance',
+        required: false,
+        attributes: ['id', 'process_definition_id', 'status'],
+        include: [
+          {
+            model: db.ProcessDefinition,
+            as: 'process_definition',
+            attributes: ['id', 'name', 'priority'],
+            include: [
+              {
+                model: db.TypeTrans,
+                as: 'type_trans',
+                attributes: ['name', 'code']
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]
+
+async function getStagesCompletedByUser ({ userId, status, limit, offset }) {
+  return db.ProcessInstanceStage.findAndCountAll({
+    where: {
+      assigned_to: userId,
+      status
+    },
+    include: USER_STAGE_INCLUDES,
+    order: [['created_at', 'DESC']],
+    limit,
+    offset,
+    distinct: true
+  })
+}
+
 async function getTerminalInstancesByDepartments ({
   departmentIds,
   transactionStatus,
@@ -733,6 +791,7 @@ module.exports = {
   getRunningInstancesForProcessDefinitions,
   getRunningInstancesForStages,
   getTerminalInstancesForStages,
+  getStagesCompletedByUser,
   getTerminalInstancesByDepartments,
   countTerminalTransactionsByDepartments,
   getRunningInstancesForDepartmentTransactions,

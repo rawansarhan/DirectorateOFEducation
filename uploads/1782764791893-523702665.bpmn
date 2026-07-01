@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:modeler="http://camunda.org/schema/modeler/1.0" id="Definitions_0dm0n1n" targetNamespace="http://bpmn.io/schema/bpmn" exporter="Camunda Modeler" exporterVersion="5.44.0" modeler:executionPlatform="Camunda Platform" modeler:executionPlatformVersion="7.24.0">
+  <bpmn:process id="Process_0j67cp2" name="معاملة نقل طالب" isExecutable="true" camunda:historyTimeToLive="180">
+    <bpmn:startEvent id="StartEvent_1">
+      <bpmn:outgoing>Flow_09s3pe8</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:userTask id="Activity_06y4ho4" name="وثائق المواطن">
+      <bpmn:incoming>Flow_09s3pe8</bpmn:incoming>
+      <bpmn:outgoing>Flow_0de57u0</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:sequenceFlow id="Flow_09s3pe8" sourceRef="StartEvent_1" targetRef="Activity_06y4ho4" />
+    <bpmn:userTask id="Activity_0wvfirz" name="ملأ الفورم">
+      <bpmn:incoming>Flow_0de57u0</bpmn:incoming>
+      <bpmn:outgoing>Flow_0mb7grn</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:sequenceFlow id="Flow_0de57u0" sourceRef="Activity_06y4ho4" targetRef="Activity_0wvfirz" />
+    <bpmn:serviceTask id="Activity_1w8na5r" camunda:expression="${true}">
+      <bpmn:incoming>Flow_0mb7grn</bpmn:incoming>
+      <bpmn:outgoing>Flow_19dllv3</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:sequenceFlow id="Flow_0mb7grn" sourceRef="Activity_0wvfirz" targetRef="Activity_1w8na5r" />
+    <bpmn:endEvent id="Event_0uhr27m">
+      <bpmn:incoming>Flow_19dllv3</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_19dllv3" sourceRef="Activity_1w8na5r" targetRef="Event_0uhr27m" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Process_0j67cp2">
+      <bpmndi:BPMNShape id="StartEvent_1_di" bpmnElement="StartEvent_1">
+        <dc:Bounds x="182" y="102" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_06y4ho4_di" bpmnElement="Activity_06y4ho4">
+        <dc:Bounds x="270" y="80" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_0wvfirz_di" bpmnElement="Activity_0wvfirz">
+        <dc:Bounds x="430" y="80" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_1w8na5r_di" bpmnElement="Activity_1w8na5r">
+        <dc:Bounds x="590" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_0uhr27m_di" bpmnElement="Event_0uhr27m">
+        <dc:Bounds x="752" y="102" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_09s3pe8_di" bpmnElement="Flow_09s3pe8">
+        <di:waypoint x="218" y="120" />
+        <di:waypoint x="270" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0de57u0_di" bpmnElement="Flow_0de57u0">
+        <di:waypoint x="370" y="120" />
+        <di:waypoint x="430" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0mb7grn_di" bpmnElement="Flow_0mb7grn">
+        <di:waypoint x="530" y="120" />
+        <di:waypoint x="590" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_19dllv3_di" bpmnElement="Flow_19dllv3">
+        <di:waypoint x="690" y="120" />
+        <di:waypoint x="752" y="120" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

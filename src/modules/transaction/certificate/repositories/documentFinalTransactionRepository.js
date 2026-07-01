@@ -1,11 +1,32 @@
 'use strict'
 
 const { DocumentFinalTransaction } = require('../../../../entities')
+const {
+  KEYS,
+  getOrLoad,
+  invalidateFinalDocument
+} = require('../../../../core/cache/apiCacheService')
+const { FINAL_DOCUMENT_CACHE_TTL_SECONDS } = require('../../../../core/config/env')
 
 async function findByTransactionId (transactionId) {
   return DocumentFinalTransaction.findOne({
     where: { transaction_id: transactionId }
   })
+}
+
+/**
+ * قراءة مكاشة للوثيقة النهائية (تعيد كائناً عادياً plain).
+ * تُستخدم في مسارات العرض فقط — لا تُستخدم في مسارات التعديل.
+ */
+async function findByTransactionIdCached (transactionId) {
+  return getOrLoad(
+    KEYS.finalDocument(transactionId),
+    () => findByTransactionId(transactionId),
+    {
+      label: `final-document:tx:${transactionId}`,
+      ttlSeconds: FINAL_DOCUMENT_CACHE_TTL_SECONDS
+    }
+  )
 }
 
 async function upsertForTransaction ({
@@ -32,16 +53,21 @@ async function upsertForTransaction ({
 
   if (existing) {
     await existing.update(payload)
-    return existing.reload()
+    const reloaded = await existing.reload()
+    await invalidateFinalDocument(transactionId)
+    return reloaded
   }
 
-  return DocumentFinalTransaction.create({
+  const created = await DocumentFinalTransaction.create({
     transaction_id: transactionId,
     ...payload
   })
+  await invalidateFinalDocument(transactionId)
+  return created
 }
 
 module.exports = {
   findByTransactionId,
+  findByTransactionIdCached,
   upsertForTransaction
 }

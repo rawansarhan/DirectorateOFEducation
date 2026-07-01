@@ -28,9 +28,12 @@
 
 const fs = require('fs')
 const path = require('path')
+const { createHash } = require('crypto')
 const fontkit = require('@pdf-lib/fontkit')
 const { PDFDocument, StandardFonts, rgb } = require('pdf-lib')
 const { normalizeStoredFilePath } = require('../../../../core/utils/filePath')
+const { injectIntegrityQr } = require('./qrStampService')
+const { API_PUBLIC_URL } = require('../../../../core/config/env')
 
 const DEFAULT_UNICODE_FONT_PATH = path.join(
   process.cwd(),
@@ -534,7 +537,8 @@ function buildGeneratedPdfPath ({ transactionId, templateId, instanceId }) {
  */
 async function generatePdfFromTemplate ({
   documentTemplate,
-  documentInstance
+  documentInstance,
+  genesisHash = null
 }) {
   if (!documentTemplate?.file_path) {
     throw new Error('ملف القالب غير موجود')
@@ -629,11 +633,26 @@ async function generatePdfFromTemplate ({
     fs.mkdirSync(uploadsDir, { recursive: true })
   }
 
+  // حقن رمز QR موقّع يشير لسلسلة نزاهة المعاملة — قبل الحفظ ليكون ضمن content_hash
+  const qrResult = await injectIntegrityQr({
+    pdfDoc,
+    configJson,
+    transactionId: documentInstance.transaction_id,
+    genesisHash,
+    documentInstanceId: documentInstance.id,
+    apiBaseUrl: API_PUBLIC_URL
+  })
+
   const pdfBytes = await pdfDoc.save()
   fs.writeFileSync(outputAbsolutePath, pdfBytes)
 
+  // content_hash = SHA-256 للملف النهائي (متضمناً رمز QR) — للمطابقة عند التحقق
+  const contentHash = createHash('sha256').update(pdfBytes).digest('hex')
+
   return {
     generated_pdf_path: outputStoredPath,
+    content_hash: contentHash,
+    qr: qrResult,
     filled_keys: fillResult.filled,
     skipped_keys: fillResult.skipped,
     flattened: fillResult.flattened === true,
@@ -641,6 +660,18 @@ async function generatePdfFromTemplate ({
   }
 }
 
+/**
+ * يحوّل نوع حقل AcroForm الأصلي في الـ PDF إلى widget_type مقترح للقالب.
+ *
+ * أنواع القالب المسموحة فقط: text_field, date_picker, dropdown, check_list
+ * (DOCUMENT_TEMPLATE_WIDGET_TYPES في stageConfigSchema). لذا:
+ *   - PDFCheckBox  → check_list  (لا يوجد نوع checkbox مفرد)
+ *   - PDFRadioGroup → dropdown   (radio_group غير مسموح في القالب — dropdown هو
+ *     الـ single-select المعتمد على options المسموح)
+ *
+ * ملاحظة: لا يوجد date_picker في صيغة PDF؛ التاريخ يظهر كـ PDFTextField → text_field،
+ * ويُغيَّر يدوياً إلى date_picker في config_json عند الحاجة.
+ */
 function mapPdfFieldToWidgetType (field) {
   const pdfFieldType = field?.constructor?.name || 'Unknown'
 
@@ -648,11 +679,11 @@ function mapPdfFieldToWidgetType (field) {
     case 'PDFTextField':
       return { pdf_field_type: 'PDFTextField', widget_type: 'text_field' }
     case 'PDFCheckBox':
-      return { pdf_field_type: 'PDFCheckBox', widget_type: 'checkbox' }
+      return { pdf_field_type: 'PDFCheckBox', widget_type: 'check_list' }
     case 'PDFDropdown':
       return { pdf_field_type: 'PDFDropdown', widget_type: 'dropdown' }
     case 'PDFRadioGroup':
-      return { pdf_field_type: 'PDFRadioGroup', widget_type: 'radio_group' }
+      return { pdf_field_type: 'PDFRadioGroup', widget_type: 'dropdown' }
     default:
       return { pdf_field_type: pdfFieldType, widget_type: 'unknown' }
   }
@@ -674,6 +705,14 @@ function buildSuggestedWidget (fieldMeta) {
 
   if (fieldMeta.widget_type === 'dropdown' && fieldMeta.options?.length) {
     base.data.options = fieldMeta.options
+  }
+
+  if (fieldMeta.widget_type === 'check_list') {
+    base.data.options = fieldMeta.options?.length
+      ? fieldMeta.options
+      : [{ key: fieldMeta.id, value: fieldMeta.id }]
+    base.data.min_selected = 0
+    base.data.max_selected = base.data.options.length
   }
 
   return base
@@ -725,7 +764,10 @@ async function extractPdfAcroFormFieldsFromBytes (templateBytes) {
       ...mapped
     }
 
-    if (mapped.pdf_field_type === 'PDFDropdown') {
+    if (
+      mapped.pdf_field_type === 'PDFDropdown' ||
+      mapped.pdf_field_type === 'PDFRadioGroup'
+    ) {
       try {
         const options = field.getOptions()
 
@@ -759,6 +801,7 @@ module.exports = {
   collectWidgetKeys,
   filterValuesByTemplateKeys,
   resolveAbsoluteUploadPath,
+  embedUnicodeFont,
   extractPdfAcroFormFieldsFromBytes,
   extractPdfAcroFormFieldsFromPath,
   buildSuggestedConfigJson,

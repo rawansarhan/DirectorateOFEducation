@@ -107,11 +107,20 @@ const submitTransactionLimiter = createRateLimiter({
   keyGenerator: userAwareKey
 })
 
+// توليد الوثيقة النهائية المدمجة عملية ثقيلة (دمج PDF) — نحدّ معدّل الطلبات بشدّة.
+const finalDocumentLimiter = createRateLimiter({
+  windowMs: Number(process.env.RATE_LIMIT_FINAL_DOC_WINDOW_MS || 10 * 1000),
+  max: Number(process.env.RATE_LIMIT_FINAL_DOC_MAX || 3),
+  keyPrefix: 'final-document',
+  keyGenerator: userAwareKey
+})
+
 module.exports = {
   createRateLimiter,
   authSensitiveLimiter,
   authBruteForceLimiter,
   signingChallengeLimiter,
   completeTaskLimiter,
-  submitTransactionLimiter
+  submitTransactionLimiter,
+  finalDocumentLimiter
 }

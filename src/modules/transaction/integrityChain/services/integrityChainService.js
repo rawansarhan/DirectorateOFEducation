@@ -4,10 +4,15 @@ const transactionRepository =
   require('../../transaction/repositories/transactionRepository')
 const transactionSignatureLinkRepository =
   require('../repositories/transactionSignatureLinkRepository')
+const documentInstanceRepository =
+  require('../../document/repositories/documentInstanceRepository')
 const digitalSignatureRepository =
   require('../../../workflow/taskCamunda/repositories/digitalSignatureRepository')
 const transactionSigningChallengeRepository =
   require('../../../workflow/taskCamunda/repositories/transactionSigningChallengeRepository')
+const {
+  verifyDocumentBinding
+} = require('./authoritySignatureService')
 
 const { API_PUBLIC_URL } = require('../../../../core/config/env')
 const {
@@ -309,10 +314,107 @@ async function getIntegrityChain (transactionId, { userId = null, skipOwnerCheck
   }
 }
 
+/**
+ * تحقق عام من رمز QR في وثيقة PDF (يُستدعى من /api/verify/document).
+ *
+ * يتحقق من:
+ *   1) صحة توقيع سلطة الإصدار على ربط الوثيقة (tx|genesis|doc).
+ *   2) تطابق genesis_hash مع المعاملة.
+ *   3) أن نسخة الوثيقة تخص هذه المعاملة فعلاً.
+ *   4) سلامة سلسلة التواقيع الحالية (المؤشّر الحيّ — أحدث سلسلة كاملة).
+ *
+ * يعيد content_hash المسجّل ليطابقه الماسح مع الملف الذي بحوزته.
+ */
+async function verifyDocumentQr ({
+  transactionId,
+  genesisHash,
+  documentInstanceId,
+  signatureBase64Url
+}) {
+  const numericTransactionId = Number.parseInt(transactionId, 10)
+  const numericDocumentInstanceId = Number.parseInt(documentInstanceId, 10)
+
+  if (!Number.isInteger(numericTransactionId) || numericTransactionId < 1) {
+    throw new Error('معرّف المعاملة غير صالح')
+  }
+
+  if (!Number.isInteger(numericDocumentInstanceId) || numericDocumentInstanceId < 1) {
+    throw new Error('معرّف الوثيقة غير صالح')
+  }
+
+  if (!genesisHash || !signatureBase64Url) {
+    throw new Error('بيانات رمز QR ناقصة')
+  }
+
+  const signatureValid = verifyDocumentBinding({
+    transactionId: numericTransactionId,
+    genesisHash,
+    documentInstanceId: numericDocumentInstanceId,
+    signatureBase64Url
+  })
+
+  if (!signatureValid) {
+    return {
+      valid: false,
+      signature_valid: false,
+      reason: 'توقيع سلطة الإصدار غير صالح — قد يكون رمز QR مزوّراً',
+      verified_at: new Date()
+    }
+  }
+
+  const transaction = await transactionRepository.findById(numericTransactionId)
+
+  if (!transaction) {
+    throw new Error('Transaction not found')
+  }
+
+  if (transaction.genesis_hash !== genesisHash) {
+    return {
+      valid: false,
+      signature_valid: true,
+      reason: 'genesis_hash لا يطابق المعاملة',
+      verified_at: new Date()
+    }
+  }
+
+  const documentInstance = await documentInstanceRepository.findById(
+    numericDocumentInstanceId
+  )
+
+  if (!documentInstance || documentInstance.transaction_id !== numericTransactionId) {
+    return {
+      valid: false,
+      signature_valid: true,
+      reason: 'نسخة الوثيقة لا تخص هذه المعاملة',
+      verified_at: new Date()
+    }
+  }
+
+  const chain = await verifyIntegrityChain(numericTransactionId, { genesis_hash: genesisHash })
+
+  return {
+    valid: chain.valid,
+    signature_valid: true,
+    transaction_id: numericTransactionId,
+    transaction_status: transaction.status,
+    genesis_hash: transaction.genesis_hash,
+    document: {
+      document_instance_id: documentInstance.id,
+      document_template_id: documentInstance.document_template_id,
+      generated_pdf_path: documentInstance.generated_pdf_path,
+      content_hash: documentInstance.content_hash,
+      status: documentInstance.status
+    },
+    chain,
+    verified_at: new Date()
+  }
+}
+
 module.exports = {
   ensureGenesisHash,
   getPreviousLinkHash,
   appendIntegrityLink,
   getIntegrityChain,
-  verifyIntegrityChain
+  verifyIntegrityChain,
+  verifyDocumentQr
 }

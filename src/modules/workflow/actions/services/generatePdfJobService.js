@@ -5,6 +5,9 @@ const documentTemplateRepository = require('../../../requirements/DocTemp/reposi
 const {
   generatePdfFromTemplate
 } = require('../../../transaction/document/services/pdfGenerationService')
+const {
+  ensureGenesisHash
+} = require('../../../transaction/integrityChain/services/integrityChainService')
 
 async function resolveDocumentInstance ({
   transactionId,
@@ -82,13 +85,18 @@ async function executeGeneratePdfJob ({
     )
   }
 
+  // يضمن وجود genesis_hash للمعاملة قبل توقيع رمز QR (مؤشّر سلسلة النزاهة)
+  const genesisHash = await ensureGenesisHash({ id: numericTransactionId })
+
   const generation = await generatePdfFromTemplate({
     documentTemplate,
-    documentInstance
+    documentInstance,
+    genesisHash
   })
 
   await documentInstanceRepository.updateInstance(documentInstance, {
     generated_pdf_path: generation.generated_pdf_path,
+    content_hash: generation.content_hash,
     status: 'generated'
   })
 
@@ -99,6 +107,7 @@ async function executeGeneratePdfJob ({
     document_instance_id: documentInstance.id,
     transaction_id: numericTransactionId,
     generated_pdf_path: generation.generated_pdf_path,
+    content_hash: generation.content_hash,
     filled_keys: generation.filled_keys,
     skipped_keys: generation.skipped_keys,
     values_used: generation.values_used,

@@ -75,7 +75,7 @@ async function loadAuthorizedTransaction (
   if (transaction.user_id === userId) {
     return transaction
   }
-
+//تحقق من صلاحية الموظف
   if (audience === CERTIFICATE_AUDIENCE.EMPLOYEE) {
     const allowed = await employeeCanAccessCertificate(userId, transaction)
 
@@ -107,22 +107,31 @@ async function getCertificateBundle (
     )
   }
 
-  const skipOwnerCheck = audience === CERTIFICATE_AUDIENCE.EMPLOYEE
-
-  const [process, integrityChain, documentInstances, finalDocument] =
+  const [process, documentInstances, finalDocument] =
     await Promise.all([
       transaction.code
         ? processRepository.findByCode(transaction.code)
         : null,
-      getIntegrityChain(transactionId, { userId, skipOwnerCheck }),
       documentInstanceRepository.findAllByTransactionId(transactionId),
-      documentFinalTransactionRepository.findByTransactionId(transactionId)
+      documentFinalTransactionRepository.findByTransactionIdCached(transactionId)
     ])
 
   const historyData = enrichHistoryTemplatesWithDocumentInstances(
     formatTransactionHistoryForDisplay(transaction.data || {}, transaction),
     documentInstances
   )
+
+  // الشهادة لا تتضمّن أي بيانات QR — نُسقط qr_payload_snapshot من الوثيقة النهائية
+  const mappedFinalDocument = mapFinalDocument(finalDocument)
+
+  if (mappedFinalDocument) {
+    delete mappedFinalDocument.qr_payload_snapshot
+  }
+
+  const finalDocumentResult = mappedFinalDocument || {
+    available: false,
+    message: 'لم يتم توليد نسخة pdf من هذا الطلب'
+  }
 
   return {
     transaction_id: transaction.id,
@@ -136,15 +145,7 @@ async function getCertificateBundle (
       priority: normalizeProcessPriority(process?.priority),
       data: historyData
     },
-    integrity_chain: {
-      genesis_hash: integrityChain.genesis_hash,
-      head_hash: integrityChain.head_hash,
-      chain_status: integrityChain.chain_status,
-      total_links: integrityChain.total_links,
-      qr_payload: integrityChain.qr_payload,
-      verify_url: integrityChain.qr_payload?.verify ?? null
-    },
-    final_document: mapFinalDocument(finalDocument)
+    final_document: finalDocumentResult
   }
 }
 
@@ -188,8 +189,9 @@ async function saveFinalDocument ({
 
   return mapFinalDocument(saved)
 }
-
+//جلب الوثيقة النهائية 
 async function getFinalDocument (transactionId, { userId = null } = {}) {
+  //تحقق من صلاحية المعاملة 
   await loadAuthorizedTransaction(transactionId, userId)
 
   const row = await documentFinalTransactionRepository.findByTransactionId(

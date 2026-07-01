@@ -42,7 +42,8 @@ const securityGuardService = require('../../../../core/security/securityGuardSer
 const {
   invalidateEmployeeTasksForUser,
   deleteKeysByPattern,
-  invalidateEmployeeTaskStats
+  invalidateEmployeeTaskStats,
+  invalidateTaskDetails
 } = require('../../../../core/cache/apiCacheService')
 const operationGuardService = require('../../../../core/security/operationGuardService')
 const documentTemplateRepository =
@@ -180,16 +181,19 @@ async function enrichTemplatesForResponse (templates = []) {
   const enriched = []
 
   for (const template of templates) {
-    const templateId = template.id ?? template.template_id
+    const templateId =
+      template.id_template ?? template.id ?? template.template_id ?? null
+    const documentInstanceId =
+      template.id_document_instance ?? template.document_instance_id ?? null
     const row = templateId
       ? await documentTemplateRepository.findById(templateId)
       : null
 
     let generatedPdfPath = template.generated_pdf_path ?? null
 
-    if (template.document_instance_id && !generatedPdfPath) {
+    if (documentInstanceId && !generatedPdfPath) {
       const instance = await documentInstanceRepository.findById(
-        template.document_instance_id
+        documentInstanceId
       )
       generatedPdfPath = instance?.generated_pdf_path ?? null
     }
@@ -197,8 +201,8 @@ async function enrichTemplatesForResponse (templates = []) {
     enriched.push({
       id: templateId,
       id_template: templateId,
-      document_instance_id: template.document_instance_id ?? null,
-      id_document_instance: template.document_instance_id ?? null,
+      document_instance_id: documentInstanceId,
+      id_document_instance: documentInstanceId,
       value: template.values ?? template.value ?? {},
       values: template.values ?? template.value ?? {},
       path: row?.file_path || template.path || null,
@@ -1208,6 +1212,9 @@ async function completeTaskCore ({
   }
 
   invalidateEmployeeTaskStats().catch(() => {})
+
+  // المهمة اكتملت → أبطل كاش تفاصيلها
+  invalidateTaskDetails(task.id).catch(() => {})
 
   if (workflowStatus === 'completed' || isReject) {
     deleteKeysByPattern('employee-tasks:*:depts:*').catch(() => {})

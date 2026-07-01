@@ -31,7 +31,7 @@ async function findByTransactionAndTemplate (transactionId, documentTemplateId) 
 async function findAllByTransactionId (transactionId) {
   return DocumentInstance.findAll({
     where: { transaction_id: transactionId },
-    order: [['id', 'ASC']]
+    order: [['created_at', 'ASC'], ['id', 'ASC']]
   })
 }
 

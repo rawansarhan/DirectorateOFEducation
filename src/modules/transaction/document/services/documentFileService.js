@@ -17,6 +17,8 @@
  *       POST /api/workflow/tasks/{id}/submit-documents/complete
  */
 
+const fs = require('fs')
+const path = require('path')
 const documentSignatureRepository = require('../../../workflow/taskCamunda/repositories/documentSignatureRepository')
 const typeDocRepository = require('../../../requirements/typeDoc/repositories/typeDocRepository')
 const { buildStoredFileEntry } = require('../../../../core/utils/filePath')
@@ -27,6 +29,35 @@ function createDocumentFileError (message) {
   const err = new Error(message)
   err.code = 'VALIDATION_ERROR'
   return err
+}
+
+/**
+ * يرفض أي مسار ملف لا يشير لملف مرفوع فعلي.
+ * يمنع حفظ مسارات مشوّهة مثل "/uploads/2" الناتجة عن قيمة file_picker خاطئة (مثل "2").
+ * الملف يجب أن يكون مرفوعاً مسبقاً عبر POST /api/transaction/files/upload.
+ */
+function assertUploadedFileExists (storedPath, fileKey) {
+  if (!storedPath || typeof storedPath !== 'string') {
+    throw createDocumentFileError(
+      `مسار الملف غير صالح للحقل "${fileKey}" — ارفع الملف عبر POST /api/transaction/files/upload ثم أرسل المسار الراجع`
+    )
+  }
+
+  const fileName = path.posix.basename(storedPath)
+
+  if (!fileName || !path.posix.extname(fileName)) {
+    throw createDocumentFileError(
+      `مسار الملف "${storedPath}" للحقل "${fileKey}" غير صالح — يجب أن يكون مسار ملف مرفوع مثل /uploads/<اسم-الملف>.pdf وليس قيمة عشوائية`
+    )
+  }
+
+  const absolutePath = path.join(process.cwd(), storedPath.replace(/^\//, ''))
+
+  if (!fs.existsSync(absolutePath)) {
+    throw createDocumentFileError(
+      `الملف المشار إليه (${storedPath}) للحقل "${fileKey}" غير موجود — تأكد من رفعه عبر POST /api/transaction/files/upload قبل الإرسال`
+    )
+  }
 }
 
 async function resolveTypeDoc (file = {}) {
@@ -71,6 +102,8 @@ async function registerTransactionFile ({
     },
     userId
   )
+
+  assertUploadedFileExists(stored.path, file.key || file.name || 'unknown')
 
   const document = await retryWithBackoff(
     () =>

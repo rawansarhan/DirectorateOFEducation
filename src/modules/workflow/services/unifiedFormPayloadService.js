@@ -226,12 +226,91 @@ function mapTemplatesForHistory (templates = []) {
   }))
 }
 
+// يستخرج معرّفات القوالب المطلوبة من stage_config.config_json.template
+function extractRequiredTemplateIds (configJson = {}) {
+  const items = Array.isArray(configJson?.template)
+    ? configJson.template
+    : Array.isArray(configJson?.templates)
+      ? configJson.templates
+      : []
+
+  const ids = []
+
+  for (const item of items) {
+    const id = Number(item?.template_id ?? item?.id)
+
+    if (Number.isInteger(id) && id > 0) {
+      ids.push(id)
+    }
+  }
+
+  return ids
+}
+
+/**
+ * يفرض أن القوالب المُرسلة تطابق القوالب المعرّفة في stage_config:
+ *   - لا يجوز إرسال templates[] فارغة إذا كانت المرحلة تتطلب قالباً
+ *   - لا يجوز نقص قالب مطلوب
+ *   - لا يجوز تكرار نفس القالب
+ *   - لا يجوز إرسال قالب غير معرّف في stage_config
+ * (مطابقة widgets/value داخل كل قالب تتم في validateAndNormalizeTemplates)
+ */
+function assertSubmittedTemplatesMatchStageConfig (configJson, submittedTemplates) {
+  const requiredIds = extractRequiredTemplateIds(configJson)
+
+  if (!requiredIds.length) {
+    return
+  }
+
+  const submitted = Array.isArray(submittedTemplates) ? submittedTemplates : []
+
+  if (!submitted.length) {
+    throw new Error(
+      `templates[] مطلوبة — هذه المرحلة تتطلب إرسال القالب/القوالب: [${requiredIds.join(', ')}] ولا يجوز إرسالها فارغة`
+    )
+  }
+
+  const seen = new Set()
+
+  for (const item of submitted) {
+    const id = Number(item?.id ?? item?.template_id)
+
+    if (!Number.isInteger(id) || id <= 0) {
+      throw new Error('معرّف القالب (id) غير صالح في templates[]')
+    }
+
+    if (seen.has(id)) {
+      throw new Error(`القالب (id=${id}) مُرسل أكثر من مرة في templates[]`)
+    }
+
+    seen.add(id)
+  }
+
+  const requiredSet = new Set(requiredIds)
+  const missing = requiredIds.filter(id => !seen.has(id))
+  const extra = [...seen].filter(id => !requiredSet.has(id))
+
+  if (missing.length) {
+    throw new Error(
+      `قوالب ناقصة — يجب إرسال القالب/القوالب المعرّفة في stage_config: [${missing.join(', ')}]`
+    )
+  }
+
+  if (extra.length) {
+    throw new Error(
+      `قوالب غير معرّفة في stage_config مُرسلة: [${extra.join(', ')}] — أرسل فقط القوالب: [${requiredIds.join(', ')}]`
+    )
+  }
+}
+
 async function validateAndNormalizeUnifiedFormPayload (
   payload = {},
   configJson = {},
   options = {}
 ) {
   const { stageName = null } = options
+  const isReject =
+    payload.decision === 'reject' || payload.decision === 'rejected'
 
   if (!Array.isArray(payload.widgets)) {
     throw new Error(
@@ -258,6 +337,11 @@ async function validateAndNormalizeUnifiedFormPayload (
   }
 
   const extracted = extractFieldsFilesFromWidgets(payload.widgets)
+
+  if (!isReject) {
+    assertSubmittedTemplatesMatchStageConfig(configJson, payload.templates || [])
+  }
+
   const templates = await validateAndNormalizeTemplates(payload.templates || [])
   const gatewayValue = extractGatewayValue(configJson, validationResult.widgets)
 

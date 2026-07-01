@@ -6,6 +6,9 @@ const {
   getFinalDocument
 } = require('../services/transactionCertificateService')
 const {
+  generateMergedFinalDocument
+} = require('../../document/services/finalDocumentBuilderService')
+const {
   successResponse,
   errorResponse
 } = require('../../transaction/utils/transactionResponse')
@@ -82,8 +85,30 @@ async function getFinalDocumentController (req, res) {
   }
 }
 
+async function generateFinalDocumentController (req, res) {
+  try {
+    const force =
+      req.query.force === 'true' || req.query.force === '1'
+
+    const data = await generateMergedFinalDocument(req.params.transactionId, {
+      userId: req.user.id,
+      force
+    })
+
+    return successResponse(res, {
+      message: data.already_exists
+        ? 'تم إنشاء الوثيقة النهائية (final_document) لهذه المعاملة مسبقاً'
+        : 'تم توليد الوثيقة النهائية المدمجة بنجاح',
+      data
+    })
+  } catch (err) {
+    return handleCertificateError(res, err)
+  }
+}
+
 module.exports = {
   getCertificateController,
   uploadFinalDocumentController,
-  getFinalDocumentController
+  getFinalDocumentController,
+  generateFinalDocumentController
 }

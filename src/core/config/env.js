@@ -72,6 +72,12 @@ module.exports = {
   JWT_SECRET: required('JWT_SECRET'),
   JWT_EXPIRES_IN: optional('JWT_EXPIRES_IN') || optional('JWT_ACCESS_EXPIRES_IN') || '1h',
 
+  // مفتاح سلطة الإصدار (Ed25519) — يوقّع به الخادم محتوى رمز QR في الـ PDF.
+  // اختياري عند الإقلاع؛ لكنه مطلوب فعلياً وقت توليد PDF (يُرمى خطأ واضح حينها).
+  // ولّد الزوج عبر: npm run keys:authority
+  INTEGRITY_AUTHORITY_PRIVATE_KEY: optional('INTEGRITY_AUTHORITY_PRIVATE_KEY'),
+  INTEGRITY_AUTHORITY_PUBLIC_KEY: optional('INTEGRITY_AUTHORITY_PUBLIC_KEY'),
+
   EMAIL_USER: required('EMAIL_USER'),
   EMAIL_PASS: required('EMAIL_PASS'),
 
@@ -94,6 +100,9 @@ module.exports = {
   API_CACHE_TTL_SECONDS: intOptional('API_CACHE_TTL_SECONDS', 3600),
   PROCESS_CACHE_TTL_SECONDS: intOptional('PROCESS_CACHE_TTL_SECONDS', 3600),
   EMPLOYEE_TASKS_CACHE_TTL_SECONDS: intOptional('EMPLOYEE_TASKS_CACHE_TTL_SECONDS', 60),
+  FINAL_DOCUMENT_CACHE_TTL_SECONDS: intOptional('FINAL_DOCUMENT_CACHE_TTL_SECONDS', 3600),
+  TASK_DETAILS_CACHE_TTL_SECONDS: intOptional('TASK_DETAILS_CACHE_TTL_SECONDS', 30),
+  CURRENT_STAGE_CACHE_TTL_SECONDS: intOptional('CURRENT_STAGE_CACHE_TTL_SECONDS', 600),
 
   OPERATION_MIN_INTERVAL_MS: intRequired('OPERATION_MIN_INTERVAL_MS'),
   IDEMPOTENCY_TTL_MS: intRequired('IDEMPOTENCY_TTL_MS'),

@@ -19,6 +19,15 @@ const {
 } = require('../utils/transactionHistoryDisplay')
 const documentInstanceRepository = require('../../../transaction/document/repositories/documentInstanceRepository')
 const { enrichCamundaTaskNotFoundError } = require('../../../../core/utils/errorMessageHelper')
+const {
+  KEYS,
+  getOrLoad,
+  invalidateTaskDetails
+} = require('../../../../core/cache/apiCacheService')
+const {
+  TASK_DETAILS_CACHE_TTL_SECONDS,
+  CURRENT_STAGE_CACHE_TTL_SECONDS
+} = require('../../../../core/config/env')
 
 function createTaskDetailsError (code, message) {
   const error = new Error(message)
@@ -102,6 +111,35 @@ async function resolveTransaction (processInstance) {
   return transaction
 }
 
+/**
+ * قراءة مكاشة للمرحلة الحالية + إعدادها (قراءة صرفة بدون أثر جانبي).
+ * المفتاح: (process_definition_id, taskDefinitionKey) — ثابت لكل مرحلة.
+ * يُبطَّل عند تعديل إعداد المرحلة (invalidateStageConfig).
+ */
+async function loadCachedCurrentStage ({ processDefinitionId, taskDefinitionKey }) {
+  return getOrLoad(
+    KEYS.currentStage(processDefinitionId, taskDefinitionKey),
+    async () => {
+      const activeStage = await stageRepository.findByCodeAndProcess(
+        processDefinitionId,
+        taskDefinitionKey
+      )
+
+      if (!activeStage) {
+        return { activeStage: null, stageConfig: null }
+      }
+
+      const stageConfig = await stageConfigRepository.findByStageId(activeStage.id)
+
+      return { activeStage, stageConfig }
+    },
+    {
+      label: `current-stage:${processDefinitionId}:${taskDefinitionKey}`,
+      ttlSeconds: CURRENT_STAGE_CACHE_TTL_SECONDS
+    }
+  )
+}
+
 async function resolveActiveStageConfig ({ task, processInstance }) {
   if (!task?.taskDefinitionKey || !processInstance?.process_definition_id) {
     return {
@@ -110,10 +148,10 @@ async function resolveActiveStageConfig ({ task, processInstance }) {
     }
   }
 
-  const activeStage = await stageRepository.findByCodeAndProcess(
-    processInstance.process_definition_id,
-    task.taskDefinitionKey
-  )
+  const { activeStage, stageConfig } = await loadCachedCurrentStage({
+    processDefinitionId: processInstance.process_definition_id,
+    taskDefinitionKey: task.taskDefinitionKey
+  })
 
   if (!activeStage) {
     return {
@@ -122,14 +160,13 @@ async function resolveActiveStageConfig ({ task, processInstance }) {
     }
   }
 
+  // الأثر الجانبي (مزامنة current_stage_id) يبقى خارج الكاش
   if (processInstance.current_stage_id !== activeStage.id) {
     await processInstanceRepository.update(processInstance.id, {
       current_stage_id: activeStage.id
     })
     processInstance.current_stage_id = activeStage.id
   }
-
-  const stageConfig = await stageConfigRepository.findByStageId(activeStage.id)
 
   return { activeStage, stageConfig }
 }
@@ -187,15 +224,24 @@ async function loadTaskDetailsContext ({ taskId, userId }) {
 }
 
 async function getTaskDetails ({ taskId, userId }) {
-  const { details, task_lock } = await loadTaskDetailsContext({ taskId, userId })
+  return getOrLoad(
+    KEYS.taskDetails(taskId, userId),
+    async () => {
+      const { details, task_lock } = await loadTaskDetailsContext({ taskId, userId })
 
-  return {
-    message: 'تم جلب تفاصيل المهمة بنجاح',
-    data: {
-      ...details,
-      task_lock
+      return {
+        message: 'تم جلب تفاصيل المهمة بنجاح',
+        data: {
+          ...details,
+          task_lock
+        }
+      }
+    },
+    {
+      label: `task-details:${taskId}`,
+      ttlSeconds: TASK_DETAILS_CACHE_TTL_SECONDS
     }
-  }
+  )
 }
 
 async function pickupTask ({ taskId, userId }) {
@@ -225,6 +271,9 @@ async function pickupTask ({ taskId, userId }) {
     taskDefinitionKey: task.taskDefinitionKey
   })
 
+  // حالة القفل تغيّرت → أبطل كاش تفاصيل المهمة لكل المستخدمين
+  await invalidateTaskDetails(task.id)
+
   const { details } = await loadTaskDetailsContext({ taskId, userId })
   const refreshedInstance = await processInstanceRepository.findById(processInstance.id)
   const task_lock = buildTaskLockStatus(refreshedInstance, task.id, userId)
@@ -246,6 +295,9 @@ async function releaseTask ({ taskId, userId }) {
     taskId: task.id,
     userId
   })
+
+  // حالة القفل تغيّرت → أبطل كاش تفاصيل المهمة لكل المستخدمين
+  await invalidateTaskDetails(task.id)
 
   const refreshedInstance = await processInstanceRepository.findById(processInstance.id)
   const task_lock = buildTaskLockStatus(refreshedInstance, task.id, userId)

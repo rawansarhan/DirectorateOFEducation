@@ -21,9 +21,14 @@ const {
 } = require('../../integrityChain/controllers/integrityChainController')
 
 const {
+  getTransactionDocumentsController
+} = require('../../document/controllers/transactionDocumentsController')
+
+const {
   getCertificateController,
   uploadFinalDocumentController,
-  getFinalDocumentController
+  getFinalDocumentController,
+  generateFinalDocumentController
 } = require('../../certificate/controllers/transactionCertificateController')
 
 const {
@@ -32,7 +37,7 @@ const {
 } = require('../../../../core/middleware/upload')
 
 const { authMiddleware } = require('../../../../core/middleware/authMiddleware')
-const { submitTransactionLimiter, signingChallengeLimiter, completeTaskLimiter } = require('../../../../core/security/rateLimitMiddleware')
+const { submitTransactionLimiter, signingChallengeLimiter, completeTaskLimiter, finalDocumentLimiter } = require('../../../../core/security/rateLimitMiddleware')
 const {
   createDocumentSubmitSigningChallengeByProcessController,
   createDocumentSubmitSigningChallengeByTransactionController,
@@ -520,14 +525,15 @@ router.get(
  * @swagger
  * /api/transaction/{transactionId}/certificate:
  *   get:
- *     summary: بيانات الشهادة للطباعة (transaction_history + QR)
+ *     summary: بيانات الشهادة للطباعة (transaction_history)
  *     description: |
  *       **الترتيب المقترح:** 1) هذا الـ API → 2) الفرونت يبني PDF → 3) POST final-document
  *
  *       يجمع كل ما يحتاجه الفرونت:
  *       - `transaction_history` (id_process + applicant + stages + templates.generated_pdf_path)
- *       - `integrity_chain.qr_payload` + verify_url
  *       - `final_document` إن وُجدت
+ *
+ *       ملاحظة: لا يتضمّن هذا الرد أي بيانات QR / سلسلة نزاهة.
  *
  *       **Auth:** Bearer — مالك المعاملة (المواطن) فقط
  *       **الحالة:** completed فقط
@@ -570,6 +576,93 @@ router.get(
   '/:transactionId/certificate',
   authMiddleware,
   getCertificateController
+)
+
+/**
+ * @swagger
+ * /api/transaction/{transactionId}/documents:
+ *   get:
+ *     summary: كل ملفات المعاملة (GENERATE_PDF + file_picker) + QR النهائي
+ *     description: |
+ *       يُرجِع لمعاملة واحدة:
+ *       - `generated_documents`: كل ملفات GENERATE_PDF (من document_instance) مع content_hash.
+ *       - `uploaded_files`: كل ملفات file_picker المرفوعة (من document_signature) مع نوع الوثيقة.
+ *       - `final_qr`: رمز QR النهائي للمعاملة وفق الطريقة المعتمدة (توقيع سلطة الإصدار — مؤشّر حيّ لسلسلة التواقيع).
+ *
+ *       **Auth:** Bearer — مالك المعاملة
+ *     tags: [Certificate & Integrity Chain]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: transactionId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *         description: معرّف المعاملة
+ *     responses:
+ *       200:
+ *         description: تم جلب وثائق المعاملة بنجاح
+ *       400:
+ *         description: معرّف غير صالح
+ *       403:
+ *         description: لا تملك صلاحية الوصول
+ *       404:
+ *         description: المعاملة غير موجودة
+ */
+router.get(
+  '/:transactionId/documents',
+  authMiddleware,
+  getTransactionDocumentsController
+)
+
+/**
+ * @swagger
+ * /api/transaction/{transactionId}/final-document/generate:
+ *   post:
+ *     summary: توليد PDF نهائي مدمج (غلاف QR + كل GENERATE_PDF + كل file_picker)
+ *     description: |
+ *       يبني الخادم ملف PDF واحد:
+ *       1) صفحة غلاف فيها رمز QR النهائي للمعاملة (الموقّع من سلطة الإصدار).
+ *       2) كل ملفات GENERATE_PDF.
+ *       3) كل ملفات file_picker المرفوعة (PDF تُنسخ صفحاتها، والصور تُدرج كصفحات).
+ *
+ *       يُحفظ ويُسجَّل كـ final_document (يستبدل النسخة السابقة إن وُجدت) ويُحسب content_hash.
+ *
+ *       **Auth:** Bearer — مالك المعاملة | **الحالة:** completed فقط
+ *     tags: [Certificate & Integrity Chain]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: transactionId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *         description: معرّف المعاملة
+ *       - in: query
+ *         name: force
+ *         required: false
+ *         schema:
+ *           type: boolean
+ *         description: عند true يعيد توليد الوثيقة المدمجة ويستبدل النسخة المحفوظة سابقاً (مفيد بعد تغيير الإعدادات/الترتيب)
+ *     responses:
+ *       200:
+ *         description: تم توليد الوثيقة النهائية المدمجة بنجاح
+ *       400:
+ *         description: لا توجد وثائق للدمج أو الحالة ليست completed
+ *       403:
+ *         description: لا تملك صلاحية الوصول
+ *       404:
+ *         description: المعاملة غير موجودة
+ */
+router.post(
+  '/:transactionId/final-document/generate',
+  authMiddleware,
+  finalDocumentLimiter,
+  generateFinalDocumentController
 )
 
 /**

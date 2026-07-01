@@ -12,6 +12,10 @@ const swaggerOptions = {
     },
     servers: [
       {
+        url: '/',
+        description: 'Same origin (current host) — يتجنّب مشاكل CORS عند التجربة'
+      },
+      {
         url: process.env.API_PUBLIC_URL || `http://localhost:${process.env.PORT || 4000}`,
         description: process.env.API_PUBLIC_URL ? 'Public server' : 'Local server'
       }
