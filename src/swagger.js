@@ -1210,6 +1210,28 @@ const swaggerOptions = {
           }
         },
 
+        LocationCreate: {
+          type: 'object',
+          required: ['name', 'typeLocation_id'],
+          properties: {
+            name: { type: 'string', example: 'ريف دمشق' },
+            typeLocation_id: { type: 'integer', example: 1 },
+            parent_id: { type: 'integer', nullable: true, example: null }
+          }
+        },
+
+        LocationEnvelope: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            message: {
+              type: 'string',
+              example: 'تم إنشاء الموقع بنجاح'
+            },
+            data: { $ref: '#/components/schemas/Location' }
+          }
+        },
+
         // ======================== Stage Submission (SDUI) ==========================
         StageSubmissionFieldItem: {
           type: 'object',
