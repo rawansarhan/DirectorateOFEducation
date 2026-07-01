@@ -1,6 +1,19 @@
 const asyncHandler = require('../../../core/middleware/asyncHandler')
 const ApiResponder = require('../../../core/utils/apiResponder')
-const { getAllLocationsService } = require('../services/location')
+const {
+  createLocationService,
+  getAllLocationsService
+} = require('../services/location')
+
+// ================= CREATE =================
+const createLocation = asyncHandler(async (req, res) => {
+  try {
+    const result = await createLocationService(req.body)
+    return ApiResponder.createdResponse(res, result, 'تم إنشاء الموقع بنجاح')
+  } catch (err) {
+    return ApiResponder.error(res, { message: err.message, statusCode: err.statusCode || 400 })
+  }
+})
 
 // ================= GET ALL =================
 const getAllLocations = asyncHandler(async (req, res) => {
@@ -13,5 +26,6 @@ const getAllLocations = asyncHandler(async (req, res) => {
 })
 
 module.exports = {
+  createLocation,
   getAllLocations
 }
