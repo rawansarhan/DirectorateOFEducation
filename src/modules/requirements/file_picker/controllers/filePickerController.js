@@ -23,8 +23,8 @@ const createFilePicker = asyncHandler(async (req, res) => {
 
 const getAllFilePickers = asyncHandler(async (req, res) => {
   try {
-    const data = await getAllFilePickersService()
-    return ApiResponder.okResponse(res, data, 'تم جلب منتقيات الملفات بنجاح')
+    const result = await getAllFilePickersService(req.query)
+    return ApiResponder.okResponse(res, result, 'تم جلب منتقيات الملفات بنجاح')
   } catch (err) {
     return ApiResponder.badRequestResponse(res, err.message)
   }

@@ -132,11 +132,23 @@ router.put(
  * @swagger
  * /api/document-templates:
  *   get:
- *     summary: Get all active document templates => (المسؤول التقني)
+ *     summary: Get all active document templates => (المسؤول التقني) (مع ترقيم صفحات وبحث)
  *     tags: [Document Templates]
  *     security:
  *       - bearerAuth: []
- *
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer, default: 1, minimum: 1 }
+ *         description: رقم الصفحة
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 10, minimum: 1, maximum: 70 }
+ *         description: عدد العناصر في الصفحة
+ *       - in: query
+ *         name: search
+ *         schema: { type: string }
+ *         description: نص البحث في اسم القالب (name)
  *     responses:
  *       200:
  *         description: تم جلب القوالب بنجاح

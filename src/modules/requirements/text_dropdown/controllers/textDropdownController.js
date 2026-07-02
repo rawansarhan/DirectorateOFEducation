@@ -23,8 +23,8 @@ const createTextDropdown = asyncHandler(async (req, res) => {
 
 const getAllTextDropdowns = asyncHandler(async (req, res) => {
   try {
-    const data = await getAllTextDropdownsService()
-    return ApiResponder.okResponse(res, data, 'تم جلب القوائم المنسدلة بنجاح')
+    const result = await getAllTextDropdownsService(req.query)
+    return ApiResponder.okResponse(res, result, 'تم جلب القوائم المنسدلة بنجاح')
   } catch (err) {
     return ApiResponder.badRequestResponse(res, err.message)
   }

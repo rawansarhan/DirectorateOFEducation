@@ -6,10 +6,12 @@ const { FilePickerInputDTO } = require('../dto/FilePickerInputDTO')
 const { validateCreateFilePicker } = require('../validations/filePickerValidations')
 const { toDTO, toDTOList } = require('../mappers/filePickerMapper')
 const {
-  getOrLoad,
-  KEYS,
   invalidateFilePickers
 } = require('../../../../core/cache/apiCacheService')
+const {
+  parsePaginationQuery,
+  buildPaginationMeta
+} = require('../../../../core/utils/pagination')
 
 const WIDGET_PREFIX = 'file_picker'
 const LOG_PREFIX = '[FilePicker]'
@@ -70,16 +72,27 @@ async function loadAllFilePickers () {
   return toDTOList(rows)
 }
 
-async function getAllFilePickersService () {
+async function getAllFilePickersService (query = {}) {
+  const { page, limit, offset } = parsePaginationQuery(query, {
+    defaultLimit: 10
+  })
+  const search = String(query.search || '').trim()
+
   console.log(
-    `${LOG_PREFIX} GET /api/file-pickers — loading list (cache key: api:${KEYS.filePickers()})`
+    `${LOG_PREFIX} GET /api/file-pickers — page=${page} limit=${limit}` +
+    (search ? ` search="${search}"` : '')
   )
 
-  return getOrLoad(
-    KEYS.filePickers(),
-    loadAllFilePickers,
-    { label: 'FilePicker GET /api/file-pickers' }
-  )
+  const { rows, count } = await filePickerRepository.findAndCountActive({
+    limit,
+    offset,
+    search: search || undefined
+  })
+
+  return {
+    items: toDTOList(rows),
+    pagination: buildPaginationMeta({ page, limit, total: count })
+  }
 }
 
 async function getFilePickerByIdService (id) {

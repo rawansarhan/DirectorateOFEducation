@@ -23,8 +23,8 @@ const createDatePicker = asyncHandler(async (req, res) => {
 
 const getAllDatePickers = asyncHandler(async (req, res) => {
   try {
-    const data = await getAllDatePickersService()
-    return ApiResponder.okResponse(res, data, 'تم جلب منتقيات التاريخ بنجاح')
+    const result = await getAllDatePickersService(req.query)
+    return ApiResponder.okResponse(res, result, 'تم جلب منتقيات التاريخ بنجاح')
   } catch (err) {
     return ApiResponder.badRequestResponse(res, err.message)
   }

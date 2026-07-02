@@ -5,10 +5,12 @@ const { TextFieldInputDTO } = require('../dto/TextFieldInputDTO')
 const { validateCreateTextField } = require('../validations/textFieldValidations')
 const { toDTO, toDTOList } = require('../mappers/textFieldMapper')
 const {
-  getOrLoad,
-  KEYS,
   invalidateTextFields
 } = require('../../../../core/cache/apiCacheService')
+const {
+  parsePaginationQuery,
+  buildPaginationMeta
+} = require('../../../../core/utils/pagination')
 
 const WIDGET_PREFIX = 'text_field'
 const LOG_PREFIX = '[TextField]'
@@ -53,16 +55,27 @@ async function loadAllTextFields () {
   return toDTOList(rows)
 }
 
-async function getAllTextFieldsService () {
+async function getAllTextFieldsService (query = {}) {
+  const { page, limit, offset } = parsePaginationQuery(query, {
+    defaultLimit: 10
+  })
+  const search = String(query.search || '').trim()
+
   console.log(
-    `${LOG_PREFIX} GET /api/text-fields — loading list (cache key: api:${KEYS.textFields()})`
+    `${LOG_PREFIX} GET /api/text-fields — page=${page} limit=${limit}` +
+    (search ? ` search="${search}"` : '')
   )
 
-  return getOrLoad(
-    KEYS.textFields(),
-    loadAllTextFields,
-    { label: 'TextField GET /api/text-fields' }
-  )
+  const { rows, count } = await textFieldRepository.findAndCountActive({
+    limit,
+    offset,
+    search: search || undefined
+  })
+
+  return {
+    items: toDTOList(rows),
+    pagination: buildPaginationMeta({ page, limit, total: count })
+  }
 }
 
 async function getTextFieldByIdService (id) {

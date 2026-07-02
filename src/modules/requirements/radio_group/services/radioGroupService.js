@@ -5,10 +5,12 @@ const { RadioGroupInputDTO } = require('../dto/RadioGroupInputDTO')
 const { validateCreateRadioGroup } = require('../validations/radioGroupValidations')
 const { toDTO, toDTOList } = require('../mappers/radioGroupMapper')
 const {
-  getOrLoad,
-  KEYS,
   invalidateRadioGroups
 } = require('../../../../core/cache/apiCacheService')
+const {
+  parsePaginationQuery,
+  buildPaginationMeta
+} = require('../../../../core/utils/pagination')
 
 const WIDGET_PREFIX = 'radio_group'
 const LOG_PREFIX = '[RadioGroup]'
@@ -53,16 +55,27 @@ async function loadAllRadioGroups () {
   return toDTOList(rows)
 }
 
-async function getAllRadioGroupsService () {
+async function getAllRadioGroupsService (query = {}) {
+  const { page, limit, offset } = parsePaginationQuery(query, {
+    defaultLimit: 10
+  })
+  const search = String(query.search || '').trim()
+
   console.log(
-    `${LOG_PREFIX} GET /api/radio-groups — loading list (cache key: api:${KEYS.radioGroups()})`
+    `${LOG_PREFIX} GET /api/radio-groups — page=${page} limit=${limit}` +
+    (search ? ` search="${search}"` : '')
   )
 
-  return getOrLoad(
-    KEYS.radioGroups(),
-    loadAllRadioGroups,
-    { label: 'RadioGroup GET /api/radio-groups' }
-  )
+  const { rows, count } = await radioGroupRepository.findAndCountActive({
+    limit,
+    offset,
+    search: search || undefined
+  })
+
+  return {
+    items: toDTOList(rows),
+    pagination: buildPaginationMeta({ page, limit, total: count })
+  }
 }
 
 async function getRadioGroupByIdService (id) {
