@@ -1,10 +1,11 @@
 'use strict'
 
 /**
- * خادم إشعارات WebSocket (stub جاهز للإنتاج) — بديل FCM لتطبيق سطح مكتب Windows.
+ * خادم إشعارات WebSocket — بديل FCM لتطبيق سطح مكتب Windows.
  *
- * مستقلّ تمامًا عن Express: يفتح خادم `ws` على منفذ منفصل (WS_PORT، الافتراضي
- * 4100) كي لا يتداخل مع الـ REST API. العميل (push_socket.dart) يتصل بـ:
+ * يُركَّب على **نفس خادم HTTP الخاص بـ Express** (المنفذ 4000) عبر [attach]، فلا
+ * يحتاج منفذًا ثانيًا ولا شهادة wss منفصلة، ويعمل خلف Nginx على المسار `/ws`.
+ * العميل (push_socket.dart) يتصل بـ:
  *
  *     wss://host/ws?token=<access_jwt>
  *
@@ -12,13 +13,12 @@
  *   - يتحقق من الـ JWT بنفس سرّ الـ backend (JWT_ACCESS_SECRET || JWT_SECRET).
  *   - يسجّل كل اتصال تحت معرّف المستخدم (decoded.id) ليُمكن الاستهداف لاحقًا.
  *   - يردّ على إطارات ping التطبيقية بـ pong (يُكمّل آلية keep-alive في العميل).
- *   - يبثّ رسالة تجريبية { title, body, payload } دوريًّا للتأكد من العرض،
- *     ويوفّر دالّتي broadcast / sendToUser لإرسالها من بقية الـ backend.
+ *   - يوفّر دالّتي broadcast / sendToUser لإرسال { title, body, payload } من
+ *     بقية الـ backend، مع إشعار تجريبي دوري اختياري للتأكد من العرض.
  *
- * التشغيل المستقل:   node src/notifications/wsNotificationServer.js
- * أو ضمن السيرفر:    require('./notifications/wsNotificationServer').start()
- *
- * متطلّب:  npm install ws        (حزمة ws غير مثبّتة بعد في هذا المشروع)
+ * الاستخدام:
+ *   - ضمن السيرفر (الإنتاج):  require('./notifications/wsNotificationServer').attach(httpServer)
+ *   - تشغيل مستقل (تطوير):     node src/notifications/wsNotificationServer.js
  */
 
 const http = require('http')
@@ -32,12 +32,11 @@ const ACCESS_SECRET =
   process.env.JWT_SECRET ||
   'your_very_secret_key'
 
-const WS_PORT = Number(process.env.WS_PORT) || 4100
 const WS_PATH = process.env.WS_PATH || '/ws'
+const WS_PORT = Number(process.env.WS_PORT) || 4100 // للتشغيل المستقل فقط.
 
-// تفعيل رسالة تجريبية دورية (مفيد للتطوير/التحقق من الـ Definition of Done).
-// أوقفها في الإنتاج عبر WS_DEMO=false.
-const DEMO_ENABLED = process.env.WS_DEMO !== 'false'
+// إشعار تجريبي دوري (مفيد للتحقق). أوقفه في الإنتاج عبر WS_DEMO=false.
+const DEMO_ENABLED = process.env.WS_DEMO === 'true'
 const DEMO_INTERVAL_MS = Number(process.env.WS_DEMO_INTERVAL_MS) || 15000
 
 /** اتصالات حيّة مفهرسة بمعرّف المستخدم: userId -> Set<WebSocket>. */
@@ -85,24 +84,29 @@ function sendToUser (userId, { title, body, payload }) {
   }
 }
 
-function start () {
-  // خادم HTTP خفيف نُرفق به ترقية الـ WebSocket كي نتحكّم بالمسار والمصادقة
-  // قبل إتمام المصافحة (نرفض الاتصالات غير المصرّح بها مبكّرًا).
-  const server = http.createServer((req, res) => {
-    res.writeHead(426, { 'Content-Type': 'text/plain' })
-    res.end('Upgrade Required: WebSocket only')
-  })
+let _demoTimer = null
 
+/**
+ * يُركّب خادم الـ WebSocket على خادم HTTP قائم (Express).
+ *
+ * يعترض حدث 'upgrade' فقط للطلبات على [WS_PATH]، ويصادق الـ JWT قبل إتمام
+ * المصافحة (فيرفض غير المصرّح مبكّرًا)، ويترك بقية الطلبات لـ Express.
+ * يُعيد مرجعًا فيه broadcast / sendToUser / detach.
+ */
+function attach (server) {
   // noServer: نتحكّم بالترقية يدويًّا في حدث 'upgrade'.
   const wss = new WebSocketServer({ noServer: true })
 
-  server.on('upgrade', (req, socket, head) => {
-    const { pathname } = new URL(req.url, 'http://localhost')
-    if (pathname !== WS_PATH) {
-      socket.write('HTTP/1.1 404 Not Found\r\n\r\n')
-      socket.destroy()
-      return
+  const onUpgrade = (req, socket, head) => {
+    let pathname
+    try {
+      pathname = new URL(req.url, 'http://localhost').pathname
+    } catch (_) {
+      pathname = null
     }
+
+    // ليست ترقية على مسارنا → اتركها (قد يتعامل معها مستمع 'upgrade' آخر).
+    if (pathname !== WS_PATH) return
 
     const token = extractToken(req.url)
     if (!token) {
@@ -124,12 +128,16 @@ function start () {
       ws.userId = decoded.id
       wss.emit('connection', ws, req)
     })
-  })
+  }
+
+  server.on('upgrade', onUpgrade)
 
   wss.on('connection', (ws) => {
     const userId = ws.userId
     register(userId, ws)
-    console.log(`[ws] متصل: user=${userId} (إجمالي المستخدمين: ${clientsByUser.size})`)
+    console.log(
+      `[ws] متصل: user=${userId} (إجمالي المستخدمين: ${clientsByUser.size})`
+    )
 
     // إشعار ترحيبي فوري للتأكد من سلامة المسار من الطرف إلى الطرف.
     ws.send(
@@ -163,17 +171,12 @@ function start () {
     })
   })
 
-  server.listen(WS_PORT, () => {
-    console.log(
-      `[ws] خادم إشعارات WebSocket يعمل على ws://localhost:${WS_PORT}${WS_PATH}`
-    )
-  })
+  console.log(`[ws] خادم الإشعارات مُركَّب على المسار ${WS_PATH}`)
 
-  // رسالة تجريبية دورية (للتطوير/التحقق). تُبثّ لكل المتصلين.
-  let demoTimer = null
-  if (DEMO_ENABLED) {
+  // إشعار تجريبي دوري (اختياري) للتحقق من العرض من الطرف إلى الطرف.
+  if (DEMO_ENABLED && !_demoTimer) {
     let counter = 0
-    demoTimer = setInterval(() => {
+    _demoTimer = setInterval(() => {
       counter += 1
       broadcast({
         title: 'إشعار تجريبي',
@@ -185,12 +188,39 @@ function start () {
 
   return {
     wss,
-    server,
     broadcast,
     sendToUser,
-    stop () {
-      if (demoTimer) clearInterval(demoTimer)
+    detach () {
+      if (_demoTimer) {
+        clearInterval(_demoTimer)
+        _demoTimer = null
+      }
+      server.removeListener('upgrade', onUpgrade)
       wss.close()
+    }
+  }
+}
+
+/**
+ * تشغيل مستقل (تطوير محلي): يفتح خادم HTTP خاصًّا على [WS_PORT] ويُركّب عليه
+ * الـ ws. للإنتاج استخدم [attach] على خادم Express بدلًا من هذا.
+ */
+function start () {
+  const server = http.createServer((req, res) => {
+    res.writeHead(426, { 'Content-Type': 'text/plain' })
+    res.end('Upgrade Required: WebSocket only')
+  })
+  const handle = attach(server)
+  server.listen(WS_PORT, () => {
+    console.log(
+      `[ws] (مستقل) خادم إشعارات WebSocket على ws://localhost:${WS_PORT}${WS_PATH}`
+    )
+  })
+  return {
+    ...handle,
+    server,
+    stop () {
+      handle.detach()
       server.close()
     }
   }
@@ -202,4 +232,4 @@ if (require.main === module) {
   start()
 }
 
-module.exports = { start, broadcast, sendToUser }
+module.exports = { attach, start, broadcast, sendToUser }
