@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <title>دليل سير العمل — Directorate of Education</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@400;600;700&display=swap" rel="stylesheet" />
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Noto Sans Arabic', Arial, sans-serif;
+      line-height: 1.7;
+      color: #1a1a1a;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 32px 40px;
+      font-size: 11pt;
+    }
+    h1 { color: #0d47a1; font-size: 22pt; border-bottom: 3px solid #0d47a1; padding-bottom: 8px; }
+    h2 { color: #1565c0; font-size: 16pt; margin-top: 28px; page-break-after: avoid; }
+    h3 { color: #1976d2; font-size: 13pt; margin-top: 20px; page-break-after: avoid; }
+    h4 { color: #424242; font-size: 11pt; margin-top: 16px; }
+    table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 10pt; }
+    th, td { border: 1px solid #ccc; padding: 8px 10px; text-align: right; vertical-align: top; }
+    th { background: #e3f2fd; font-weight: 700; }
+    tr:nth-child(even) { background: #fafafa; }
+    code, pre {
+      font-family: Consolas, monospace;
+      background: #f5f5f5;
+      direction: ltr;
+      text-align: left;
+    }
+    pre {
+      padding: 12px;
+      border-radius: 6px;
+      overflow-x: auto;
+      font-size: 9pt;
+      border: 1px solid #ddd;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .cover { text-align: center; padding: 60px 0 40px; page-break-after: always; }
+    .cover h1 { border: none; font-size: 26pt; }
+    .cover p { color: #555; font-size: 12pt; }
+    .note { background: #fff8e1; border-right: 4px solid #ffc107; padding: 10px 14px; margin: 12px 0; }
+    .flow { background: #f3e5f5; border-right: 4px solid #7b1fa2; padding: 10px 14px; margin: 12px 0; font-family: monospace; font-size: 10pt; direction: ltr; text-align: left; }
+    ul { padding-right: 24px; }
+    li { margin: 4px 0; }
+    .page-break { page-break-before: always; }
+    .meta { color: #666; font-size: 10pt; margin-bottom: 24px; }
+  </style>
+</head>
+<body>
+
+<div class="cover">
+  <h1>دليل شامل لسير العمل</h1>
+  <p>من إعداد العملية (BPMN) إلى تقديم المعاملة ومعالجة مهام الموظفين</p>
+  <p>Directorate of Education — Backend API Flows</p>
+  <p class="meta">إصدار: مايو 2026</p>
+</div>
+
+<h1>0. شكل الاستجابة الموحّد</h1>
+<table>
+  <tr><th>الحالة</th><th>الشكل</th></tr>
+  <tr><td>نجاح</td><td><code>{ success: true, status_code: 200, message: "...", data: { ... } }</code></td></tr>
+  <tr><td>خطأ</td><td><code>{ success: false, status_code: 4xx/5xx, message: "...", error: "...", data: null }</code></td></tr>
+</table>
+<ul>
+  <li>كل الطلبات (ما عدا تسجيل الدخول) تحتاج: <code>Authorization: Bearer &lt;token&gt;</code></li>
+  <li>رسائل الأخطاء بالعربية في مسارات الـ workflow والمعاملات</li>
+</ul>
+
+<h1>1. الأدوار (Actors)</h1>
+<table>
+  <tr><th>الدور</th><th>المسؤولية</th></tr>
+  <tr><td>المسؤول التقني</td><td>يرفع BPMN، يضبط مراحل الاستمارات، يراجع ويوافق على العملية</td></tr>
+  <tr><td>المواطن / الموظف (مقدّم الطلب)</td><td>يختار نوع المعاملة، يملأ الاستمارة، يقدّم الطلب</td></tr>
+  <tr><td>الموظف (معالج)</td><td>يستلم المهام، يقفل المعاملة، يوقّع USB، يوافق أو يرفض</td></tr>
+</table>
+
+<h1 class="page-break">2. الجزء الأول — إعداد العملية (Admin)</h1>
+<p><strong>الهدف:</strong> تحويل ملف BPMN إلى عملية جاهزة للاستخدام من المواطن والموظفين.</p>
+
+<h2>2.1 سيكوانس إنشاء وتفعيل العملية</h2>
+<pre>
+[1] المسؤول التقني → Frontend Admin
+[2] POST /api/process_definitions/create  (multipart: BPMN + name + priority + type_trans_id)
+    → Deploy Camunda → حفظ process_definitions + stages
+[3] POST /api/stage_config/create  ({ stages: [{ stage_id, config_json, assignments }] })
+    → حفظ stage_configs + stage_assignments
+[4] GET /api/process_definitions/{id}/details
+    → { process, stages, validation: { is_valid, errors } }
+[5] إذا is_valid = true:
+    POST /api/process_definitions/{id}/review  { decision: "APPROVE" | "REJECT" }
+    → approval_status = APPROVED → العملية جاهزة للجمهور
+</pre>
+
+<h2>2.2 شرح خطوة بخطoة (للفرونت)</h2>
+<table>
+  <tr><th>#</th><th>API</th><th>متى</th><th>ملاحظات</th></tr>
+  <tr><td>1</td><td>POST /api/process_definitions/create</td><td>إنشاء عملية</td><td>multipart: file BPMN + name, priority, type_trans_id — صلاحية PROCESS_CREATE</td></tr>
+  <tr><td>2</td><td>POST /api/stage_config/create</td><td>إعداد المراحل</td><td>stages[]: stage_id, config_json, assignments[] — STAGE_CONFIG_CREATE</td></tr>
+  <tr><td>3</td><td>GET /api/process_definitions/{id}/details</td><td>معاينة/تحقق</td><td>اعرض validation.errors — لا تفعّل الموافقة إذا is_valid=false — PROCESS_VIEW</td></tr>
+  <tr><td>4</td><td>POST /api/process_definitions/{id}/review</td><td>موافقة/رفض</td><td>{ decision: "APPROVE" | "REJECT" } — PROCESS_APPROVE</td></tr>
+</table>
+
+<h3>ماذا يحدث للـ Stakeholders؟</h3>
+<ol>
+  <li><strong>رفع BPMN</strong> — النشر في Camunda + حفظ المراحل.</li>
+  <li><strong>إعداد المراحل</strong> — استمارة + تعيين الدوائر/الأدوار.</li>
+  <li><strong>التحقق</strong> — التأكد من اكتمال الإعدادات.</li>
+  <li><strong>الموافقة</strong> — بعدها فقط تظهر للمواطن/الموظف.</li>
+</ol>
+
+<h1 class="page-break">3. الجزء الثاني — تقديم المعاملة</h1>
+<p><strong>الهدف:</strong> من اختيار النوع حتى إرسال الطلب وبدء سير العمل.</p>
+
+<h2>3.1 سيكوانس رحلة مقدّم الطلب</h2>
+<pre>
+[1] GET /api/typeProcess                          → أنواع المعاملات
+[2] GET /api/process_definitions/auth/{typeTransId} → عمليات AUTH المعتمدة
+[3] المستخدم يختار processId
+[4] بالتوازي:
+    GET /api/transaction/draft/{processId}         → مسودة إن وُجدت
+    GET /api/stage_config/config/{processId}       → config_json (widgets)
+[5] عرض الاستمارة
+[6] (اختياري) POST /api/transaction/upsertDraft/{processId}  → حفظ مسودة
+[7] POST /api/transaction/{transactionId}/submit → إرسال + بدء workflow (outbox)
+    → بدون توقيع USB — idempotency_key يولّده السيرفر
+</pre>
+
+<h2>3.2 جدول APIs — Portal</h2>
+<table>
+  <tr><th>#</th><th>API</th><th>الشاشة</th><th>ملاحظة</th></tr>
+  <tr><td>1</td><td>GET /api/typeProcess</td><td>قائمة الأنواع</td><td>—</td></tr>
+  <tr><td>2</td><td>GET /api/process_definitions/auth/{typeTransId}</td><td>عمليات متاحة</td><td>typeProcess id — مع pagination</td></tr>
+  <tr><td>3</td><td>GET /api/transaction/draft/{processId}</td><td>الاستمارة</td><td>مسودة محفوظة</td></tr>
+  <tr><td>4</td><td>GET /api/stage_config/config/{processId}</td><td>الاستمارة</td><td>process definition id — هيكل widgets</td></tr>
+  <tr><td>5</td><td>POST /api/transaction/upsertDraft/{processId}</td><td>حفظ</td><td>اختياري</td></tr>
+  <tr><td>6</td><td>POST /api/transaction/{transactionId}/submit</td><td>إرسال</td><td>يبدأ workflow</td></tr>
+</table>
+
+<h3>body الـ submit</h3>
+<pre>{
+  "stage_name": "استمارة التقديم",
+  "fields": [{ "key": "citizen_phone", "value": "0912345678" }],
+  "files": [{ "key": "national_id_files", "path": "uploads/..." }],
+  "templates": [{ "template_id": 1, "values": {} }],
+  "decision": "submit",
+  "note": ""
+}</pre>
+<div class="note">
+  <strong>مهم:</strong> لا توقيع USB عند submit. Idempotency: السيرفر يولّد idempotency_key — لا ترسله من العميل.
+</div>
+
+<h3>APIs إضافية</h3>
+<table>
+  <tr><th>API</th><th>الاستخدام</th></tr>
+  <tr><td>POST /api/transaction/CreateDraft/{processId}</td><td>إنشاء مسودة فارغة</td></tr>
+  <tr><td>POST /api/transaction/updateDraft/{transId}</td><td>حقول الهوية فقط</td></tr>
+  <tr><td>GET /api/transaction/{transactionId}</td><td>تفاصيل المعاملة</td></tr>
+</table>
+
+<h1 class="page-break">4. الجزء الثالث — معالجة المهام (موظف)</h1>
+
+<h2>4.1 سيكوانس معالجة مهمة</h2>
+<pre>
+[1] GET /api/workflow/tasks              (بانتظار + قيد التنفيذ)
+    أو GET /api/workflow/tasks/in-progress
+    أو GET /api/workflow/tasks/pending-pickup
+[2] المستخدم يختار taskId
+[3] GET /api/workflow/tasks/{taskId}     → قفل (task lock) + config
+[4] إذا requires_digital_signature:
+    POST /api/workflow/tasks/{taskId}/signing-challenge  { pin, decision }
+    → توقيع message عبر USB
+    POST /api/workflow/tasks/{taskId}/complete  { signature, idempotency_key, ... }
+[5] النتيجة: approve → مرحلة تالية | reject → إغلاق + status=rejected
+</pre>
+
+<h2>4.2 قوائم المهام</h2>
+<table>
+  <tr><th>API</th><th>الاستخدام</th></tr>
+  <tr><td>GET /api/workflow/tasks?status=active</td><td>بانتظار الاستلام + قيد التنفيذ</td></tr>
+  <tr><td>GET /api/workflow/tasks/in-progress</td><td>قيد التنفيذ فقط (مقفولة لدي)</td></tr>
+  <tr><td>GET /api/workflow/tasks/pending-pickup</td><td>بانتظار الاستلام فقط</td></tr>
+  <tr><td>GET /api/workflow/tasks?status=completed</td><td>منجزة</td></tr>
+  <tr><td>GET /api/workflow/tasks?status=rejected</td><td>مرفوضة</td></tr>
+</table>
+
+<h3>حالات العنصر</h3>
+<table>
+  <tr><th>status</th><th>status_label</th><th>المعنى</th></tr>
+  <tr><td>pending_pickup</td><td>بانتظار الاستلام</td><td>لم يُقفَل بعد</td></tr>
+  <tr><td>in_progress</td><td>قيد التنفيذ</td><td>مقفولة لدى الموظف</td></tr>
+  <tr><td>completed</td><td>منجز</td><td>انتهت</td></tr>
+  <tr><td>rejected</td><td>مرفوض</td><td>رُفضت</td></tr>
+</table>
+
+<h2>4.3 تسلسل إلزامي (Frontend)</h2>
+<div class="flow">
+1. GET  /api/workflow/tasks/{taskId}
+2. POST /api/workflow/tasks/{taskId}/signing-challenge   (إذا التوقيع مطلوب)
+3. POST /api/workflow/tasks/{taskId}/complete
+</div>
+
+<h3>complete — approve</h3>
+<pre>{
+  "stage_name": "مراجعة المدير",
+  "fields": [{ "key": "notes", "value": "موافق" }],
+  "files": [],
+  "templates": [],
+  "decision": "approve",
+  "note": "",
+  "signature": { "challenge_id": "...", "signature": "base64..." },
+  "idempotency_key": "uuid-from-client"
+}</pre>
+
+<h3>complete — reject</h3>
+<pre>{
+  "decision": "reject",
+  "rejection_reason": "سبب الرفض",
+  "signature": { "challenge_id": "...", "signature": "..." },
+  "idempotency_key": "..."
+}</pre>
+
+<table>
+  <tr><th></th><th>submit (مواطن)</th><th>complete (موظف)</th></tr>
+  <tr><td>توقيع USB</td><td>لا</td><td>نعم (افتراضياً)</td></tr>
+  <tr><td>Idempotency</td><td>السيرفر يولّده</td><td>العميل يرسل idempotency_key</td></tr>
+</table>
+
+<h1 class="page-break">5. لوحات الإحصاء (Dashboard)</h1>
+<table>
+  <tr><th>API</th><th>الغرض</th></tr>
+  <tr><td>GET /api/workflow/tasks/stats/completed-last-month?department_ids=1,2</td><td>عدد المنجزة — آخر 30 يوم</td></tr>
+  <tr><td>GET /api/workflow/tasks/stats/rejected-last-month?department_ids=1,2</td><td>عدد المرفوضة — آخر 30 يوم</td></tr>
+  <tr><td>GET /api/workflow/tasks/stats/active?department_ids=1,2</td><td>عدد النشطة</td></tr>
+  <tr><td>GET /api/workflow/tasks/completed/by-department?department_ids=1&from_date=...&to_date=...</td><td>قائمة المنجزة</td></tr>
+  <tr><td>GET /api/workflow/tasks/rejected/by-department?department_ids=1&from_date=...</td><td>قائمة المرفوضة</td></tr>
+</table>
+
+<h1>6. ملخص Stakeholders</h1>
+<h3>مرحلة الإعداد</h3>
+<p>BPMN → إعداد الاستمارات والدوائر → تحقق → موافقة → جاهزة للجمهور</p>
+<h3>مرحلة التقديم</h3>
+<p>اختيار النوع → اختيار العملية → ملء استمارة → (حفظ?) → إرسال → workflow يبدأ</p>
+<h3>مرحلة المعالجة</h3>
+<p>قائمة مهام → فتح (قفل) → توقيع USB → موافقة/رفض → مرحلة تالية أو إغلاق</p>
+
+<h3>الفصل مواطن / موظف</h3>
+<table>
+  <tr><th></th><th>مقدّم الطلب</th><th>موظف معالج</th></tr>
+  <tr><td>مسار التقديم</td><td>submit</td><td>نفس APIs إن قدّم لنفسه</td></tr>
+  <tr><td>USB</td><td>لا</td><td>نعم عند complete</td></tr>
+  <tr><td>المهام</td><td>لا</td><td>/workflow/tasks</td></tr>
+</table>
+
+<h1 class="page-break">7. خريطة الشاشات → APIs (Cheat Sheet)</h1>
+<pre>
+[Admin]
+  إنشاء عملية    → POST /api/process_definitions/create
+  إعداد مراحل    → POST /api/stage_config/create
+  معاينة         → GET  /api/process_definitions/{id}/details
+  موافقة/رفض     → POST /api/process_definitions/{id}/review
+
+[Portal]
+  أنواع          → GET  /api/typeProcess
+  عمليات         → GET  /api/process_definitions/auth/{typeId}
+  استمارة        → GET  /draft/{processId} + GET /stage_config/config/{processId}
+  حفظ            → POST /api/transaction/upsertDraft/{processId}
+  إرسال          → POST /api/transaction/{id}/submit
+
+[Employee]
+  مهامي          → GET  /api/workflow/tasks
+  تفاصيل+قفل     → GET  /api/workflow/tasks/{taskId}
+  تحدي توقيع     → POST /api/workflow/tasks/{taskId}/signing-challenge
+  إكمال          → POST /api/workflow/tasks/{taskId}/complete
+</pre>
+
+<p class="meta" style="margin-top:40px; text-align:center;">— نهاية الوثيقة —</p>
+
+</body>
+</html>

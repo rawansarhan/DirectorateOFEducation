@@ -1,0 +1,30 @@
+'use strict'
+
+class TransactionOutputDTO {
+  constructor (row) {
+    const plain =
+      row && typeof row.get === 'function'
+        ? row.get({ plain: true })
+        : row
+
+    this.id = plain?.id
+    this.code = plain?.code
+    this.id_process = plain?.id_process ?? null
+    this.user_id = plain?.user_id
+    this.status = plain?.status
+    this.data = plain?.data ?? {}
+    this.first_name = plain?.first_name ?? null
+    this.last_name = plain?.last_name ?? null
+    this.father_name = plain?.father_name ?? null
+    this.mother_name = plain?.mother_name ?? null
+    this.national_id = plain?.national_id ?? null
+    this.version = plain?.version
+    this.is_active = plain?.is_active
+    this.created_at = plain?.created_at
+    this.updated_at = plain?.updated_at
+  }
+}
+
+module.exports = {
+  TransactionOutputDTO
+}

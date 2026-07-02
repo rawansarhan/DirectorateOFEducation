@@ -4,9 +4,9 @@ const { OutboxEvent } = require('../../../../entities')
 // CREATE EVENT
 // ====================================
 
-async function create(data) {
+async function create (data, options = {}) {
 
-  return await OutboxEvent.create(data)
+  return await OutboxEvent.create(data, options)
 }
 
 // ====================================

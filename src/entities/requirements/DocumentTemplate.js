@@ -2,8 +2,16 @@
 
 module.exports = (sequelize, DataTypes) => {
   class DocumentTemplate extends sequelize.Sequelize.Model {
-    static associate(models) {
+    static associate (models) {
+      DocumentTemplate.belongsTo(models.TypeDoc, {
+        foreignKey: 'type_doc_id',
+        as: 'type_doc'
+      })
 
+      DocumentTemplate.hasMany(models.DocumentInstance, {
+        foreignKey: 'document_template_id',
+        as: 'document_instances'
+      })
     }
   }
 
@@ -19,8 +27,8 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
       },
 
-      file_type: {
-        type: DataTypes.ENUM('pdf', 'docx', 'html'),
+      type_doc_id: {
+        type: DataTypes.INTEGER,
         allowNull: false,
       },
 

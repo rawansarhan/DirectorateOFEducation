@@ -1,5 +1,7 @@
 'use strict'
 
+const { buildProcessDefinitionCode } = require('../../modules/workflow/processDefinition/utils/processDefinitionCode')
+
 module.exports = (sequelize, DataTypes) => {
   class ProcessDefinition extends sequelize.Sequelize.Model {
     static associate (models) {
@@ -83,6 +85,11 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.INTEGER,
         allowNull: true
       },
+      is_complaint: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false
+      },
       priority: {
         type: DataTypes.INTEGER,
         defaultValue: 1
@@ -120,6 +127,17 @@ module.exports = (sequelize, DataTypes) => {
       updatedAt: 'updated_at'
     }
   )
+
+  ProcessDefinition.addHook('afterCreate', async (instance) => {
+    const version = instance.version ?? 1
+    const code = buildProcessDefinitionCode(instance.id, version)
+
+    if (instance.code === code) {
+      return
+    }
+
+    await instance.update({ code }, { hooks: false })
+  })
 
   return ProcessDefinition
 }

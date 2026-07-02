@@ -18,6 +18,7 @@ const {
   employeeVerifySignatureUser,
   refreshTokenUser,
   logoutUser,
+  resendOtpUser,
 } = require('../controllers/AuthController')
 
 const { authMiddleware, authorize } = require('../../../core/middleware/authMiddleware')
@@ -36,9 +37,10 @@ router.use(authSensitiveLimiter)
  *     tags: [Auth]
  *     summary: إنشاء حساب موظف (الفريق التقني فقط)
  *     description: |
- *       ينشئ حساب موظف مع PIN ومفتاح Ed25519.
- *       public_key يُولَّد في المتصفح ويُرسل للسيرفر فقط.
- *       private_key لا يمر عبر السيرفر.
+ *       ينشئ حساب موظف مع كلمة مرور و PIN (6 أرقام).
+ *       public_key مطلوب (يُولَّد في المتصفح). private_key اختياري — إن أُرسل يُتحقق من مطابقته وتشفيره بـ PIN داخلياً فقط.
+ *       السيرفر يخزّن public_key فقط ولا يُرجع المفتاح الخاص.
+ *       شكل الاستجابة: { success, status_code, message, data }.
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -295,23 +297,24 @@ router.post('/citizen/change-pin', authMiddleware, accountLockMiddleware, change
  * /api/auth/employee/verify-pin:
  *   post:
  *     tags: [Auth]
- *     summary: تحقق PIN للموظف (الخطوة 1)
+ *     summary: تحقق كلمة مرور الموظف (الخطوة 1)
+ *     description: |
+ *       يتحقق من userName + password (وليس PIN).
+ *       يُرجع pin_session_id للخطوة التالية (challenge + توقيع).
  *     security: []
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             required: [userName, pin]
- *             properties:
- *               userName:
- *                 type: string
- *               pin:
- *                 type: string
+ *             $ref: '#/components/schemas/EmployeeVerifyPasswordRequest'
  *     responses:
  *       200:
  *         description: pin_session_id للخطوة التالية
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/EmployeeVerifyPasswordResponse'
  */
 router.post('/employee/verify-pin', authBruteForceLimiter, employeeVerifyPinUser)
 
@@ -327,15 +330,14 @@ router.post('/employee/verify-pin', authBruteForceLimiter, employeeVerifyPinUser
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             required: [pin_session_id]
- *             properties:
- *               pin_session_id:
- *                 type: string
- *                 format: uuid
+ *             $ref: '#/components/schemas/EmployeeChallengeRequest'
  *     responses:
  *       200:
  *         description: challenge للتوقيع بـ private key
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/EmployeeChallengeResponse'
  */
 router.post('/employee/challenge', employeeChallengeUser)
 
@@ -351,18 +353,14 @@ router.post('/employee/challenge', employeeChallengeUser)
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             required: [challenge_id, signature]
- *             properties:
- *               challenge_id:
- *                 type: string
- *                 format: uuid
- *               signature:
- *                 type: string
- *                 description: base64 signature signed with private key from USB
+ *             $ref: '#/components/schemas/EmployeeVerifySignatureRequest'
  *     responses:
  *       200:
  *         description: JWT token
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/VerifyRegisterOtpResponse'
  */
 router.post('/employee/verify-signature', authBruteForceLimiter, employeeVerifySignatureUser)
 
@@ -418,5 +416,45 @@ router.post('/refresh', authBruteForceLimiter, refreshTokenUser)
  *         description: تم تسجيل الخروج
  */
 router.post('/logout', logoutUser)
+
+/**
+ * @swagger
+ * /api/auth/resend-otp:
+ *   post:
+ *     tags: [Auth]
+ *     summary: إعادة إرسال OTP (عند انتهاء الصلاحية أو عدم الاستلام)
+ *     description: |
+ *       يقبل session_id الحالي ويُرسل OTP جديداً إلى نفس رقم الهاتف.
+ *       يُرجع session_id جديداً يُستخدم في خطوة التحقق — **استبدل القديم بالجديد**.
+ *       يعمل لكلا التدفقين: التسجيل (/verify-otp/register) وتسجيل الدخول (/verify-otp/login).
+ *       محمي بـ rate limiter لمنع الإساءة.
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/ResendOtpRequest'
+ *     responses:
+ *       200:
+ *         description: تم إعادة إرسال OTP بنجاح
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/OtpSendResponse'
+ *       400:
+ *         description: الجلسة غير موجودة أو انتهت صلاحيتها — ابدأ من /register/citizen أو /login مجدداً
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ApiErrorResponse'
+ *       429:
+ *         description: تجاوز عدد المحاولات المسموح بها
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ApiErrorResponse'
+ */
+router.post('/resend-otp', authBruteForceLimiter, resendOtpUser)
 
 module.exports = router

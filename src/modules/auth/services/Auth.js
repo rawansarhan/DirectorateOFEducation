@@ -3,7 +3,6 @@
 const orgDeptRolesClient = require('../../../core/shared/clients/organization/orgDeptRolesClient')
 
 const bcrypt = require('bcryptjs')
-const crypto = require('crypto')
 
 const { v4: uuidv4 } = require('uuid')
 
@@ -33,8 +32,15 @@ const { sendSms } = require('./smsService')
 const {
   computeKeyFingerprint,
   hashPin,
+  validatePrivateKeyPem,
   validatePublicKeyPem,
+  assertPrivatePublicKeyPair
 } = require('./cryptoAuthService')
+
+const {
+  encryptPrivateKeyPem,
+  decryptPrivateKeyPem
+} = require('../../../core/crypto/employeeKeyCrypto')
 
 const OTP_TTL_MINUTES = 5
 
@@ -102,7 +108,7 @@ async function saveAndSendOtp (userId, phone) {
 // ================== REGISTER EMPLOYEE ==================
 
 async function registerEmployee (userData) {
-  const { error } = validateRegisterEmp(userData)
+  const { error, value } = validateRegisterEmp(userData)
 
   if (error) {
     throw new Error(
@@ -110,7 +116,9 @@ async function registerEmployee (userData) {
     )
   }
 
-  const existingEmail = await userRepository.findByEmail(userData.email)
+  const data = value
+
+  const existingEmail = await userRepository.findByEmail(data.email)
 
   if (existingEmail) {
     throw new Error(
@@ -119,7 +127,7 @@ async function registerEmployee (userData) {
   }
 
   const existingUserName = await userRepository.findByUserName(
-    userData.userName
+    data.userName
   )
 
   if (existingUserName) {
@@ -128,11 +136,19 @@ async function registerEmployee (userData) {
     )
   }
 
+  const existingNationalId = await userRepository.findByNationalId(
+    data.national_id
+  )
+
+  if (existingNationalId) {
+    throw new Error('الرقم الوطني مسجّل مسبقاً')
+  }
+
   const orgDeptRole =
     await orgDeptRolesClient.findOrgDeptRole({
-      organization_id: userData.organization_id,
-      department_id: userData.department_id,
-      role_id: userData.role_id
+      organization_id: data.organization_id,
+      department_id: data.department_id,
+      role_id: data.role_id
     })
 
   if (!orgDeptRole) {
@@ -142,23 +158,48 @@ async function registerEmployee (userData) {
   }
 
   const hashedPassword = await bcrypt.hash(
-    crypto.randomBytes(32).toString('hex'),
+    data.password,
     10
   )
 
-  const pinHash = await hashPin(userData.pin)
+  const pinHash = await hashPin(data.pin)
 
-  const publicKey = validatePublicKeyPem(
-    userData.public_key
-  )
+  const publicKeyPem = data.public_key
 
-  const keyFingerprint =
-    computeKeyFingerprint(publicKey)
+  if (data.private_key) {
+    const privateKeyPem = validatePrivateKeyPem(data.private_key)
+    assertPrivatePublicKeyPair(privateKeyPem, publicKeyPem)
+
+    const encryptedPrivateKey = encryptPrivateKeyPem(
+      privateKeyPem,
+      data.pin,
+      computeKeyFingerprint(publicKeyPem)
+    )
+
+    const decryptedCheck = decryptPrivateKeyPem(
+      {
+        meta: encryptedPrivateKey.meta,
+        ciphertextBase64: encryptedPrivateKey.ciphertext
+      },
+      data.pin
+    )
+
+    if (decryptedCheck !== privateKeyPem) {
+      throw new Error('فشل التحقق من تشفير المفتاح الخاص')
+    }
+  }
+
+  const keyFingerprint = computeKeyFingerprint(publicKeyPem)
 
   const user = await userRepository.create({
-    userName: userData.userName,
-    email: userData.email,
-    phone_number: userData.phone_number,
+    userName: data.userName,
+    email: data.email,
+    phone_number: data.phone_number,
+    first_name: data.first_name,
+    last_name: data.last_name,
+    father_name: data.father_name,
+    mother_name: data.mother_name,
+    national_id: data.national_id,
     password: hashedPassword,
     pin_hash: pinHash,
     is_active: true,
@@ -171,23 +212,102 @@ async function registerEmployee (userData) {
 
   await userKeyRepository.create({
     user_id: user.id,
-    public_key: publicKey,
+    public_key: publicKeyPem,
     key_fingerprint: keyFingerprint,
     algorithm: 'ed25519',
     is_active: true,
   })
 
   return {
-    userName: userData.userName,
+    userName: data.userName,
+    first_name: user.first_name,
+    last_name: user.last_name,
+    father_name: user.father_name,
+    mother_name: user.mother_name,
+    national_id: user.national_id,
     key_fingerprint: keyFingerprint,
-    organization_department_roles_id: orgDeptRole.id,
-    message:
-      'تم إنشاء حساب الموظف بنجاح. private_key يبقى في المتصفح/USB ولا يُخزَّن على السيرفر.',
+    public_key: publicKeyPem,
+    organization_department_roles_id: orgDeptRole.id
   }
 }
+// //////////////////////////////////////////////////
+// const jwt = require('jsonwebtoken')
+// const { OrgDeptRole , User , UserRoleAssignment } = require('../../../entities')
+// const JWT_SECRET = process.env.JWT_SECRET || 'your_very_secret_key'
 
-// ================== REGISTER CITIZEN ==================
+// // ================== REGISTER CITIZEN ==================
+// async function registerCitizen(userData) {
 
+//   const sequelize = User.sequelize
+
+//   const transaction = await sequelize.transaction()
+
+//   try {
+
+//     const { error } = validateRegisterCitizen(userData)
+
+//     if (error) {
+//       throw new Error(error.details.map(d => d.message).join(', '))
+//     }
+
+//     const existingUser = await User.findOne({
+//       where: { email: userData.email },
+//       transaction
+//     })
+
+//     if (existingUser) {
+//       throw new Error('Email already exists')
+//     }
+
+//     const orgDeptRole = await OrgDeptRole.findOne({
+//       where: {
+//         camunda_group_key: 'CITIZEN'
+//       },
+//       transaction
+//     })
+
+//     if (!orgDeptRole) {
+//       throw new Error('CITIZEN role not found')
+//     }
+
+//     const hashedPassword = await bcrypt.hash(userData.password, 10)
+
+//     const inputUserDTO = new RegisterCitizenInputDTO({
+//       ...userData,
+//       password: hashedPassword
+//     })
+
+//     const user = await User.create(
+//       { ...inputUserDTO },
+//       { transaction }
+//     )
+
+//     await UserRoleAssignment.create({
+//       user_id: user.id,
+//       organization_department_roles_id: orgDeptRole.id
+//     }, { transaction })
+
+//     const token = jwt.sign(
+//       { id: user.id },
+//       JWT_SECRET,
+//       { expiresIn: '30d' }
+//     )
+
+//     await transaction.commit()
+
+//     return {
+//       token,
+//       user: new RegisterCitizenOutputDTO(user),
+//       role_code: 'CITIZEN'
+//     }
+
+//   } catch (error) {
+
+//     await transaction.rollback()
+
+//     throw error
+//   }
+// }
 async function registerCitizen (userData) {
   const sequelize = userRepository.getSequelize()
 
@@ -299,8 +419,51 @@ async function registerCitizen (userData) {
   }
 }
 
-// ================== LOGIN ==================
+//================== LOGIN ==================
+// async function login(userData , clientMeta = {}) {
+//   const { error } = validateLogin(userData)
+//   if (error) {
+//     throw new Error(error.details.map(d => d.message).join(', '))
+//   }
 
+//   const inputDTO = new LoginInputDTO(userData)
+
+//   const user = await User.findOne({
+//     where: { userName: inputDTO.userName }
+//   })
+
+//   if (!user) {
+//     throw new Error('Invalid userName or password')
+//   }
+
+//   const isValid = await bcrypt.compare(inputDTO.password, user.password)
+//   if (!isValid) {
+//     throw new Error('Invalid userName or password')
+//   }
+
+//   const roleAssign = await UserRoleAssignment.findAll({
+//     where: { user_id: user.id },
+//     attributes: ['organization_department_roles_id']
+//   })
+
+//   if (!roleAssign.length) {
+//     throw new Error('User has no roles')
+//   }
+
+//   const roleIds = roleAssign.map(r => r.organization_department_roles_id)
+
+//   const token = jwt.sign(
+//     { id: user.id },
+//     JWT_SECRET,
+//     { expiresIn: '30d' }
+//   )
+
+//   return {
+//     user: new LoginOutputDTO(user),
+//     roles: roleIds,
+//     token
+//   }
+// }
 async function login (
   userData,
   clientMeta = {}
@@ -407,8 +570,6 @@ async function verifyRegisterOtp (
   }
 
   if (new Date() > record.expires_at) {
-    await otpCodeRepository.destroyInstance(record)
-
     throw new Error(
       `انتهت صلاحية رمز التحقق (مدة الصلاحية ${OTP_TTL_MINUTES} دقائق). يرجى طلب رمز تحقق جديد`
     )
@@ -493,10 +654,8 @@ async function verifyLoginOtp (
   }
 
   if (new Date() > record.expires_at) {
-    await otpCodeRepository.destroyInstance(record)
-
     throw new Error(
-      `انتهت صلاحية رمز التحقق (مدة الصلاحية ${OTP_TTL_MINUTES} دقائق). يرجى تسجيل الدخول مرة أخرى لإرسال رمز تحقق جديد`
+      `انتهت صلاحية رمز التحقق (مدة الصلاحية ${OTP_TTL_MINUTES} دقائق). يرجى طلب رمز تحقق جديد`
     )
   }
 
@@ -551,6 +710,39 @@ async function verifyLoginOtp (
     ),
     token: accessToken,
     refreshToken,
+  }
+}
+
+// ================== RESEND OTP ==================
+
+async function resendOtp ({ session_id }) {
+  const record = await otpCodeRepository.findBySessionId(session_id)
+
+  if (!record) {
+    throw new Error(
+      'الجلسة غير موجودة أو انتهت صلاحيتها. يرجى البدء من جديد'
+    )
+  }
+
+  const user = await userRepository.findById(record.user_id)
+
+  if (!user) {
+    throw new Error(
+      'الحساب غير موجود. يرجى التواصل مع الدعم الفني'
+    )
+  }
+
+  if (!user.phone_number) {
+    throw new Error(
+      'لا يوجد رقم هاتف مرتبط بهذا الحساب. يرجى التواصل مع الدعم الفني'
+    )
+  }
+
+  const new_session_id = await saveAndSendOtp(user.id, user.phone_number)
+
+  return {
+    session_id: new_session_id,
+    message: `تم إعادة إرسال رمز التحقق على رقم الموبايل. أدخله خلال ${OTP_TTL_MINUTES} دقائق.`,
   }
 }
 
@@ -612,4 +804,5 @@ module.exports = {
   login,
   verifyLoginOtp,
   registerDeviceToken,
+  resendOtp,
 }

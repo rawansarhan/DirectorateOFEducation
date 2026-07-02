@@ -7,6 +7,7 @@ const {
   login,
   verifyLoginOtp,
   registerDeviceToken,
+  resendOtp,
 } = require('../services/Auth')
 
 const {
@@ -28,6 +29,7 @@ const {
   validateCreateChallenge,
   validateVerifySignature,
   validateRefreshToken,
+  validateResendOtp,
 } = require('../validations/authValidations')
 
 const { getClientMeta } = require('../../../core/security/securityConfig')
@@ -41,7 +43,8 @@ function handleControllerError (res, err, defaultStatus = 400) {
 
   return ApiResponder.error(res, {
     message: err.message,
-    statusCode: err.statusCode || defaultStatus
+    statusCode: err.statusCode || defaultStatus,
+    data: null
   })
 }
 
@@ -166,7 +169,7 @@ const employeeVerifyPinUser = async (req, res) => {
       ...req.body,
       clientMeta: getClientMeta(req)
     })
-    return ApiResponder.okResponse(res, result, 'تم التحقق من رمز الموظف بنجاح')
+    return ApiResponder.okResponse(res, result, 'تم التحقق من كلمة مرور الموظف بنجاح')
   } catch (err) {
     return handleControllerError(res, err, 401)
   }
@@ -234,6 +237,21 @@ const refreshTokenUser = async (req, res) => {
   }
 }
 
+const resendOtpUser = async (req, res) => {
+  try {
+    const { error } = validateResendOtp(req.body)
+
+    if (error) {
+      throw new Error(error.details.map(d => d.message).join(', '))
+    }
+
+    const result = await resendOtp(req.body)
+    return ApiResponder.okResponse(res, result, 'تم إعادة إرسال رمز التحقق بنجاح')
+  } catch (err) {
+    return handleControllerError(res, err, 400)
+  }
+}
+
 const logoutUser = async (req, res) => {
   try {
     const { error } = validateRefreshToken(req.body)
@@ -269,4 +287,5 @@ module.exports = {
   employeeVerifySignatureUser,
   refreshTokenUser,
   logoutUser,
+  resendOtpUser,
 }

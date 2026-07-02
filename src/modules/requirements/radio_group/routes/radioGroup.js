@@ -1,0 +1,116 @@
+'use strict'
+
+const express = require('express')
+const router = express.Router()
+
+const {
+  createRadioGroup,
+  getAllRadioGroups,
+  getRadioGroupById
+} = require('../controllers/radioGroupController')
+
+const {
+  authMiddleware,
+  authorize
+} = require('../../../../core/middleware/authMiddleware')
+
+/**
+ * @swagger
+ * tags:
+ *   name: RadioGroup
+ *   description: إدارة مجموعات الاختيار (Radio Group Widgets)
+ */
+
+/**
+ * @swagger
+ * /api/radio-groups:
+ *   get:
+ *     summary: جلب كل مجموعات الاختيار
+ *     tags: [RadioGroup]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: تم الجلب بنجاح
+ */
+router.get(
+  '/',
+  authMiddleware,
+  authorize('FIELD_READ'),
+  getAllRadioGroups
+)
+
+/**
+ * @swagger
+ * /api/radio-groups:
+ *   post:
+ *     summary: إنشاء مجموعة اختيار
+ *     tags: [RadioGroup]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [label, options]
+ *             properties:
+ *               label:
+ *                 type: string
+ *                 example: الحالة الاجتماعية
+ *               is_required:
+ *                 type: boolean
+ *                 example: true
+ *               options:
+ *                 type: array
+ *                 minItems: 1
+ *                 items:
+ *                   type: object
+ *                   required: [key, value]
+ *                   properties:
+ *                     key:
+ *                       type: string
+ *                       example: single
+ *                     value:
+ *                       type: string
+ *                       example: عازب/ة
+ *     responses:
+ *       201:
+ *         description: تم الإنشاء بنجاح
+ */
+router.post(
+  '/',
+  authMiddleware,
+  authorize('FIELD_CREATE'),
+  createRadioGroup
+)
+
+/**
+ * @swagger
+ * /api/radio-groups/{id}:
+ *   get:
+ *     summary: جلب مجموعة اختيار بالمعرّف
+ *     tags: [RadioGroup]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: تم الجلب بنجاح
+ *       404:
+ *         description: غير موجود
+ */
+router.get(
+  '/:id',
+  authMiddleware,
+  authorize('GET_ONE_FIELD'),
+  getRadioGroupById
+)
+
+module.exports = router

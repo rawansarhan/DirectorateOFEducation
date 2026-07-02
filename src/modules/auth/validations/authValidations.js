@@ -1,4 +1,9 @@
 const Joi = require('joi')
+const {
+  validatePublicKeyPem,
+  validatePrivateKeyPem,
+  assertPrivatePublicKeyPair
+} = require('../services/cryptoAuthService')
 
 // ============================================
 // رسائل عربية مشتركة لكل حقل
@@ -41,11 +46,69 @@ const idMessages = (label) => ({
   'any.required': `${label} مطلوب`
 })
 
+const ARABIC_NAME_PATTERN = /^[\u0600-\u06FFa-zA-Z][\u0600-\u06FFa-zA-Z\s.'-]{1,49}$/
+
+const personNameMessages = (label) => ({
+  'string.base': `${label} يجب أن يكون نصاً`,
+  'string.empty': `${label} مطلوب`,
+  'string.min': `${label} يجب أن يكون حرفين على الأقل`,
+  'string.max': `${label} يجب ألا يتجاوز 50 حرفاً`,
+  'string.pattern.base': `${label} يجب أن يحتوي على أحرف عربية أو لاتينية فقط`,
+  'any.required': `${label} مطلوب`
+})
+
+const nationalIdMessages = {
+  'string.base': 'الرقم الوطني يجب أن يكون نصاً',
+  'string.empty': 'الرقم الوطني مطلوب',
+  'string.length': 'الرقم الوطني يجب أن يتكون من 11 رقماً',
+  'string.pattern.base': 'الرقم الوطني يجب أن يحتوي على أرقام فقط',
+  'any.required': 'الرقم الوطني مطلوب'
+}
+
 // =======================================
 // validate register employee
 // =======================================
 function validateRegisterEmp (data) {
   const schema = Joi.object({
+    first_name: Joi.string()
+      .trim()
+      .min(2)
+      .max(50)
+      .pattern(ARABIC_NAME_PATTERN)
+      .required()
+      .messages(personNameMessages('الاسم الأول')),
+
+    last_name: Joi.string()
+      .trim()
+      .min(2)
+      .max(50)
+      .pattern(ARABIC_NAME_PATTERN)
+      .required()
+      .messages(personNameMessages('الاسم الأخير')),
+
+    father_name: Joi.string()
+      .trim()
+      .min(2)
+      .max(50)
+      .pattern(ARABIC_NAME_PATTERN)
+      .required()
+      .messages(personNameMessages('اسم الأب')),
+
+    mother_name: Joi.string()
+      .trim()
+      .min(2)
+      .max(50)
+      .pattern(ARABIC_NAME_PATTERN)
+      .required()
+      .messages(personNameMessages('اسم الأم')),
+
+    national_id: Joi.string()
+      .trim()
+      .length(11)
+      .pattern(/^\d{11}$/)
+      .required()
+      .messages(nationalIdMessages),
+
     userName: Joi.string()
       .trim()
       .min(3)
@@ -65,11 +128,29 @@ function validateRegisterEmp (data) {
       .required()
       .messages(phoneMessages),
 
+    password: Joi.string()
+      .min(6)
+      .required()
+      .messages(passwordMessages),
+
     pin: Joi.string()
       .length(6)
       .pattern(/^\d+$/)
       .required()
-      .messages(passwordMessages),
+      .messages({
+        'string.base': 'رمز PIN يجب أن يكون نصاً',
+        'string.length': 'رمز PIN يجب أن يتكون من 6 أرقام',
+        'string.pattern.base': 'رمز PIN يجب أن يحتوي على أرقام فقط',
+        'any.required': 'رمز PIN مطلوب'
+      }),
+
+    confirm_pin: Joi.string()
+      .valid(Joi.ref('pin'))
+      .required()
+      .messages({
+        'any.only': 'confirm_pin يجب أن يطابق pin',
+        'any.required': 'confirm_pin مطلوب'
+      }),
 
     organization_id: Joi.number()
       .integer()
@@ -87,15 +168,62 @@ function validateRegisterEmp (data) {
       .integer()
       .positive()
       .required()
-      .messages(idMessages('معرّف الدور'))
+      .messages(idMessages('معرّف الدور')),
+
+    private_key: Joi.string()
+      .trim()
+      .optional()
+      .messages({
+        'string.base': 'المفتاح الخاص يجب أن يكون نصاً'
+      }),
+
+    public_key: Joi.string()
+      .trim()
+      .required()
+      .messages({
+        'string.base': 'المفتاح العام يجب أن يكون نصاً',
+        'string.empty': 'المفتاح العام مطلوب',
+        'any.required': 'المفتاح العام مطلوب'
+      })
   }).messages({
     'object.unknown': 'الحقل {#label} غير مسموح به'
   })
 
-  return schema.validate(data, {
+  const { error, value } = schema.validate(data, {
     abortEarly: false,
     allowUnknown: false
   })
+
+  if (error) {
+    return { error, value: null }
+  }
+
+  try {
+    value.public_key = validatePublicKeyPem(value.public_key)
+  } catch (keyError) {
+    return {
+      error: {
+        details: [{ message: keyError.message }]
+      },
+      value: null
+    }
+  }
+
+  if (value.private_key) {
+    try {
+      validatePrivateKeyPem(value.private_key)
+      assertPrivatePublicKeyPair(value.private_key, value.public_key)
+    } catch (keyError) {
+      return {
+        error: {
+          details: [{ message: keyError.message }]
+        },
+        value: null
+      }
+    }
+  }
+
+  return { error: null, value }
 }
 
 // ===========================================
@@ -267,11 +395,25 @@ function validateChangePin (data) {
 
 function validateEmployeeVerifyPin (data) {
   const schema = Joi.object({
-    userName: Joi.string().trim().min(3).max(50).required(),
-    pin: Joi.string().length(6).pattern(/^\d+$/).required()
+    userName: Joi.string()
+      .trim()
+      .min(3)
+      .max(50)
+      .required()
+      .messages(userNameMessages),
+
+    password: Joi.string()
+      .min(6)
+      .required()
+      .messages(passwordMessages)
+  }).messages({
+    'object.unknown': 'الحقل {#label} غير مسموح به'
   })
 
-  return schema.validate(data, { abortEarly: false })
+  return schema.validate(data, {
+    abortEarly: false,
+    allowUnknown: false
+  })
 }
 
 function validateCreateChallenge (data) {
@@ -303,6 +445,22 @@ function validateRefreshToken (data) {
   return schema.validate(data, { abortEarly: false })
 }
 
+function validateResendOtp (data) {
+  const schema = Joi.object({
+    session_id: Joi.string()
+      .uuid()
+      .required()
+      .messages({
+        'string.base': 'معرّف الجلسة يجب أن يكون نصاً',
+        'string.empty': 'معرّف الجلسة مطلوب',
+        'string.guid': 'معرّف الجلسة غير صالح',
+        'any.required': 'معرّف الجلسة مطلوب'
+      })
+  })
+
+  return schema.validate(data, { abortEarly: false })
+}
+
 module.exports = {
   validateRegisterEmp,
   validateRegisterCitizen,
@@ -316,5 +474,6 @@ module.exports = {
   validateEmployeeVerifyPin,
   validateCreateChallenge,
   validateVerifySignature,
-  validateRefreshToken
+  validateRefreshToken,
+  validateResendOtp
 }

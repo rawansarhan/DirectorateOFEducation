@@ -75,21 +75,87 @@ function enrichFileEntry (file) {
   }
 }
 
+function enrichFilePickerWidget (widget) {
+  if (!widget || widget.widget_type !== 'file_picker') {
+    return widget
+  }
+
+  const rawValue = widget.value
+
+  if (Array.isArray(rawValue)) {
+    return {
+      ...widget,
+      value: rawValue.map(item => {
+        if (typeof item === 'string') {
+          const storedPath = normalizeStoredFilePath(item)
+
+          return {
+            path: storedPath,
+            url: toPublicFileUrl(storedPath)
+          }
+        }
+
+        if (item && typeof item === 'object') {
+          return enrichFileEntry(item)
+        }
+
+        return item
+      })
+    }
+  }
+
+  if (typeof rawValue === 'string' && rawValue.trim()) {
+    const storedPath = normalizeStoredFilePath(rawValue)
+
+    return {
+      ...widget,
+      value: {
+        path: storedPath,
+        url: toPublicFileUrl(storedPath)
+      }
+    }
+  }
+
+  return widget
+}
+
+function isStageFormSnapshot (stageData) {
+  return Boolean(
+    stageData &&
+    typeof stageData === 'object' &&
+    Array.isArray(stageData.widgets)
+  )
+}
+
+function enrichStageSnapshot (stageData = {}) {
+  if (!stageData || typeof stageData !== 'object') {
+    return stageData
+  }
+
+  if (isStageFormSnapshot(stageData)) {
+    return {
+      ...stageData,
+      widgets: stageData.widgets.map(enrichFilePickerWidget)
+    }
+  }
+
+  return {
+    ...stageData,
+    files: Array.isArray(stageData.files)
+      ? stageData.files.map(enrichFileEntry)
+      : stageData.files
+  }
+}
+
 function enrichStagesData (stagesData = {}) {
+  if (isStageFormSnapshot(stagesData)) {
+    return enrichStageSnapshot(stagesData)
+  }
+
   const enriched = {}
 
   for (const [stageCode, stageData] of Object.entries(stagesData)) {
-    if (!stageData || typeof stageData !== 'object') {
-      enriched[stageCode] = stageData
-      continue
-    }
-
-    enriched[stageCode] = {
-      ...stageData,
-      files: Array.isArray(stageData.files)
-        ? stageData.files.map(enrichFileEntry)
-        : stageData.files
-    }
+    enriched[stageCode] = enrichStageSnapshot(stageData)
   }
 
   return enriched
@@ -101,5 +167,8 @@ module.exports = {
   toPublicFileUrl,
   buildStoredFileEntry,
   enrichFileEntry,
+  enrichFilePickerWidget,
+  enrichStageSnapshot,
+  isStageFormSnapshot,
   enrichStagesData
 }

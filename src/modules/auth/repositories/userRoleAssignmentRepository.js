@@ -30,6 +30,17 @@ class UserRoleAssignmentRepository {
       }]
     })
   }
+
+  // تعطيل كل تعيينات الأدوار الفعّالة لمستخدم (يُستخدم عند إعادة التعيين)
+  async deactivateAllByUserId (userId, options = {}) {
+    return UserRoleAssignment.update(
+      { is_active: false },
+      {
+        where: { user_id: userId, is_active: true },
+        ...options
+      }
+    )
+  }
 }
 
 module.exports = new UserRoleAssignmentRepository()

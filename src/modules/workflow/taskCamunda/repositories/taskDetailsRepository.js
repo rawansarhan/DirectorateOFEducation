@@ -19,18 +19,29 @@ async function findProcessInstanceByCamundaId(
 
     include: [
 
-      // ================================================
-      // TRANSACTION
-      // ================================================
+      {
+        model: db.ProcessDefinition,
+        as: 'process_definition',
+        attributes: ['id', 'name', 'priority', 'code']
+      },
 
       {
         model: db.Transaction,
-        as: 'transaction'
+        as: 'transaction',
+        include: [
+          {
+            model: db.User,
+            as: 'user',
+            attributes: [
+              'id',
+              'phone_number',
+              'first_name',
+              'father_name',
+              'last_name'
+            ]
+          }
+        ]
       },
-
-      // ================================================
-      // CURRENT STAGE
-      // ================================================
 
       {
         model: db.Stage,
@@ -38,13 +49,10 @@ async function findProcessInstanceByCamundaId(
 
         include: [
 
-          // ============================================
-          // STAGE CONFIG
-          // ============================================
-
           {
             model: db.StageConfig,
-            as: 'stage_config'
+            as: 'stage_config',
+            attributes: ['id', 'stage_id', 'config_json']
           }
         ]
       }

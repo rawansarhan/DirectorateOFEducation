@@ -1,0 +1,199 @@
+{
+  "info": {
+    "_postman_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "name": "Directorate of Education — Certificate & Integrity Chain",
+    "description": "مجموعة Postman لـ APIs الشهادة، الوثيقة النهائية، وسلسلة النزاهة (QR).\n\n**المتغيرات:**\n- `baseUrl` — عنوان السيرفر (افتراضي http://localhost:4000)\n- `token` — Bearer token للمواطن/المالك\n- `transactionId` — معرّف المعاملة المكتملة\n\n**ترتيب الاستخدام المقترح:**\n1. GET certificate — بيانات الطباعة + QR payload\n2. (الفرونت يولّد PDF)\n3. POST final-document — رفع PDF النهائي\n4. GET final-document — التحقق من الحفظ\n5. GET integrity-chain — سلسلة التواقيع (يتطلب auth)\n6. GET/POST integrity-chain/verify — تحقق عام (QR — بدون auth)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:4000",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "transactionId",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "head_hash",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "genesis_hash",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Certificate — الشهادة",
+      "item": [
+        {
+          "name": "GET بيانات الشهادة للطباعة (transaction_history + QR)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/transaction/{{transactionId}}/certificate",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "transaction", "{{transactionId}}", "certificate"]
+            },
+            "description": "يجمع transaction_history + integrity_chain.qr_payload + final_document.\n\n**Auth:** Bearer (مالك المعاملة فقط)\n**الحالة:** completed فقط\n\nللموظف: GET /api/workflow/transactions/{transactionId}/certificate"
+          },
+          "response": []
+        }
+      ],
+      "description": "APIs بيانات الشهادة قبل/أثناء توليد PDF من الفرونت"
+    },
+    {
+      "name": "Final Document — الوثيقة النهائية",
+      "item": [
+        {
+          "name": "POST رفع وحفظ PDF النهائي",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": [],
+                  "description": "ملف PDF النهائي المُولَّد من الفرونت (إلزامي)"
+                },
+                {
+                  "key": "qr_payload",
+                  "value": "{\"v\":1,\"tx\":1,\"genesis\":\"\",\"head\":\"\",\"links\":0}",
+                  "type": "text",
+                  "description": "JSON string — snapshot QR عند الطباعة (اختياري)",
+                  "disabled": true
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/transaction/{{transactionId}}/final-document",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "transaction", "{{transactionId}}", "final-document"]
+            },
+            "description": "يرفع PDF النهائي بعد توليده من الفرونت.\n\n**Auth:** Bearer (مالك المعاملة)\n**Body:** multipart/form-data\n- file (required)\n- qr_payload (optional JSON string)"
+          },
+          "response": []
+        },
+        {
+          "name": "GET جلب الوثيقة النهائية المحفوظة",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/transaction/{{transactionId}}/final-document",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "transaction", "{{transactionId}}", "final-document"]
+            },
+            "description": "يرجع مسار/بيانات PDF النهائي المحفوظ.\n\n**Auth:** Bearer (مالك المعاملة)"
+          },
+          "response": []
+        }
+      ],
+      "description": "رفع وجلب الوثيقة النهائية بعد توليد PDF من الفرونت"
+    },
+    {
+      "name": "Integrity Chain — سلسلة النزاهة",
+      "item": [
+        {
+          "name": "GET سلسلة التواقيع + QR payload",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/transaction/{{transactionId}}/integrity-chain",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "transaction", "{{transactionId}}", "integrity-chain"]
+            },
+            "description": "يعرض signature ledger + qr_payload.\n\n**Auth:** Bearer (مالك المعاملة)"
+          },
+          "response": []
+        },
+        {
+          "name": "GET Verify — عام (QR scan)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/transaction/{{transactionId}}/integrity-chain/verify?head_hash={{head_hash}}&genesis_hash={{genesis_hash}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "transaction", "{{transactionId}}", "integrity-chain", "verify"],
+              "query": [
+                {
+                  "key": "head_hash",
+                  "value": "{{head_hash}}",
+                  "description": "اختياري — من QR"
+                },
+                {
+                  "key": "genesis_hash",
+                  "value": "{{genesis_hash}}",
+                  "description": "اختياري — من QR"
+                }
+              ]
+            },
+            "description": "تحقق عام من سلسلة التواقيع — **لا يتطلب تسجيل دخول**.\n\nQuery params اختيارية للمقارنة مع QR."
+          },
+          "response": []
+        },
+        {
+          "name": "POST Verify — عام (body)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"head_hash\": \"{{head_hash}}\",\n  \"genesis_hash\": \"{{genesis_hash}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/transaction/{{transactionId}}/integrity-chain/verify",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "transaction", "{{transactionId}}", "integrity-chain", "verify"]
+            },
+            "description": "تحقق عام — **لا يتطلب auth**.\n\nBody اختياري:\n- head_hash\n- genesis_hash"
+          },
+          "response": []
+        }
+      ],
+      "description": "سلسلة النزاهة والتحقق العام (QR)"
+    }
+  ]
+}

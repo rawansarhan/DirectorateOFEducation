@@ -14,9 +14,24 @@ module.exports = (sequelize, DataTypes) => {
         as: 'stages'
       })
 
+      Transaction.hasOne(models.ProcessInstance, {
+        foreignKey: 'transaction_id',
+        as: 'process_instance'
+      })
+
       Transaction.hasMany(models.DocumentInstance, {
         foreignKey: 'transaction_id',
         as: 'documents'
+      })
+
+      Transaction.hasMany(models.TransactionSignatureLink, {
+        foreignKey: 'transaction_id',
+        as: 'signature_links'
+      })
+
+      Transaction.hasOne(models.DocumentFinalTransaction, {
+        foreignKey: 'transaction_id',
+        as: 'final_document'
       })
     }
   }
@@ -31,6 +46,12 @@ module.exports = (sequelize, DataTypes) => {
       code: {
         type: DataTypes.STRING,
         allowNull: true
+      },
+
+      id_process: {
+        type: DataTypes.STRING(32),
+        allowNull: true,
+        unique: true
       },
 
       version: {
@@ -49,14 +70,43 @@ module.exports = (sequelize, DataTypes) => {
           'submitted',
           'in_progress',
           'completed',
-          'rejected',
-          'cancelled'
+          'rejected'
         ),
         defaultValue: 'draft'
       },
 
       data: {
         type: DataTypes.JSON,
+        allowNull: true
+      },
+
+      first_name: {
+        type: DataTypes.STRING(100),
+        allowNull: true
+      },
+
+      last_name: {
+        type: DataTypes.STRING(100),
+        allowNull: true
+      },
+
+      father_name: {
+        type: DataTypes.STRING(100),
+        allowNull: true
+      },
+
+      mother_name: {
+        type: DataTypes.STRING(100),
+        allowNull: true
+      },
+
+      national_id: {
+        type: DataTypes.STRING(50),
+        allowNull: true
+      },
+
+      genesis_hash: {
+        type: DataTypes.STRING(64),
         allowNull: true
       },
 

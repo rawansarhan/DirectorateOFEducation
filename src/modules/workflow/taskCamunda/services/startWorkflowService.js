@@ -1,11 +1,11 @@
 const transactionClient =
   require('../../../../core/shared/clients/transaction/transactionClient')
 
-const EVENTS =
-  require('../../../../core/shared/events/types')
+const transactionRepository =
+  require('../../../transaction/transaction/repositories/transactionRepository')
 
 const processRepository =
-  require('../../repositories/processRepository')
+  require('../../processDefinition/repositories/processRepository')
 
 const camundaClient =
   require('../../../../core/shared/clients/camunda/camundaClient')
@@ -13,51 +13,52 @@ const camundaClient =
 const processInstanceRepository =
   require('../repositories/processInstanceRepository')
 
-const outboxRepository =
-  require('../../../../core/shared/outbox/repositories/OutboxRepository')
-
 const {
-  completeTask
+  completeTask,
+  buildAutoCompleteAuthPayload
 } = require('./completeTaskService')
+const { toStartWorkflow } = require('../mappers/taskCamundaMapper')
+
+async function rollbackCamundaProcess (camundaProcessInstanceId) {
+  if (!camundaProcessInstanceId) {
+    return
+  }
+
+  try {
+    await camundaClient.deleteProcessInstance(camundaProcessInstanceId)
+  } catch {
+    // best-effort compensation
+  }
+}
 
 // ======================================================
 // START WORKFLOW
 // ======================================================
 
-async function startWorkflow({
-
+async function startWorkflow ({
   transactionId,
-  processCode
+  processCode,
+  dbTransaction = null,
+  transactionRow = null,
+  submissionPayload = null
 }) {
-
-  // ====================================================
-  // LOAD TRANSACTION + PROCESS
-  // ====================================================
-
-  const [transaction, process] =
-    await Promise.all([
-
-      transactionClient.getTransactionById(
-        transactionId
+  const [transaction, process] = await Promise.all([
+    transactionRow
+      ? Promise.resolve(transactionRow)
+      : (
+        dbTransaction
+          ? transactionRepository.findById(transactionId, dbTransaction)
+          : transactionClient.getTransactionById(transactionId)
       ),
-
-      processRepository.findByCode(
-        processCode
-      )
-    ])
-
-  // ====================================================
-  // VALIDATIONS
-  // ====================================================
+    processRepository.findByCode(processCode)
+  ])
 
   if (!transaction) {
     throw new Error('Transaction not found')
   }
 
   if (transaction.status !== 'submitted') {
-    throw new Error(
-      'Transaction must be submitted first'
-    )
+    throw new Error('Transaction must be submitted first')
   }
 
   if (!process) {
@@ -69,166 +70,74 @@ async function startWorkflow({
   }
 
   if (!process.camunda_process_key) {
-    throw new Error(
-      'Missing Camunda process key'
-    )
+    throw new Error('Missing Camunda process key')
   }
 
-  // ====================================================
-  // START CAMUNDA PROCESS
-  // ====================================================
+  let camundaProcess = null
 
-  const camundaProcess =
-    await camundaClient.startProcess(
+  try {
+    camundaProcess = await camundaClient.startProcess(
       process.camunda_process_key,
       transaction.id
     )
 
-  // ====================================================
-  // CREATE PROCESS INSTANCE
-  // ====================================================
+    const processInstance = await processInstanceRepository.create({
+      process_definition_id: process.id,
+      transaction_id: transaction.id,
+      camunda_process_instance_id: camundaProcess.id,
+      status: 'running'
+    }, dbTransaction)
 
-  const processInstance =
-    await processInstanceRepository.create({
+    const tasks = await camundaClient.getActiveTasks(camundaProcess.id)
+    const firstTask = tasks?.[0]
+    let result = null
 
-      process_definition_id:
-        process.id,
+    if (firstTask) {
+      const autoPayload = buildAutoCompleteAuthPayload(
+        submissionPayload || transaction.data || {}
+      )
 
-      transaction_id:
-        transaction.id,
+      if (!autoPayload.widgets.length) {
+        throw new Error(
+          'widgets[] غير موجودة على المعاملة — أعد submit مع الاستمارة كاملة'
+        )
+      }
 
-      camunda_process_instance_id:
-        camundaProcess.id,
-
-      status:
-        'running'
-    })
-
-  // ====================================================
-  // GET FIRST TASK
-  // ====================================================
-
-  const tasks =
-    await camundaClient.getActiveTasks(
-      camundaProcess.id
-    )
-
-  const firstTask =
-    tasks?.[0]
-
-  let result = null
-
-  // ====================================================
-  // AUTO COMPLETE FIRST TASK
-  // ====================================================
-
-  /**
-   * هنا صار reuse للـ engine
-   * بدون duplication
-   */
-
-  if (firstTask) {
-
-    result =
-      await completeTask({
-
-        taskId:
-          firstTask.id,
-
-        userId:
-          transaction.user_id,
-
-        payload: {
-
-          /**
-           * غالباً أول task ما عنده payload
-           * لكن يمكن لاحقاً تضيف defaults
-           */
-
-          fields: [],
-          files: [],
-          templates: [],
-          actions: [],
-
-          /**
-           * optional gateway variables
-           */
-
-          variables: {}
-        },
-
-        /**
-         * مهم جداً
-         * حتى نعرف أنها auto-complete
-         */
-
-        isAutoComplete:
-          true
+      result = await completeTask({
+        taskId: firstTask.id,
+        userId: transaction.user_id,
+        payload: autoPayload,
+        isAutoComplete: true,
+        dbTransaction
       })
-  }
-
-  // ====================================================
-  // UPDATE TRANSACTION STATUS
-  // ====================================================
-
-  await transactionClient.updateStatus(
-
-    transaction.id,
-
-    'in_progress'
-  )
-
-  // ====================================================
-  // WORKFLOW STARTED EVENT
-  // ====================================================
-
-  await outboxRepository.create({
-
-    event_type:
-      EVENTS.WORKFLOW_STARTED,
-
-    payload: {
-
-      transactionId:
-        transaction.id,
-
-      processId:
-        process.id,
-
-      processInstanceId:
-        processInstance.id,
-
-      camundaProcessInstanceId:
-        camundaProcess.id
     }
-  })
 
-  // ====================================================
-  // RESPONSE
-  // ====================================================
-
-  return {
-
-    message:
-      'Workflow started successfully',
-
-    data: {
-
-      transactionId:
+    if (dbTransaction) {
+      await transactionRepository.updateStatus(
         transaction.id,
-
-      processInstanceId:
-        processInstance.id,
-
-      camundaProcessInstanceId:
-        camundaProcess.id,
-
-      currentTask:
-        result?.data?.nextTask || null,
-
-      workflowStatus:
-        'running'
+        'in_progress',
+        dbTransaction
+      )
+    } else {
+      await transactionClient.updateStatus(transaction.id, 'in_progress')
     }
+
+    const transactionPlain = typeof transaction.get === 'function'
+      ? transaction.get({ plain: true })
+      : transaction
+
+    return {
+      message: 'Workflow started successfully',
+      data: toStartWorkflow({
+        transaction: transactionPlain,
+        processInstance,
+        camundaProcess,
+        completeTaskResult: result
+      })
+    }
+  } catch (error) {
+    await rollbackCamundaProcess(camundaProcess?.id)
+    throw error
   }
 }
 

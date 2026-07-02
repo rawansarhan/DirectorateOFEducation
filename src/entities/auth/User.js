@@ -29,6 +29,16 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: 'user_id',
         as: 'device_tokens'
       })
+
+      User.hasMany(models.Notification, {
+        foreignKey: 'user_id',
+        as: 'notifications'
+      })
+
+      User.hasMany(models.Notification, {
+        foreignKey: 'sent_by_user_id',
+        as: 'sent_notifications'
+      })
     }
   }
 
@@ -54,6 +64,32 @@ module.exports = (sequelize, DataTypes) => {
       phone_number: {
         type: DataTypes.STRING,
         allowNull: true,
+      },
+
+      first_name: {
+        type: DataTypes.STRING(64),
+        allowNull: true,
+      },
+
+      last_name: {
+        type: DataTypes.STRING(64),
+        allowNull: true,
+      },
+
+      father_name: {
+        type: DataTypes.STRING(64),
+        allowNull: true,
+      },
+
+      mother_name: {
+        type: DataTypes.STRING(64),
+        allowNull: true,
+      },
+
+      national_id: {
+        type: DataTypes.STRING(11),
+        allowNull: true,
+        unique: true,
       },
 
       password: {

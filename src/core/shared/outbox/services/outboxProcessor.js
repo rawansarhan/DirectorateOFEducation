@@ -1,7 +1,7 @@
 // core/shared/outbox/services/outboxProcessor.js
 
 const outboxRepository =
-  require('../repositories/outboxRepository')
+  require('../repositories/OutboxRepository')
 
 const eventBus =
   require('../../events/eventBus')

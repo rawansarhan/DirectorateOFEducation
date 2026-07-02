@@ -12,7 +12,14 @@ module.exports = {
 
       code: {
         type: Sequelize.STRING,
-        allowNull: true 
+        allowNull: true
+      },
+
+      id_process: {
+        type: Sequelize.STRING(32),
+        allowNull: true,
+        unique: true,
+        comment: 'رقم المعاملة المعروض — مثال TXN-2024-441'
       },
 
       user_id: {

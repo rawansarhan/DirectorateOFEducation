@@ -1,128 +1,95 @@
 const axios = require('axios')
+const { retryWithBackoff } = require('../../../utils/retryWithBackoff')
 
 const BASE_URL =
   process.env.ORGANIZATION_SERVICE_URL ||
   `http://localhost:${process.env.PORT || 4000}`
 
-class OrganizationClient {
+class OrgDeptRolesClient {
 
+  async getOrgDeptRoleById (id) {
+    return retryWithBackoff(async () => {
+      try {
+        const res = await axios.get(
+          `${BASE_URL}/internal/org-dept-roles/${id}`
+        )
 
-      async getOrgDeptRoleById(id) {
+        return res.data.data
+      } catch (err) {
+        if (err.response?.status === 404) {
+          return null
+        }
 
-    try {
-
-      const res = await axios.get(
-        `${BASE_URL}/internal/org-dept-roles/${id}`
-      )
-
-      return res.data.data
-
-    } catch (err) {
-
-      if (err.response?.status === 404) {
-        return null
+        throw err
       }
-
-      throw err
-    }
+    }, { label: 'orgDeptRolesClient.getOrgDeptRoleById' })
   }
 
-  // =====================================
-  // GET ACTIVE ORG DEPT ROLES
-  // =====================================
-
-  async getActiveOrgDeptRoles() {
-
-    try {
-
+  async getActiveOrgDeptRoles () {
+    return retryWithBackoff(async () => {
       const res = await axios.get(
-
         `${BASE_URL}/internal/org-dept-roles/active`
       )
 
       return res.data.data || []
-
-    } catch (err) {
-
-      throw err
-    }
+    }, { label: 'orgDeptRolesClient.getActiveOrgDeptRoles' })
   }
 
+  async findOrgDeptRole (data) {
+    return retryWithBackoff(async () => {
+      try {
+        const res = await axios.post(
+          `${BASE_URL}/internal/org-dept-roles/find`,
+          data
+        )
 
-//////////////////////////////////////////////////////////////////////////////
-/// ====================== find OrgDeptRole ==================================
+        return res.data.data
+      } catch (err) {
+        if (err.response?.status === 404) {
+          return null
+        }
 
-async findOrgDeptRole(data) {
+        throw err
+      }
+    }, { label: 'orgDeptRolesClient.findOrgDeptRole' })
+  }
 
-  try {
+  async findAllOrgDeptRole (data) {
+    return retryWithBackoff(async () => {
+      try {
+        const res = await axios.post(
+          `${BASE_URL}/internal/org-dept-roles/bulk`,
+          data
+        )
 
+        return res.data.data || []
+      } catch (err) {
+        if (err.response?.status === 404) {
+          return []
+        }
 
-    const res = await axios.post(
+        throw err
+      }
+    }, { label: 'orgDeptRolesClient.findAllOrgDeptRole' })
+  }
 
-      `${BASE_URL}/internal/org-dept-roles/find`,
+  async getCitizenRole () {
+    return retryWithBackoff(async () => {
+      try {
+        const res = await axios.get(
+          `${BASE_URL}/internal/org-dept-roles/citizen`
+        )
 
-      data
-    )
-    return res.data.data
+        return res.data.data || null
+      } catch (err) {
+        if (err.response?.status === 404) {
+          return null
+        }
 
-  } catch (err) {
-
-    if (err.response?.status === 404) {
-      return null
-    }
-
-    throw err
+        throw err
+      }
+    }, { label: 'orgDeptRolesClient.getCitizenRole' })
   }
 }
 
-
-  async findAllOrgDeptRole(data) {
-
-    try {
-
-      const res = await axios.post(
-
-        `${BASE_URL}/internal/org-dept-roles/bulk`,
-
-        data
-      )
-
-      return res.data.data || []
-
-    } catch (err) {
-
-      if (err.response?.status === 404) {
-        return []
-      }
-
-      throw err
-    }
-  }
-
-
-    // =====================================
-  // GET CITIZEN ROLE
-  // =====================================
-
-  async getCitizenRole() {
-
-    try {
-
-      const res = await axios.get(
-        `${BASE_URL}/internal/org-dept-roles/citizen`
-      )
-
-      return res.data.data || null
-
-    } catch (err) {
-
-      if (err.response?.status === 404) {
-        return null
-      }
-
-      throw err
-    }
-  }
-}
-module.exports =
-  new OrganizationClient()
+module.exports = new OrgDeptRolesClient()
