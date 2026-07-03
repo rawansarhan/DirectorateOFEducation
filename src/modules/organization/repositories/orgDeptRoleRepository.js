@@ -1,8 +1,11 @@
+const { QueryTypes } = require('sequelize')
+
 const {
   Role,
   Organization,
   Department,
-  OrgDeptRole
+  OrgDeptRole,
+  sequelize
 } = require('../../../entities')
 
 const fullIncludes = [
@@ -75,6 +78,46 @@ async function destroyInstance(orgDeptRole) {
   return orgDeptRole.destroy()
 }
 
+function normalizeRootIds(rootIds = []) {
+  return [...new Set(
+    rootIds
+      .map(id => Number(id))
+      .filter(id => Number.isInteger(id) && id > 0)
+  )]
+}
+
+async function findDescendantSubtreeByRootIds(rootIds = []) {
+  const ids = normalizeRootIds(rootIds)
+
+  if (!ids.length) {
+    return []
+  }
+
+  return sequelize.query(
+    `
+    WITH RECURSIVE subtree AS (
+      SELECT id, parent_id, department_id, organization_id, role_id, 0 AS depth
+      FROM organization_department_roles
+      WHERE id IN (:rootIds) AND is_active = true
+
+      UNION ALL
+
+      SELECT odr.id, odr.parent_id, odr.department_id, odr.organization_id, odr.role_id, st.depth + 1
+      FROM organization_department_roles odr
+      INNER JOIN subtree st ON odr.parent_id = st.id
+      WHERE odr.is_active = true
+    )
+    SELECT id, parent_id, department_id, organization_id, role_id, depth
+    FROM subtree
+    ORDER BY depth ASC, id ASC
+    `,
+    {
+      replacements: { rootIds: ids },
+      type: QueryTypes.SELECT
+    }
+  )
+}
+
 module.exports = {
   findById,
   findByIdWithRelations,
@@ -82,6 +125,7 @@ module.exports = {
   findByRoleOrgDept,
   findAll,
   findActiveByDepartmentIdWithRole,
+  findDescendantSubtreeByRootIds,
   create,
   updateInstance,
   destroyInstance

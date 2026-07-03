@@ -56,7 +56,8 @@ const KEYS = {
   },
   processDefinitionDepartments: (processDefinitionId) =>
     `process:departments:${processDefinitionId}`,
-  processDefinitionsWithType: () => 'process:definitions:with-type'
+  processDefinitionsWithType: () => 'process:definitions:with-type',
+  userAccessibleDepartments: (userId) => `user:accessible-departments:${userId}`
 }
 
 let redisClient = null
@@ -604,6 +605,28 @@ async function invalidateProcessDefinitionsWithType () {
   )
 }
 
+async function invalidateUserAccessibleDepartments (userId) {
+  if (userId == null) {
+    return
+  }
+
+  const cacheKey = KEYS.userAccessibleDepartments(userId)
+  const deleted = await deleteKey(cacheKey)
+
+  logInvalidate({
+    module: 'UserAccessibleDepartments',
+    fullKey: `${API_CACHE_PREFIX}${cacheKey}`,
+    deleted
+  })
+}
+
+async function invalidateAllUserAccessibleDepartments () {
+  const count = await deleteKeysByPattern('user:accessible-departments:*')
+  console.log(
+    `${LOG_PREFIX} invalidate all user accessible departments (${count} key(s)) — redis: ${redisStatusLabel()}`
+  )
+}
+
 module.exports = {
   KEYS,
   deleteKeysByPattern,
@@ -636,5 +659,7 @@ module.exports = {
   invalidateEmployeeTasksByDepartment,
   invalidateEmployeeTaskStats,
   invalidateProcessDefinitionDepartments,
-  invalidateProcessDefinitionsWithType
+  invalidateProcessDefinitionsWithType,
+  invalidateUserAccessibleDepartments,
+  invalidateAllUserAccessibleDepartments
 }

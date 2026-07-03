@@ -11,6 +11,7 @@ const organizationRepository = require('../repositories/organizationRepository')
 const departmentRepository = require('../repositories/departmentRepository')
 const roleRepository = require('../repositories/roleRepository')
 const orgDeptRoleRepository = require('../repositories/orgDeptRoleRepository')
+const { invalidateAllUserAccessibleDepartments } = require('../../../core/cache/apiCacheService')
 
 function buildCamundaGroupKey(roleCode, organizationId, departmentId) {
   return `${roleCode}__ORG${organizationId}__DEPT${departmentId}`
@@ -100,6 +101,8 @@ async function createRoleService(data) {
 
     return { role, orgDeptRole }
   })
+
+  await invalidateAllUserAccessibleDepartments()
 
   return orgDeptRoleRepository.findByIdWithRelations(result.orgDeptRole.id)
 }
@@ -205,6 +208,8 @@ async function updateRoleService(data, id) {
 
   await orgDeptRoleRepository.updateInstance(orgDeptRole, payload)
 
+  await invalidateAllUserAccessibleDepartments()
+
   return orgDeptRoleRepository.findByIdWithRelations(orgDeptRoleId)
 }
 
@@ -228,6 +233,8 @@ async function toggleRoleStatusService(id) {
 
   await orgDeptRoleRepository.updateInstance(orgDeptRole, { is_active: !orgDeptRole.is_active })
 
+  await invalidateAllUserAccessibleDepartments()
+
   return orgDeptRoleRepository.findByIdWithRelations(orgDeptRoleId)
 }
 
@@ -250,6 +257,8 @@ async function deleteRoleService(id) {
   }
 
   await orgDeptRoleRepository.destroyInstance(orgDeptRole)
+
+  await invalidateAllUserAccessibleDepartments()
 
   return { id: orgDeptRoleId }
 }

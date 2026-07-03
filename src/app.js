@@ -26,6 +26,8 @@ setupSwagger(app)
 //========================== auth services =================================
 
 const authRoutes = require('./modules/auth/routes/auth')
+const pinRoutes = require('./modules/auth/routes/pin')
+app.use('/api/auth', pinRoutes)
 app.use('/api/auth', authRoutes)
 
 

@@ -10,9 +10,6 @@ const {
   loginUser,
   verifyLoginOtpUser,
   registerDeviceTokenUser,
-  setupPinUser,
-  verifyAppPinUser,
-  changePinUser,
   employeeVerifyPinUser,
   employeeChallengeUser,
   employeeVerifySignatureUser,
@@ -185,112 +182,6 @@ router.post('/verify-otp/login', authBruteForceLimiter, verifyLoginOtpUser)
  *         description: تم حفظ التوكن
  */
 router.post('/device-token', authMiddleware, accountLockMiddleware, registerDeviceTokenUser)
-
-/**
- * @swagger
- * /api/auth/setup-pin:
- *   post:
- *     tags: [Auth]
- *     summary: إنشاء أو تغيير رمز PIN (قفل التطبيق)
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required: [pin, confirm_pin]
- *             properties:
- *               pin:
- *                 type: string
- *                 example: "123456"
- *               confirm_pin:
- *                 type: string
- *                 example: "123456"
- *     responses:
- *       200:
- *         description: تم إنشاء PIN
- */
-router.post('/setup-pin', authMiddleware, accountLockMiddleware, setupPinUser)
-
-/**
- * @swagger
- * /api/auth/verify-app-pin:
- *   post:
- *     tags: [Auth]
- *     summary: فتح قفل التطبيق عبر PIN (ليس تسجيل دخول)
- *     description: |
- *       يتطلب JWT صالحاً من login/OTP.
- *       لا يصدر token جديد — للتحقق فقط عند فتح التطبيق.
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required: [pin]
- *             properties:
- *               pin:
- *                 type: string
- *                 example: "123456"
- *     responses:
- *       200:
- *         description: تم فتح القفل
- */
-router.post('/verify-app-pin', authMiddleware, accountLockMiddleware, verifyAppPinUser)
-
-/**
- * @swagger
- * /api/auth/change-pin:
- *   post:
- *     tags: [Auth]
- *     summary: تغيير PIN (يتطلب PIN القديم)
- *     description: |
- *       متاح لأي مستخدم مسجّل (مواطن أو موظف).
- *       يتحقق من PIN القديم ثم يحفظ PIN الجديد.
- *       للإعداد الأول استخدم setup-pin.
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required: [old_pin, new_pin, confirm_new_pin]
- *             properties:
- *               old_pin:
- *                 type: string
- *                 example: "123456"
- *               new_pin:
- *                 type: string
- *                 example: "654321"
- *               confirm_new_pin:
- *                 type: string
- *                 example: "654321"
- *     responses:
- *       200:
- *         description: تم تغيير PIN
- */
-router.post('/change-pin', authMiddleware, accountLockMiddleware, changePinUser)
-
-/**
- * @swagger
- * /api/auth/citizen/change-pin:
- *   post:
- *     tags: [Auth]
- *     summary: (deprecated) استخدم /api/auth/change-pin
- *     deprecated: true
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: تم تغيير PIN
- */
-router.post('/citizen/change-pin', authMiddleware, accountLockMiddleware, changePinUser)
 
 /**
  * @swagger

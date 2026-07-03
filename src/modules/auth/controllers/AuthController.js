@@ -14,6 +14,7 @@ const {
   setupPin,
   verifyAppPin,
   changePin,
+  deletePin,
   employeeVerifyPin,
   createEmployeeChallenge,
   verifyEmployeeSignature,
@@ -25,6 +26,7 @@ const {
   validateSetupPin,
   validateVerifyAppPin,
   validateChangePin,
+  validateDeletePin,
   validateEmployeeVerifyPin,
   validateCreateChallenge,
   validateVerifySignature,
@@ -157,6 +159,21 @@ const changePinUser = async (req, res) => {
   }
 }
 
+const deletePinUser = async (req, res) => {
+  try {
+    const { error } = validateDeletePin(req.body)
+
+    if (error) {
+      throw new Error(error.details.map(item => item.message).join(', '))
+    }
+
+    const result = await deletePin(req.user.id, req.body.pin, getClientMeta(req))
+    return ApiResponder.okResponse(res, result, 'تم حذف رمز PIN بنجاح')
+  } catch (err) {
+    return handleControllerError(res, err, 400)
+  }
+}
+
 const employeeVerifyPinUser = async (req, res) => {
   try {
     const { error } = validateEmployeeVerifyPin(req.body)
@@ -282,6 +299,7 @@ module.exports = {
   setupPinUser,
   verifyAppPinUser,
   changePinUser,
+  deletePinUser,
   employeeVerifyPinUser,
   employeeChallengeUser,
   employeeVerifySignatureUser,

@@ -6,6 +6,14 @@ const {
   verifyIntegrityChain,
   verifyDocumentQr
 } = require('../services/integrityChainService')
+const {
+  wantsHtmlResponse,
+  buildPublicVerifyResult,
+  renderDocumentVerifyHtml,
+  renderDocumentVerifyErrorHtml
+} = require('../views/documentVerifyPublicView')
+const transactionRepository =
+  require('../../transaction/repositories/transactionRepository')
 
 async function getIntegrityChainController (req, res) {
   try {
@@ -69,6 +77,8 @@ async function verifyIntegrityChainController (req, res) {
  * يقرأ المعطيات من query: tx, g (genesis), doc, s (signature).
  */
 async function verifyDocumentController (req, res) {
+  const asHtml = wantsHtmlResponse(req)
+
   try {
     const source = { ...req.query, ...(req.body || {}) }
 
@@ -79,15 +89,37 @@ async function verifyDocumentController (req, res) {
       signatureBase64Url: source.s
     })
 
+    const transaction = result.transaction_id
+      ? await transactionRepository.findById(result.transaction_id)
+      : null
+
+    const publicResult = buildPublicVerifyResult(result, transaction)
+
+    if (asHtml) {
+      return res
+        .status(publicResult.valid ? 200 : 400)
+        .type('html')
+        .send(renderDocumentVerifyHtml(publicResult))
+    }
+
     return ApiResponder.okResponse(
       res,
-      result,
-      result.valid
-        ? 'الوثيقة صحيحة وسلسلة التواقيع صالحة'
-        : (result.reason || 'الوثيقة غير صالحة أو سلسلة التواقيع غير مكتملة')
+      publicResult,
+      publicResult.message
     )
   } catch (error) {
     const statusCode = error.message === 'Transaction not found' ? 404 : 400
+
+    if (asHtml) {
+      return res
+        .status(statusCode)
+        .type('html')
+        .send(renderDocumentVerifyErrorHtml({
+          message: error.message === 'Transaction not found'
+            ? 'المعاملة غير موجودة'
+            : error.message
+        }))
+    }
 
     return ApiResponder.errorResponse(res, error.message, statusCode)
   }

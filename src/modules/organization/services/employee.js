@@ -8,6 +8,7 @@ const orgDeptRoleRepository = require('../repositories/orgDeptRoleRepository')
 const userRoleAssignmentRepository =
   require('../../auth/repositories/userRoleAssignmentRepository')
 const userKeyRepository = require('../../auth/repositories/userKeyRepository')
+const { invalidateUserAccessibleDepartments } = require('../../../core/cache/apiCacheService')
 
 const {
   hashPin,
@@ -277,6 +278,10 @@ async function updateEmployeeService (data, id) {
       await transaction.rollback()
     }
     throw err
+  }
+
+  if (value.organization_id !== undefined) {
+    await invalidateUserAccessibleDepartments(employeeId)
   }
 
   // أعد قراءة الموظف بكامل علاقاته بعد التحديث

@@ -106,6 +106,14 @@ async function setupPin (userId, pin, clientMeta = {}) {
     throw new Error('المستخدم غير موجود أو غير مفعّل')
   }
 
+  if (user.pin_hash) {
+    const error = new Error(
+      'PIN موجود مسبقاً. استخدم change-pin للتغيير أو delete-pin للحذف'
+    )
+    error.statusCode = 409
+    throw error
+  }
+
   const pinHash = await hashPin(pin)
 
   await userRepository.updatePinHash(user, pinHash)
@@ -206,6 +214,46 @@ async function changePin (userId, { old_pin, new_pin }, clientMeta = {}) {
 
   return {
     message: 'تم تغيير رمز PIN بنجاح'
+  }
+}
+
+async function deletePin (userId, pin, clientMeta = {}) {
+  await securityGuardService.assertAccountNotLocked(userId)
+
+  const user = await userRepository.findById(userId)
+
+  if (!user || !user.is_active) {
+    throw new Error('المستخدم غير موجود أو غير مفعّل')
+  }
+
+  if (!user.pin_hash) {
+    throw new Error('لا يوجد PIN لحذفه')
+  }
+
+  const pinValid = await verifyPin(pin, user.pin_hash)
+
+  if (!pinValid) {
+    await handleSecurityFailure({
+      userId,
+      action: 'PIN_DELETE_FAILED',
+      message: 'رمز PIN غير صحيح',
+      clientMeta
+    })
+  }
+
+  await userRepository.clearPinHash(user)
+
+  await securityGuardService.recordSuccess({
+    userId,
+    action: 'PIN_DELETED',
+    resourceType: 'user',
+    resourceId: userId,
+    ipAddress: clientMeta.ip,
+    userAgent: clientMeta.userAgent
+  })
+
+  return {
+    message: 'تم حذف رمز PIN بنجاح'
   }
 }
 
@@ -474,6 +522,7 @@ module.exports = {
   setupPin,
   verifyAppPin,
   changePin,
+  deletePin,
   changeCitizenPin: changePin,
   employeeVerifyPin,
   createEmployeeChallenge,

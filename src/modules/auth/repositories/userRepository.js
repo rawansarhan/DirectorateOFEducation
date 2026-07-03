@@ -83,6 +83,10 @@ class UserRepository {
     return user.update({ pin_hash: pinHash }, options)
   }
 
+  async clearPinHash (user, options = {}) {
+    return user.update({ pin_hash: null }, options)
+  }
+
   async resetSecurityLock (user) {
     return user.update({
       security_failed_attempts: 0,

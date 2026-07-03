@@ -7,6 +7,16 @@ const {
   updateEmployeeService
 } = require('../services/employee')
 
+const {
+  parseDepartmentIds,
+  getDepartmentEmployeesService
+} = require('../services/departmentEmployeeService')
+
+const {
+  parseCursorPaginationQuery,
+  decodeCursor
+} = require('../../../core/utils/pagination')
+
 // ================= GET ALL (paginated + search) =================
 const getAllEmployees = asyncHandler(async (req, res) => {
   try {
@@ -27,6 +37,30 @@ const getEmployeeById = asyncHandler(async (req, res) => {
   }
 })
 
+// ================= GET BY DEPARTMENTS (workload) =================
+const getEmployeesByDepartments = asyncHandler(async (req, res) => {
+  try {
+    const { limit, cursor } = parseCursorPaginationQuery(req.query)
+    const departmentIds = parseDepartmentIds({ query: req.query })
+
+    const result = await getDepartmentEmployeesService({
+      userId: req.user.id,
+      departmentIds,
+      cursor,
+      decodedCursor: cursor ? decodeCursor(cursor) : null,
+      limit
+    })
+
+    return ApiResponder.okResponse(res, result, 'تم جلب موظفي الدوائر بنجاح')
+  } catch (err) {
+    const statusCode =
+      err.statusCode ||
+      (err.code === 'FORBIDDEN' ? 403 : err.code === 'VALIDATION_ERROR' ? 400 : 500)
+
+    return ApiResponder.error(res, { message: err.message, statusCode })
+  }
+})
+
 // ================= UPDATE =================
 const updateEmployee = asyncHandler(async (req, res) => {
   try {
@@ -40,5 +74,6 @@ const updateEmployee = asyncHandler(async (req, res) => {
 module.exports = {
   getAllEmployees,
   getEmployeeById,
+  getEmployeesByDepartments,
   updateEmployee
 }

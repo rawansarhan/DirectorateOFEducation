@@ -22,6 +22,10 @@ const swaggerOptions = {
     ],
     tags: [
       { name: 'Auth', description: 'المصادقة وإدارة الحسابات (Authentication)' },
+      {
+        name: 'App PIN',
+        description: 'قفل التطبيق — إنشاء، تحقق، تغيير، وحذف رمز PIN (Application Lock PIN)'
+      },
       { name: 'Calculation', description: 'العمليات الحسابية (calculations)' },
       { name: 'TextField', description: 'إدارة حقول النص (Text Field Widgets)' },
       { name: 'TextDropdown', description: 'إدارة القوائم المنسدلة (Text Dropdown Widgets)' },

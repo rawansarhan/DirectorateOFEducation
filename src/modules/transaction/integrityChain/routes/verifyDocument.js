@@ -15,7 +15,7 @@ const {
  *     description: >
  *       نقطة تحقق عامة (بدون مصادقة) تُستدعى عند مسح رمز QR المضمّن في الـ PDF.
  *       تتحقق من توقيع سلطة الإصدار، تطابق المعاملة، وسلامة سلسلة التواقيع،
- *       وتعيد content_hash المسجّل لمطابقته مع الملف الممسوح.
+ *       وتعيد صفحة HTML للمتصفح (مسح QR) أو JSON مختصر عند `?format=json`.
  *     tags: [IntegrityChain]
  *     parameters:
  *       - in: query
@@ -38,9 +38,13 @@ const {
  *         required: true
  *         schema: { type: string }
  *         description: توقيع سلطة الإصدار (Ed25519, base64url)
+ *       - in: query
+ *         name: format
+ *         schema: { type: string, enum: [html, json] }
+ *         description: html (افتراضي للمتصفح) | json للـ API
  *     responses:
  *       200:
- *         description: نتيجة التحقق
+ *         description: نتيجة التحقق — HTML أو JSON عام (بدون تفاصيل تقنية)
  *       400:
  *         description: بيانات غير صالحة
  *       404:

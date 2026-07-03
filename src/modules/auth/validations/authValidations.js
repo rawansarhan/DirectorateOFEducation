@@ -461,6 +461,17 @@ function validateResendOtp (data) {
   return schema.validate(data, { abortEarly: false })
 }
 
+function validateDeletePin (data) {
+  const schema = Joi.object({
+    pin: Joi.string().length(6).pattern(/^\d+$/).required().messages({
+      'string.length': 'pin must be 6 digits',
+      'string.pattern.base': 'pin must contain digits only'
+    })
+  })
+
+  return schema.validate(data, { abortEarly: false })
+}
+
 module.exports = {
   validateRegisterEmp,
   validateRegisterCitizen,
@@ -470,6 +481,7 @@ module.exports = {
   validateSetupPin,
   validateVerifyAppPin,
   validateChangePin,
+  validateDeletePin,
   validateChangeCitizenPin: validateChangePin,
   validateEmployeeVerifyPin,
   validateCreateChallenge,

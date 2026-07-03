@@ -13,14 +13,8 @@ const {
 } = require('../services/department')
 
 const {
-  parseDepartmentIds,
-  getDepartmentEmployeesService
-} = require('../services/departmentEmployeeService')
-
-const {
-  parseCursorPaginationQuery,
-  decodeCursor
-} = require('../../../core/utils/pagination')
+  getUserAccessibleDepartments
+} = require('../services/userAccessibleDepartmentsService')
 
 // ================= CREATE =================
 const createDepartment = asyncHandler(async (req, res) => {
@@ -98,27 +92,14 @@ const getDepartmentOverview = asyncHandler(async (req, res) => {
   }
 })
 
-// ================= GET EMPLOYEES BY DEPARTMENTS =================
-const getDepartmentEmployees = asyncHandler(async (req, res) => {
+// ================= GET ACCESSIBLE SCOPE (auth subtree) =================
+const getAccessibleDepartments = asyncHandler(async (req, res) => {
   try {
-    const { limit, cursor } = parseCursorPaginationQuery(req.query)
-    const departmentIds = parseDepartmentIds({ query: req.query })
+    const result = await getUserAccessibleDepartments(req.user.id)
 
-    const result = await getDepartmentEmployeesService({
-      userId: req.user.id,
-      departmentIds,
-      cursor,
-      decodedCursor: cursor ? decodeCursor(cursor) : null,
-      limit
-    })
-
-    return ApiResponder.okResponse(res, result, 'تم جلب موظفي الدوائر بنجاح')
+    return ApiResponder.okResponse(res, result, 'تم جلب دوائر نطاق المستخدم بنجاح')
   } catch (err) {
-    const statusCode =
-      err.statusCode ||
-      (err.code === 'FORBIDDEN' ? 403 : err.code === 'VALIDATION_ERROR' ? 400 : 500)
-
-    return ApiResponder.error(res, { message: err.message, statusCode })
+    return ApiResponder.error(res, { message: err.message, statusCode: err.statusCode || 400 })
   }
 })
 
@@ -141,7 +122,7 @@ module.exports = {
   getAllDepartments,
   getDepartmentById,
   getDepartmentOverview,
-  getDepartmentEmployees,
   getLeafDepartmentsByOrganization,
+  getAccessibleDepartments,
   toggleDepartmentStatus
 }
