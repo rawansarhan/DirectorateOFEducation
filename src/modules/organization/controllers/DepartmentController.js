@@ -12,6 +12,16 @@ const {
   toggleDepartmentStatusService
 } = require('../services/department')
 
+const {
+  parseDepartmentIds,
+  getDepartmentEmployeesService
+} = require('../services/departmentEmployeeService')
+
+const {
+  parseCursorPaginationQuery,
+  decodeCursor
+} = require('../../../core/utils/pagination')
+
 // ================= CREATE =================
 const createDepartment = asyncHandler(async (req, res) => {
   try {
@@ -88,6 +98,30 @@ const getDepartmentOverview = asyncHandler(async (req, res) => {
   }
 })
 
+// ================= GET EMPLOYEES BY DEPARTMENTS =================
+const getDepartmentEmployees = asyncHandler(async (req, res) => {
+  try {
+    const { limit, cursor } = parseCursorPaginationQuery(req.query)
+    const departmentIds = parseDepartmentIds({ query: req.query })
+
+    const result = await getDepartmentEmployeesService({
+      userId: req.user.id,
+      departmentIds,
+      cursor,
+      decodedCursor: cursor ? decodeCursor(cursor) : null,
+      limit
+    })
+
+    return ApiResponder.okResponse(res, result, 'تم جلب موظفي الدوائر بنجاح')
+  } catch (err) {
+    const statusCode =
+      err.statusCode ||
+      (err.code === 'FORBIDDEN' ? 403 : err.code === 'VALIDATION_ERROR' ? 400 : 500)
+
+    return ApiResponder.error(res, { message: err.message, statusCode })
+  }
+})
+
 // ================= GET LEAVES BY ORGANIZATION =================
 const getLeafDepartmentsByOrganization = asyncHandler(async (req, res) => {
   try {
@@ -107,6 +141,7 @@ module.exports = {
   getAllDepartments,
   getDepartmentById,
   getDepartmentOverview,
+  getDepartmentEmployees,
   getLeafDepartmentsByOrganization,
   toggleDepartmentStatus
 }

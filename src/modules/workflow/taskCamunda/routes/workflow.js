@@ -102,15 +102,15 @@ const {
 
  *       - in: query
 
- *         name: page
+ *         name: cursor
 
- *         schema:
+ *         schema: { type: string }
 
- *           type: integer
+ *         description: |
 
- *           minimum: 1
+ *           مؤشر الصفحة التالية (Cursor Pagination). اتركه فارغاً للصفحة الأولى؛
 
- *           default: 1
+ *           للصفحة التالية استخدم قيمة pagination.next_cursor من الاستجابة السابقة.
 
  *       - in: query
 
@@ -342,9 +342,15 @@ router.get('/tasks/pending-pickup', authMiddleware, getPendingPickupTasksControl
 
  *       - in: query
 
- *         name: page
+ *         name: cursor
 
- *         schema: { type: integer, minimum: 1, default: 1 }
+ *         schema: { type: string }
+
+ *         description: |
+
+ *           مؤشر الصفحة التالية (Cursor Pagination). اتركه فارغاً للصفحة الأولى؛
+
+ *           للصفحة التالية استخدم قيمة pagination.next_cursor من الاستجابة السابقة.
 
  *       - in: query
 
@@ -428,9 +434,15 @@ router.get(
 
  *       - in: query
 
- *         name: page
+ *         name: cursor
 
- *         schema: { type: integer, minimum: 1, default: 1 }
+ *         schema: { type: string }
+
+ *         description: |
+
+ *           مؤشر الصفحة التالية (Cursor Pagination). اتركه فارغاً للصفحة الأولى؛
+
+ *           للصفحة التالية استخدم قيمة pagination.next_cursor من الاستجابة السابقة.
 
  *       - in: query
 

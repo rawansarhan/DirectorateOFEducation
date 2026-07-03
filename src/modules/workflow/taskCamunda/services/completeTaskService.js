@@ -38,6 +38,10 @@ const { createProcessStage } =
   require('../../../transaction/process_instance_stage/services/processInstanceStageService')
 const transactionRepository =
   require('../../../transaction/transaction/repositories/transactionRepository')
+const {
+  assessFinalDocumentReadiness,
+  assertReadyForWorkflowCompletion
+} = require('../../../transaction/document/services/finalDocumentReadinessService')
 const securityGuardService = require('../../../../core/security/securityGuardService')
 const {
   invalidateEmployeeTasksForUser,
@@ -1152,6 +1156,13 @@ async function completeTaskCore ({
       })
     } else {
       logStep('APPROVE_WORKFLOW_FINISHING', { transactionId: transaction.id })
+
+      const readiness = await assessFinalDocumentReadiness(transaction.id, {
+        requireCompleted: false,
+        flushGeneratePdf: true
+      })
+
+      assertReadyForWorkflowCompletion(readiness)
 
       await withDbTransaction(sequelize, dbTransaction, async (dbTx) => {
         await processInstanceRepository.update(processInstance.id, {

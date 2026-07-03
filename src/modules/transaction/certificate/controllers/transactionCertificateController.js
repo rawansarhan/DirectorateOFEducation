@@ -9,6 +9,9 @@ const {
   generateMergedFinalDocument
 } = require('../../document/services/finalDocumentBuilderService')
 const {
+  assessFinalDocumentReadiness
+} = require('../../document/services/finalDocumentReadinessService')
+const {
   successResponse,
   errorResponse
 } = require('../../transaction/utils/transactionResponse')
@@ -106,9 +109,32 @@ async function generateFinalDocumentController (req, res) {
   }
 }
 
+async function getFinalDocumentReadinessController (req, res) {
+  try {
+    const flush =
+      req.query.flush === 'true' || req.query.flush === '1'
+
+    const data = await assessFinalDocumentReadiness(req.params.transactionId, {
+      userId: req.user.id,
+      requireCompleted: true,
+      flushGeneratePdf: flush
+    })
+
+    return successResponse(res, {
+      message: data.ready_for_merge
+        ? 'الوثيقة النهائية جاهزة للدمج'
+        : 'الوثيقة النهائية غير جاهزة بعد',
+      data
+    })
+  } catch (err) {
+    return handleCertificateError(res, err)
+  }
+}
+
 module.exports = {
   getCertificateController,
   uploadFinalDocumentController,
   getFinalDocumentController,
-  generateFinalDocumentController
+  generateFinalDocumentController,
+  getFinalDocumentReadinessController
 }

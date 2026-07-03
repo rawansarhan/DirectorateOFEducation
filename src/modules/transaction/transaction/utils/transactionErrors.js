@@ -32,7 +32,11 @@ const MESSAGES = {
   TRANSACTION_COUNTS_RETRIEVED: 'تم جلب أعداد معاملاتك بنجاح',
   FIRST_STAGE_RETRIEVED: 'تم جلب محتوى المرحلة الأولى بنجاح',
   FIRST_STAGE_NOT_FOUND: 'لا توجد مرحلة أولى لهذه العملية',
-  FIRST_STAGE_CONTENT_NOT_FOUND: 'لا يوجد محتوى محفوظ للمرحلة الأولى'
+  FIRST_STAGE_CONTENT_NOT_FOUND: 'لا يوجد محتوى محفوظ للمرحلة الأولى',
+  GENERATE_PDF_NOT_READY:
+    'تعذّر إكمال المعاملة — توليد PDF لم يكتمل بعد',
+  FINAL_DOCUMENT_NOT_READY:
+    'الوثيقة النهائية غير جاهزة للدمج بعد'
 }
 
 function createTransactionError (code, detail, meta = null) {
@@ -112,10 +116,18 @@ function httpStatusForError (error) {
     error?.code === 'CITIZEN_SIGNATURE_NOT_ALLOWED' ||
     error?.code === 'TRANSACTION_IN_PROGRESS' ||
     error?.code === 'VALIDATION_ERROR' ||
+    error?.code === 'FINAL_DOCUMENT_NOT_READY' ||
     msg.includes('not active') ||
     msg.includes('Only draft')
   ) {
     return 400
+  }
+
+  if (
+    error?.code === 'GENERATE_PDF_NOT_READY' ||
+    error?.statusCode === 409
+  ) {
+    return 409
   }
 
   if (error?.code === 'WORKFLOW_START_FAILED') {

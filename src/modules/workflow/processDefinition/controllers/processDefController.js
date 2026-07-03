@@ -20,6 +20,10 @@ const {
   getProcessByIdService
 } = require('../services/processDefinitionService')
 
+const {
+  getAllProcessDefinitionStatsService
+} = require('../services/processDefinitionStatsService')
+
 ///// ============================== create new Process Definition ====================================
 
 const createProcessDefinition = asyncHandler(async (req, res) => {
@@ -175,6 +179,17 @@ const processById = asyncHandler(async (req, res) => {
   }
 })
 
+const getAllProcessDefinitionStatsController = asyncHandler(async (req, res) => {
+  try {
+    const result = await getAllProcessDefinitionStatsService({ query: req.query })
+
+    return ApiResponder.okResponse(res, result.data, result.message)
+  } catch (err) {
+    const statusCode = err.code === 'VALIDATION_ERROR' ? 400 : 500
+    return ApiResponder.error(res, { message: err.message, statusCode })
+  }
+})
+
 //////////////////////////////////////////////////
 
 module.exports = {
@@ -185,5 +200,6 @@ module.exports = {
   getProcessesByTypeForAdminController,
   getProcessDetails,
   reviewProcessController,
-  processById
+  processById,
+  getAllProcessDefinitionStatsController
 }

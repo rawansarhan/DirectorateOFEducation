@@ -7,7 +7,11 @@ const camundaClient = require('../../../../core/shared/clients/camunda/camundaCl
 const { toEmployeeTaskItem } = require('../mappers/taskCamundaMapper')
 const {
   emptyPaginatedResult,
-  buildPaginationMeta
+  emptyCursorPaginatedResult,
+  buildPaginationMeta,
+  buildCursorPaginationMeta,
+  encodeCursor,
+  decodeCursor
 } = require('../../../../core/utils/pagination')
 const { retryWithBackoff } = require('../../../../core/utils/retryWithBackoff')
 const {
@@ -33,7 +37,7 @@ const EMPLOYEE_STATUS_FILTERS = {
   IN_PROGRESS: 'in_progress',
   PENDING_PICKUP: 'pending_pickup'
 }
-
+//ا
 async function buildProgressMaps (instances = []) {
   const transactionIds = instances
     .map(instance => instance.transaction?.id)
@@ -235,15 +239,63 @@ async function loadEmployeeStageContext (userId) {
 
   return context
 }
+//هذه الدالة لتحقق من المهمة الحالية اذا كانت اكبر من المهمة السابقة 
+function isActivePairAfterCursor (pair, cursor) {
+  const priority = normalizeProcessPriority(pair.instance.process_definition?.priority)
+  const createdAt = new Date(
+    pair.instance.transaction?.created_at || pair.instance.created_at
+  )
+  const id = pair.instance.id
+  const cursorTime = new Date(cursor.t).getTime()
 
+  if (priority > cursor.p) {
+    return true
+  }
+
+  if (priority < cursor.p) {
+    return false
+  }
+
+  if (createdAt.getTime() > cursorTime) {
+    return true
+  }
+
+  if (createdAt.getTime() < cursorTime) {
+    return false
+  }
+
+  return id > cursor.id
+}
+//هذذه الدالة لبناء المهمة الحالية 
+function buildActiveTaskCursor (pair) {
+  return encodeCursor({
+    k: 'active',
+    p: normalizeProcessPriority(pair.instance.process_definition?.priority),
+    t: new Date(
+      pair.instance.transaction?.created_at || pair.instance.created_at
+    ).toISOString(),
+    id: pair.instance.id
+  })
+}
+// هذه الدالة لبناء المهمة السابقة 
+function buildUserStageCursor (row) {
+  return encodeCursor({
+    k: 'stage',
+    t: new Date(row.created_at).toISOString(),
+    id: row.id
+  })
+}
+//
 async function getRunningTasks ({
   userId,
   stageIds,
   processDefinitionIds,
-  page,
   limit,
-  offset,
-  employeeStatusFilter = EMPLOYEE_STATUS_FILTERS.ALL_ACTIVE
+  employeeStatusFilter = EMPLOYEE_STATUS_FILTERS.ALL_ACTIVE,
+  cursor = null,
+  decodedCursor = null,
+  page = null,
+  offset = null
 }) {
   const instances =
     await employeeTaskRepository.getRunningInstancesForProcessDefinitions({
@@ -251,11 +303,13 @@ async function getRunningTasks ({
     })
 
   if (!instances.length) {
-    return emptyPaginatedResult({ page, limit })
+    return page != null
+      ? emptyPaginatedResult({ page, limit })
+      : emptyCursorPaginatedResult({ limit, cursor })
   }
-
+//
   await releaseExpiredTaskLocksForProcessInstances(instances)
-
+  
   const camundaIds = instances.map(
     instance => instance.camunda_process_instance_id
   )
@@ -279,7 +333,9 @@ async function getRunningTasks ({
   })
 
   if (!matchedPairs.length) {
-    return emptyPaginatedResult({ page, limit })
+    return page != null
+      ? emptyPaginatedResult({ page, limit })
+      : emptyCursorPaginatedResult({ limit, cursor })
   }
 
   const sortedPairs = [...matchedPairs].sort((a, b) => {
@@ -310,29 +366,61 @@ async function getRunningTasks ({
     await buildProgressMaps(sortedInstances)
   const stageNameMap = await buildStageNameMap(sortedInstances)
 
-  const allItems = sortedPairs.map(({ instance, activeTask, activeStage }) =>
-    mapInstanceToTask({
-      instance,
-      activeTask,
+  const enrichedPairs = sortedPairs.map(pair => ({
+    pair,
+    item: mapInstanceToTask({
+      instance: pair.instance,
+      activeTask: pair.activeTask,
       userId,
       stageCountMap,
       completedStageCountMap,
-      stageNameOverride: activeTask?.name || activeStage?.name || null
+      stageNameOverride: pair.activeTask?.name || pair.activeStage?.name || null
     })
-  )
+  }))
 
-  const filteredItems = allItems.filter(item =>
+  const filteredPairs = enrichedPairs.filter(({ item }) =>
     matchesEmployeeStatusFilter(item, employeeStatusFilter)
   )
 
-  const pageItems = filteredItems.slice(offset, offset + limit)
+  if (page != null) {
+    const pageItems = filteredPairs
+      .slice(offset, offset + limit)
+      .map(entry => entry.item)
+
+    return {
+      items: pageItems,
+      pagination: buildPaginationMeta({
+        page,
+        limit,
+        total: filteredPairs.length
+      })
+    }
+  }
+
+  let startIndex = 0
+
+  if (decodedCursor) {
+    const idx = filteredPairs.findIndex(({ pair }) =>
+      isActivePairAfterCursor(pair, decodedCursor)
+    )
+    startIndex = idx === -1 ? filteredPairs.length : idx
+  }
+
+  const slice = filteredPairs.slice(startIndex, startIndex + limit + 1)
+  const hasNext = slice.length > limit
+  const pageEntries = hasNext ? slice.slice(0, limit) : slice
+  const nextCursor =
+    hasNext && pageEntries.length
+      ? buildActiveTaskCursor(pageEntries[pageEntries.length - 1].pair)
+      : null
 
   return {
-    items: pageItems,
-    pagination: buildPaginationMeta({
-      page,
+    items: pageEntries.map(entry => entry.item),
+    pagination: buildCursorPaginationMeta({
       limit,
-      total: filteredItems.length
+      cursor,
+      nextCursor,
+      hasNext
     })
   }
 }
@@ -363,23 +451,46 @@ function mapUserStageToItem (row) {
   }
 }
 
-async function getUserCompletedStages ({ userId, status, page, limit, offset }) {
-  const { rows, count } =
+async function getUserCompletedStages ({
+  userId,
+  status,
+  cursor = null,
+  decodedCursor = null,
+  limit
+}) {
+  const { rows, hasNext } =
     await employeeTaskRepository.getStagesCompletedByUser({
       userId,
       status,
       limit,
-      offset
+      cursor: decodedCursor
     })
 
   if (!rows.length) {
-    return emptyPaginatedResult({ page, limit })
+    return emptyCursorPaginatedResult({ limit, cursor })
   }
+
+  const nextCursor =
+    hasNext && rows.length ? buildUserStageCursor(rows[rows.length - 1]) : null
 
   return {
     items: rows.map(mapUserStageToItem),
-    pagination: buildPaginationMeta({ page, limit, total: count })
+    pagination: buildCursorPaginationMeta({
+      limit,
+      cursor,
+      nextCursor,
+      hasNext
+    })
   }
+}
+
+function buildTerminalInstanceCursor (instance) {
+  return encodeCursor({
+    k: 'task',
+    p: normalizeProcessPriority(instance.process_definition?.priority),
+    t: new Date(instance.transaction.created_at).toISOString(),
+    id: instance.id
+  })
 }
 
 async function getDepartmentTerminalTasks ({
@@ -388,9 +499,9 @@ async function getDepartmentTerminalTasks ({
   transactionStatus,
   fromDate = null,
   toDate = null,
-  page,
-  limit,
-  offset
+  cursor = null,
+  decodedCursor = null,
+  limit
 }) {
   const access = await employeeTaskRepository.userHasDepartmentsAccess(
     userId,
@@ -405,18 +516,18 @@ async function getDepartmentTerminalTasks ({
     throw error
   }
 
-  const { rows, count } =
+  const { rows, hasNext } =
     await employeeTaskRepository.getTerminalInstancesByDepartments({
       departmentIds,
       transactionStatus,
       fromDate,
       toDate,
       limit,
-      offset
+      cursor: decodedCursor
     })
 
   if (!rows.length) {
-    return emptyPaginatedResult({ page, limit })
+    return emptyCursorPaginatedResult({ limit, cursor })
   }
 
   const { stageCountMap, completedStageCountMap } =
@@ -434,9 +545,18 @@ async function getDepartmentTerminalTasks ({
     })
   )
 
+  const nextCursor = hasNext
+    ? buildTerminalInstanceCursor(rows[rows.length - 1])
+    : null
+
   return {
     items,
-    pagination: buildPaginationMeta({ page, limit, total: count })
+    pagination: buildCursorPaginationMeta({
+      limit,
+      cursor,
+      nextCursor,
+      hasNext
+    })
   }
 }
 
@@ -523,12 +643,15 @@ async function loadActiveEmployeeTasks ({
   page,
   limit,
   offset,
+  cursor,
   employeeStatusFilter
 }) {
   const context = await loadEmployeeStageContext(userId)
 
   if (!context) {
-    return emptyPaginatedResult({ page, limit })
+    return page != null
+      ? emptyPaginatedResult({ page, limit })
+      : emptyCursorPaginatedResult({ limit, cursor })
   }
 
   return getRunningTasks({
@@ -538,19 +661,20 @@ async function loadActiveEmployeeTasks ({
     page,
     limit,
     offset,
+    cursor,
+    decodedCursor: cursor ? decodeCursor(cursor) : null,
     employeeStatusFilter
   })
 }
 
 async function loadCachedEmployeeTasks ({
   userId,
-  page,
+  cursor,
   limit,
-  offset,
   cacheScope,
   loader
 }) {
-  const cacheKey = KEYS.employeeTasks(userId, cacheScope, page, limit)
+  const cacheKey = KEYS.employeeTasks(userId, cacheScope, cursor, limit)
 
   return getOrLoad(
     cacheKey,
@@ -568,15 +692,14 @@ async function loadCachedDepartmentTasks ({
   transactionStatus,
   fromDate,
   toDate,
-  page,
-  limit,
-  offset
+  cursor,
+  limit
 }) {
   const cacheKey = KEYS.employeeTasksByDepartments(
     userId,
     departmentIds,
     transactionStatus,
-    page,
+    cursor,
     limit,
     fromDate,
     toDate
@@ -593,9 +716,9 @@ async function loadCachedDepartmentTasks ({
         transactionStatus,
         fromDate,
         toDate,
-        page,
-        limit,
-        offset
+        cursor,
+        decodedCursor: cursor ? decodeCursor(cursor) : null,
+        limit
       }),
     {
       label: `employee-tasks:depts:${deptLabel}:${transactionStatus}`,
@@ -633,9 +756,8 @@ async function getCompletedByDepartment ({
   departmentIds,
   fromDate,
   toDate,
-  page,
-  limit,
-  offset
+  cursor,
+  limit
 }) {
   const data = await loadCachedDepartmentTasks({
     userId,
@@ -643,9 +765,8 @@ async function getCompletedByDepartment ({
     transactionStatus: 'completed',
     fromDate,
     toDate,
-    page,
-    limit,
-    offset
+    cursor,
+    limit
   })
 
   return {
@@ -659,9 +780,8 @@ async function getRejectedByDepartment ({
   departmentIds,
   fromDate,
   toDate,
-  page,
-  limit,
-  offset
+  cursor,
+  limit
 }) {
   const data = await loadCachedDepartmentTasks({
     userId,
@@ -669,9 +789,8 @@ async function getRejectedByDepartment ({
     transactionStatus: 'rejected',
     fromDate,
     toDate,
-    page,
-    limit,
-    offset
+    cursor,
+    limit
   })
 
   return {
@@ -680,25 +799,22 @@ async function getRejectedByDepartment ({
   }
 }
 
-async function getAllTasks ({ userId, page, limit, offset, status = 'active' }) {
-  const paginationInput = { page, limit, offset }
-
+async function getAllTasks ({ userId, cursor, limit, status = 'active' }) {
   if (status === 'completed' || status === 'rejected') {
     const cacheScope = `terminal:${status}`
 
     const data = await loadCachedEmployeeTasks({
       userId,
-      page,
+      cursor,
       limit,
-      offset,
       cacheScope,
       loader: () =>
         getUserCompletedStages({
           userId,
           status,
-          page,
-          limit,
-          offset
+          cursor,
+          decodedCursor: cursor ? decodeCursor(cursor) : null,
+          limit
         })
     })
 
@@ -708,13 +824,17 @@ async function getAllTasks ({ userId, page, limit, offset, status = 'active' }) 
     }
   }
 
-  return getActiveEmployeeTasks({
+  const data = await loadActiveEmployeeTasks({
     userId,
-    page,
+    cursor,
     limit,
-    offset,
     employeeStatusFilter: EMPLOYEE_STATUS_FILTERS.ALL_ACTIVE
   })
+
+  return {
+    message: 'تم جلب المهام بنجاح',
+    data
+  }
 }
 
 module.exports = {

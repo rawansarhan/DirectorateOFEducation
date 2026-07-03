@@ -39,7 +39,8 @@ const {
 } = require('../../../../core/cache/processCacheService')
 const {
   getOrLoad,
-  KEYS
+  KEYS,
+  invalidateProcessDefinitionsWithType
 } = require('../../../../core/cache/apiCacheService')
 const { PROCESS_CACHE_TTL_SECONDS } = require('../../../../core/config/env')
 const {
@@ -136,6 +137,7 @@ async function createProcessDefinitionService (data) {
     `${LOG_PREFIX} created process id=${process.id} code=${process.code} — invalidating cache...`
   )
   await invalidateAllProcessLists()
+  await invalidateProcessDefinitionsWithType()
 
   return process
 }
@@ -439,6 +441,7 @@ async function reviewProcess(
     `${LOG_PREFIX} review process id=${processId} decision=${decision} — invalidating auth process caches...`
   )
   await invalidateAllProcessLists()
+  await invalidateProcessDefinitionsWithType()
 
   return {
     message:

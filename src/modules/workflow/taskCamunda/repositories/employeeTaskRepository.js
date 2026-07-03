@@ -634,18 +634,46 @@ const USER_STAGE_INCLUDES = [
   }
 ]
 
-async function getStagesCompletedByUser ({ userId, status, limit, offset }) {
-  return db.ProcessInstanceStage.findAndCountAll({
-    where: {
-      assigned_to: userId,
-      status
-    },
+async function getStagesCompletedByUser ({ userId, status, limit, cursor = null }) {
+  const baseWhere = {
+    assigned_to: userId,
+    status
+  }
+
+  const whereConditions = [baseWhere]
+
+  if (cursor) {
+    const createdAt = new Date(cursor.t)
+
+    whereConditions.push({
+      [Op.or]: [
+        { created_at: { [Op.lt]: createdAt } },
+        {
+          [Op.and]: [
+            { created_at: createdAt },
+            { id: { [Op.lt]: cursor.id } }
+          ]
+        }
+      ]
+    })
+  }
+
+  const where =
+    whereConditions.length === 1
+      ? baseWhere
+      : { [Op.and]: whereConditions }
+
+  const rows = await db.ProcessInstanceStage.findAll({
+    where,
     include: USER_STAGE_INCLUDES,
-    order: [['created_at', 'DESC']],
-    limit,
-    offset,
-    distinct: true
+    order: [['created_at', 'DESC'], ['id', 'DESC']],
+    limit: limit + 1
   })
+
+  const hasNext = rows.length > limit
+  const pageRows = hasNext ? rows.slice(0, limit) : rows
+
+  return { rows: pageRows, hasNext }
 }
 
 async function getTerminalInstancesByDepartments ({
@@ -654,12 +682,12 @@ async function getTerminalInstancesByDepartments ({
   fromDate = null,
   toDate = null,
   limit,
-  offset
+  cursor = null
 }) {
   const transactionIds = await getTransactionIdsPassedDepartments(departmentIds)
 
   if (!transactionIds.length) {
-    return { rows: [], count: 0 }
+    return { rows: [], hasNext: false }
   }
 
   const transactionWhere = {
@@ -678,13 +706,45 @@ async function getTerminalInstancesByDepartments ({
     }
   }
 
-  return db.ProcessInstance.findAndCountAll({
-    where: {
-      status: 'completed',
-      transaction_id: {
-        [Op.in]: transactionIds
-      }
-    },
+  const baseWhere = {
+    status: 'completed',
+    transaction_id: {
+      [Op.in]: transactionIds
+    }
+  }
+
+  const whereConditions = [baseWhere]
+
+  if (cursor) {
+    const createdAt = new Date(cursor.t)
+
+    whereConditions.push({
+      [Op.or]: [
+        { '$process_definition.priority$': { [Op.lt]: cursor.p } },
+        {
+          [Op.and]: [
+            { '$process_definition.priority$': cursor.p },
+            { '$transaction.created_at$': { [Op.gt]: createdAt } }
+          ]
+        },
+        {
+          [Op.and]: [
+            { '$process_definition.priority$': cursor.p },
+            { '$transaction.created_at$': createdAt },
+            { id: { [Op.gt]: cursor.id } }
+          ]
+        }
+      ]
+    })
+  }
+
+  const where =
+    whereConditions.length === 1
+      ? baseWhere
+      : { [Op.and]: whereConditions }
+
+  const rows = await db.ProcessInstance.findAll({
+    where,
     attributes: ['id', 'process_definition_id', 'current_stage_id', 'created_at', 'updated_at'],
     include: [
       TERMINAL_INCLUDES[0],
@@ -696,12 +756,17 @@ async function getTerminalInstancesByDepartments ({
     ],
     order: [
       [{ model: db.ProcessDefinition, as: 'process_definition' }, 'priority', 'DESC'],
-      [{ model: db.Transaction, as: 'transaction' }, 'created_at', 'ASC']
+      [{ model: db.Transaction, as: 'transaction' }, 'created_at', 'ASC'],
+      ['id', 'ASC']
     ],
-    limit,
-    offset,
-    distinct: true
+    limit: limit + 1,
+    subQuery: false
   })
+
+  const hasNext = rows.length > limit
+  const pageRows = hasNext ? rows.slice(0, limit) : rows
+
+  return { rows: pageRows, hasNext }
 }
 
 async function countStagesByProcessDefinitionIds (processDefinitionIds = []) {

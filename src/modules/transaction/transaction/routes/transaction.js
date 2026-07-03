@@ -28,7 +28,8 @@ const {
   getCertificateController,
   uploadFinalDocumentController,
   getFinalDocumentController,
-  generateFinalDocumentController
+  generateFinalDocumentController,
+  getFinalDocumentReadinessController
 } = require('../../certificate/controllers/transactionCertificateController')
 
 const {
@@ -619,6 +620,38 @@ router.get(
 
 /**
  * @swagger
+ * /api/transaction/{transactionId}/final-document/readiness:
+ *   get:
+ *     summary: فحص جاهزية الوثيقة النهائية للدمج
+ *     description: |
+ *       يُرجع checklist لحالة GENERATE_PDF والمرفقات وسلسلة التواقيع ومفاتيح السلطة.
+ *       `flush=true` يعالج فوراً أحداث outbox المعلّقة/الفاشلة لهذه المعاملة قبل الفحص.
+ *     tags: [Certificate & Integrity Chain]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: transactionId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: flush
+ *         schema:
+ *           type: boolean
+ *         description: معالجة فورية لأحداث GENERATE_PDF في outbox قبل الفحص
+ *     responses:
+ *       200:
+ *         description: نتيجة فحص الجاهزية
+ */
+router.get(
+  '/:transactionId/final-document/readiness',
+  authMiddleware,
+  getFinalDocumentReadinessController
+)
+
+/**
+ * @swagger
  * /api/transaction/{transactionId}/final-document/generate:
  *   post:
  *     summary: توليد PDF نهائي مدمج (غلاف QR + كل GENERATE_PDF + كل file_picker)
@@ -627,6 +660,8 @@ router.get(
  *       1) صفحة غلاف فيها رمز QR النهائي للمعاملة (الموقّع من سلطة الإصدار).
  *       2) كل ملفات GENERATE_PDF.
  *       3) كل ملفات file_picker المرفوعة (PDF تُنسخ صفحاتها، والصور تُدرج كصفحات).
+ *
+ *       **يفضّل أولاً:** GET /final-document/readiness — يُرفض الدمج إذا GENERATE_PDF أو المرفقات غير جاهزة.
  *
  *       يُحفظ ويُسجَّل كـ final_document (يستبدل النسخة السابقة إن وُجدت) ويُحسب content_hash.
  *

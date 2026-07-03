@@ -8,6 +8,7 @@ const {
   getAllDepartments,
   getDepartmentById,
   getDepartmentOverview,
+  getDepartmentEmployees,
   getLeafDepartmentsByOrganization,
   toggleDepartmentStatus
 } = require('../controllers/DepartmentController')
@@ -159,6 +160,50 @@ router.get(
   authMiddleware,
   authorize('DEPARTMENT_VIEW'),
   getLeafDepartmentsByOrganization
+)
+
+/**
+ * @swagger
+ * /api/department/employees:
+ *   get:
+ *     summary: موظفو دوائر/شعب (واحدة أو أكثر) مع عبء العمل
+ *     description: |
+ *       يعيد صفاً لكل تعيين موظف في دائرة (organization_department_role) مع:
+ *       بيانات الهوية، اسم الدائرة والدور، عدد المهام النشطة (in_progress / pending_pickup)،
+ *       عدد المراحل المكتملة، نسبة عبء العمل وحالة النشاط.
+ *
+ *       **حالات عبء العمل:**
+ *       - `inactive` (غير نشط): 0%
+ *       - `low_active` (قليل النشاط): أكثر من 0% حتى 20%
+ *       - `active` (نشط): أكثر من 20% حتى 60%
+ *       - `overloaded` (مثقل): أكثر من 60% حتى 100%
+ *
+ *       **Cursor Pagination:** استخدم `pagination.next_cursor` للصفحة التالية.
+ *     tags: [Department]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: department_ids
+ *         required: true
+ *         schema: { type: string, example: '1,2,3' }
+ *       - in: query
+ *         name: cursor
+ *         schema: { type: string }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, minimum: 1, maximum: 70, default: 3 }
+ *     responses:
+ *       200:
+ *         description: قائمة موظفي الدوائر
+ *       403:
+ *         description: لا صلاحية لإحدى الدوائر
+ */
+router.get(
+  '/employees',
+  authMiddleware,
+  authorize('DEPARTMENT_VIEW'),
+  getDepartmentEmployees
 )
 
 /**

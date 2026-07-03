@@ -1,6 +1,11 @@
 const eventBus = require('../../events/eventBus')
 const OutboxRepository = require('../repositories/OutboxRepository')
 const { OUTBOX_POLL_INTERVAL_MS } = require('../../../config/env')
+const {
+  retryFailedGeneratePdfEvents,
+  failGeneratePdfEvent
+} = require('../services/generatePdfOutboxService')
+const EVENTS = require('../../events/types')
 
 let isRunning = false
 
@@ -9,6 +14,8 @@ async function processOutbox () {
   isRunning = true
 
   try {
+    await retryFailedGeneratePdfEvents()
+
     const events = await OutboxRepository.findPending()
 
     for (const event of events) {
@@ -18,7 +25,12 @@ async function processOutbox () {
         console.log(`✅ Outbox processed: ${event.event_type}`)
       } catch (err) {
         console.error('❌ Outbox event failed:', event.id, err.message)
-        await OutboxRepository.markFailed(event.id, err.message)
+
+        if (event.event_type === EVENTS.GENERATE_PDF) {
+          await failGeneratePdfEvent(event, err)
+        } else {
+          await OutboxRepository.markFailed(event.id, err.message)
+        }
       }
     }
   } catch (err) {

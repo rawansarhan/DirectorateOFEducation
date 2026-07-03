@@ -1,4 +1,5 @@
 const { OutboxEvent } = require('../../../../entities')
+const { Op } = require('sequelize')
 
 // ====================================
 // CREATE EVENT
@@ -65,9 +66,42 @@ async function markFailed(id, error) {
   })
 }
 
+async function resetToPending (id) {
+
+  return await OutboxEvent.update({
+
+    status: 'pending',
+
+    last_error: null
+
+  }, {
+
+    where: { id }
+  })
+}
+
+async function findByEventTypeAndStatuses (eventType, statuses = ['pending']) {
+
+  return await OutboxEvent.findAll({
+
+    where: {
+      event_type: eventType,
+      status: { [Op.in]: statuses }
+    },
+
+    order: [
+      ['created_at', 'ASC']
+    ],
+
+    limit: 50
+  })
+}
+
 module.exports = {
   create,
   findPending,
   markProcessed,
-  markFailed
+  markFailed,
+  resetToPending,
+  findByEventTypeAndStatuses
 }

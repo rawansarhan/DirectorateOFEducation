@@ -18,7 +18,7 @@ const {
 } = require('../../../../core/utils/workflowResponseHelper')
 const { validateCompleteTaskPayload } = require('../../schemas/completeTaskSchema')
 const { validateSigningChallengePayload } = require('../../schemas/signingChallengeSchema')
-const { parsePaginationQuery } = require('../../../../core/utils/pagination')
+const { parsePaginationQuery, parseCursorPaginationQuery } = require('../../../../core/utils/pagination')
 const {
   getCertificateBundle
 } = require('../../../transaction/certificate/services/transactionCertificateService')
@@ -96,25 +96,25 @@ async function completeTaskController (req, res) {
       )
     }
 
-    return handleWorkflowError(res, error, 400)
+    return handleWorkflowError(res, error, error.statusCode || 400)
   }
 }
 
 async function getAllTasksController (req, res) {
   try {
-    const { page, limit, offset } = parsePaginationQuery(req.query)
+    const { limit, cursor } = parseCursorPaginationQuery(req.query)
     const status = String(req.query.status || 'active').trim()
     const result = await getAllTasksService.getAllTasks({
       userId: req.user.id,
-      page,
+      cursor,
       limit,
-      offset,
       status
     })
 
     return sendWorkflowSuccess(res, result.data, result.message)
   } catch (error) {
-    return handleWorkflowError(res, error, 500)
+    const status = error.code === 'VALIDATION_ERROR' ? 400 : 500
+    return handleWorkflowError(res, error, status)
   }
 }
 
@@ -156,7 +156,7 @@ async function getPendingPickupTasksController (req, res) {
 ///////////////////////////////////////////////////////////////////////////////////
 async function getCompletedByDepartmentController (req, res) {
   try {
-    const { page, limit, offset } = parsePaginationQuery(req.query)
+    const { limit, cursor } = parseCursorPaginationQuery(req.query)
     const departmentIds = parseDepartmentIds({ query: req.query })
     const { fromDate, toDate } = parseDateRange({ query: req.query })
 
@@ -165,9 +165,8 @@ async function getCompletedByDepartmentController (req, res) {
       departmentIds,
       fromDate,
       toDate,
-      page,
-      limit,
-      offset
+      cursor,
+      limit
     })
 
     return sendWorkflowSuccess(res, result.data, result.message)
@@ -179,7 +178,7 @@ async function getCompletedByDepartmentController (req, res) {
 
 async function getRejectedByDepartmentController (req, res) {
   try {
-    const { page, limit, offset } = parsePaginationQuery(req.query)
+    const { limit, cursor } = parseCursorPaginationQuery(req.query)
     const departmentIds = parseDepartmentIds({ query: req.query })
     const { fromDate, toDate } = parseDateRange({ query: req.query })
 
@@ -188,9 +187,8 @@ async function getRejectedByDepartmentController (req, res) {
       departmentIds,
       fromDate,
       toDate,
-      page,
-      limit,
-      offset
+      cursor,
+      limit
     })
 
     return sendWorkflowSuccess(res, result.data, result.message)

@@ -11,7 +11,8 @@ const {
   getProcessesByTypeForAdminController,
   getProcessDetails,
   reviewProcessController,
-  processById
+  processById,
+  getAllProcessDefinitionStatsController
 } = require('../controllers/processDefController')
 
 const {uploadBPMN,
@@ -116,6 +117,45 @@ router.get(
   authMiddleware,
   authorize('PROCESS_VIEW'),
   getUnapprovedOrInactiveProcessesController
+)
+
+/**
+ * @swagger
+ * /api/process_definitions/stats:
+ *   get:
+ *     summary: إحصائيات كل العمليات مع عدد المعاملات والدوائر المرتبطة
+ *     description: |
+ *       يعرض كل process definitions مع:
+ *       - اسم نوع المعاملة (type_trans.name)
+ *       - process code
+ *       - عدد المعاملات حسب الحالة: pending_pickup, in_progress, completed, rejected
+ *       - الدوائر المرتبطة عبر stage_assignments → organization_department_roles → department
+ *
+ *       فلترة اختيارية بتاريخ إنشاء المعاملة: from_date / to_date
+ *       الكاش: قائمة العمليات + الدوائر (ثابتة)؛ أعداد المعاملات تُحسب طازجة كل طلب.
+ *     tags: [Process Definition]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: from_date
+ *         schema: { type: string, format: date, example: '2026-01-01' }
+ *       - in: query
+ *         name: to_date
+ *         schema: { type: string, format: date, example: '2026-01-31' }
+ *     responses:
+ *       200:
+ *         description: تم جلب الإحصائيات بنجاح
+ *       400:
+ *         description: تواريخ غير صالحة
+ *       403:
+ *         description: PROCESS_VIEW مطلوب
+ */
+router.get(
+  '/stats',
+  authMiddleware,
+  authorize('PROCESS_VIEW'),
+  getAllProcessDefinitionStatsController
 )
 
 /**

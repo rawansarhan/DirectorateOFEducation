@@ -39,18 +39,24 @@ const KEYS = {
   transactionDraft: (userId, processId) => `transaction:draft:${userId}:${processId}`,
   createDraft: (userId, processId) => `transaction:create-draft:${userId}:${processId}`,
   transactionById: (userId, transactionId) => `transaction:by-id:${userId}:${transactionId}`,
-  employeeTasks: (userId, scope, page, limit) =>
-    `employee-tasks:${userId}:${scope}:p${page}:l${limit}`,
-  employeeTasksByDepartments: (userId, departmentIds, status, page, limit, fromDate, toDate) => {
+  employeeTasks: (userId, scope, cursor, limit) => {
+    const cursorKey = cursor ? encodeURIComponent(cursor) : 'start'
+    return `employee-tasks:${userId}:${scope}:c${cursorKey}:l${limit}`
+  },
+  employeeTasksByDepartments: (userId, departmentIds, status, cursor, limit, fromDate, toDate) => {
     const deptKey = [...departmentIds].sort((a, b) => a - b).join('-')
     const fromKey = fromDate ? fromDate.toISOString().slice(0, 10) : 'all'
     const toKey = toDate ? toDate.toISOString().slice(0, 10) : 'all'
-    return `employee-tasks:${userId}:depts:${deptKey}:${status}:from${fromKey}:to${toKey}:p${page}:l${limit}`
+    const cursorKey = cursor ? encodeURIComponent(cursor) : 'start'
+    return `employee-tasks:${userId}:depts:${deptKey}:${status}:from${fromKey}:to${toKey}:c${cursorKey}:l${limit}`
   },
   employeeTaskStats: (userId, scope, departmentIds, periodKey = 'default') => {
     const deptKey = [...departmentIds].sort((a, b) => a - b).join('-')
     return `employee-task-stats:${userId}:${scope}:depts:${deptKey}:${periodKey}`
-  }
+  },
+  processDefinitionDepartments: (processDefinitionId) =>
+    `process:departments:${processDefinitionId}`,
+  processDefinitionsWithType: () => 'process:definitions:with-type'
 }
 
 let redisClient = null
@@ -578,6 +584,26 @@ async function invalidateEmployeeTaskStats () {
   console.log(`${LOG_PREFIX} invalidate employee task stats (${count} key(s))`)
 }
 
+async function invalidateProcessDefinitionDepartments (processDefinitionId = null) {
+  if (processDefinitionId != null) {
+    const count = await deleteKeysByPattern(`process:departments:${processDefinitionId}`)
+    console.log(
+      `${LOG_PREFIX} invalidate process departments — process ${processDefinitionId} (${count} key(s))`
+    )
+    return
+  }
+
+  const count = await deleteKeysByPattern('process:departments:*')
+  console.log(`${LOG_PREFIX} invalidate all process departments (${count} key(s))`)
+}
+
+async function invalidateProcessDefinitionsWithType () {
+  const count = await deleteKey(KEYS.processDefinitionsWithType())
+  console.log(
+    `${LOG_PREFIX} invalidate process definitions with type (${count ? 1 : 0} key)`
+  )
+}
+
 module.exports = {
   KEYS,
   deleteKeysByPattern,
@@ -608,5 +634,7 @@ module.exports = {
   invalidateAllTransactionsForUser,
   invalidateEmployeeTasksForUser,
   invalidateEmployeeTasksByDepartment,
-  invalidateEmployeeTaskStats
+  invalidateEmployeeTaskStats,
+  invalidateProcessDefinitionDepartments,
+  invalidateProcessDefinitionsWithType
 }

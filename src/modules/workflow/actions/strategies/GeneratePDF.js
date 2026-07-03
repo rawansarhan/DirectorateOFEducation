@@ -5,21 +5,15 @@
  * GeneratePDF — action strategy لمرحلة SERVICE_TASK
  * =============================================================================
  *
- * يُعرّف في stage_config.config_json.actions:
- *   { name: "GENERATE_PDF", payload: { template_id: 1 } }
- *
- * يُنفَّذ تلقائياً عند complete لـ SERVICE_TASK (completeTaskService Phase 9)
- *
- * المتطلبات:
- *   - document_instance موجود مسبقاً (أُنشئ من templates في USER_TASK)
- *   - document_template نشط وملف PDF موجود في uploads
- *
- * التنفيذ: يُ enqueue في outbox — التوليد الفعلي في generatePdf.listener.js
+ * يُنفَّذ توليد PDF **متزامناً** أولاً؛ عند الفشل يُenqueue في outbox لإعادة المحاولة.
  */
 
 const documentInstanceRepository = require('../../../transaction/document/repositories/documentInstanceRepository')
 const documentTemplateRepository = require('../../../requirements/DocTemp/repositories/documentTemplateRepository')
 const { enqueueOutboxEvent } = require('../../../../core/shared/outbox/services/outboxEnqueueService')
+const {
+  executeGeneratePdfJob
+} = require('../services/generatePdfJobService')
 const EVENTS = require('../../../../core/shared/events/types')
 
 class GeneratePdfStrategy {
@@ -70,22 +64,41 @@ class GeneratePdfStrategy {
       }
     }
 
-    await enqueueOutboxEvent(EVENTS.GENERATE_PDF, {
+    const jobPayload = {
       transaction_id: transactionId,
       template_id: templateId,
       document_instance_id: documentInstance.id,
       stage_code: context?.stage?.code || null,
       user_id: context?.userId || null
-    })
+    }
 
-    return {
-      type: 'pdf',
-      status: 'queued',
-      template_id: templateId,
-      document_instance_id: documentInstance.id,
-      transaction_id: transactionId,
-      generated_pdf_path: null,
-      engine_type: documentTemplate.engine_type
+    try {
+      const result = await executeGeneratePdfJob(jobPayload)
+
+      return {
+        type: 'pdf',
+        status: result.skipped ? 'generated' : 'generated',
+        skipped: Boolean(result.skipped),
+        template_id: templateId,
+        document_instance_id: documentInstance.id,
+        transaction_id: transactionId,
+        generated_pdf_path: result.generated_pdf_path,
+        engine_type: documentTemplate.engine_type
+      }
+    } catch (error) {
+      await enqueueOutboxEvent(EVENTS.GENERATE_PDF, jobPayload)
+
+      return {
+        type: 'pdf',
+        status: 'queued',
+        queued_after_failure: true,
+        error: error.message,
+        template_id: templateId,
+        document_instance_id: documentInstance.id,
+        transaction_id: transactionId,
+        generated_pdf_path: null,
+        engine_type: documentTemplate.engine_type
+      }
     }
   }
 }

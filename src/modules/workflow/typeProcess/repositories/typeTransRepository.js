@@ -1,7 +1,5 @@
 const { TypeTrans } = require('../../../../entities')
-const Sequelize = require('sequelize')
 
-const Op = Sequelize.Op
 class TypeTransRepository {
 // ================= FIND BY ID =================
   async findById(id) {
@@ -56,17 +54,14 @@ class TypeTransRepository {
     })
   }
 
-  // ================= GET ALL WITHOUT COMPLAINT =================
+  // ================= GET ALL ACTIVE =================
 
   async findAllWithoutComplaint() {
 
     return await TypeTrans.findAll({
 
       where: {
-         is_active: true,
-        id: {
-          [Op.ne]: 1
-        }
+        is_active: true
       },
 
       order: [['id', 'ASC']]

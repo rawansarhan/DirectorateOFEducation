@@ -45,6 +45,10 @@ const {
   resolveAbsoluteUploadPath,
   embedUnicodeFont
 } = require('./pdfGenerationService')
+const {
+  assessFinalDocumentReadiness,
+  assertReadyForMerge
+} = require('./finalDocumentReadinessService')
 
 const A4 = { width: 595.28, height: 841.89 }
 const PAGE_MARGIN = 40
@@ -428,6 +432,14 @@ async function generateMergedFinalDocument (
     )
   }
 
+  const readiness = await assessFinalDocumentReadiness(numericTransactionId, {
+    userId,
+    requireCompleted: true,
+    flushGeneratePdf: true
+  })
+
+  assertReadyForMerge(readiness)
+
   const [instances, uploadedRows] = await Promise.all([
     documentInstanceRepository.findAllByTransactionId(numericTransactionId),
     documentSignatureRepository.findAllWithSignaturesByTransactionId(
@@ -546,7 +558,12 @@ async function generateMergedFinalDocument (
       generated_documents_merged: mergedGenerated,
       uploaded_files_merged: mergedUploaded,
       total_pages: mergedPdf.getPageCount(),
-      skipped
+      skipped,
+      readiness: {
+        ready_for_merge: readiness.ready_for_merge,
+        generate_pdf: readiness.generate_pdf,
+        final_qr: readiness.final_qr
+      }
     }
   }
 }
