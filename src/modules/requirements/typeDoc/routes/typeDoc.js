@@ -61,10 +61,23 @@ router.put('/:id', authMiddleware, updateTypeDoc)
  * @swagger
  * /api/typeDoc:
  *   get:
- *     summary: جلب كل أنواع الوثائق
+ *     summary: جلب كل أنواع الوثائق (مع ترقيم صفحات وبحث)
  *     tags: [TypeDoc]
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer, default: 1, minimum: 1 }
+ *         description: رقم الصفحة
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 10, minimum: 1, maximum: 70 }
+ *         description: عدد العناصر في الصفحة
+ *       - in: query
+ *         name: search
+ *         schema: { type: string }
+ *         description: نص البحث في اسم نوع الوثيقة (name)
  *     responses:
  *       200:
  *         description: قائمة أنواع الوثائق

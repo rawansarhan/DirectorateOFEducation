@@ -5,10 +5,12 @@ const { DatePickerInputDTO } = require('../dto/DatePickerInputDTO')
 const { validateCreateDatePicker } = require('../validations/datePickerValidations')
 const { toDTO, toDTOList } = require('../mappers/datePickerMapper')
 const {
-  getOrLoad,
-  KEYS,
   invalidateDatePickers
 } = require('../../../../core/cache/apiCacheService')
+const {
+  parsePaginationQuery,
+  buildPaginationMeta
+} = require('../../../../core/utils/pagination')
 
 const WIDGET_PREFIX = 'date_picker'
 const LOG_PREFIX = '[DatePicker]'
@@ -53,16 +55,27 @@ async function loadAllDatePickers () {
   return toDTOList(rows)
 }
 
-async function getAllDatePickersService () {
+async function getAllDatePickersService (query = {}) {
+  const { page, limit, offset } = parsePaginationQuery(query, {
+    defaultLimit: 10
+  })
+  const search = String(query.search || '').trim()
+
   console.log(
-    `${LOG_PREFIX} GET /api/date-pickers — loading list (cache key: api:${KEYS.datePickers()})`
+    `${LOG_PREFIX} GET /api/date-pickers — page=${page} limit=${limit}` +
+    (search ? ` search="${search}"` : '')
   )
 
-  return getOrLoad(
-    KEYS.datePickers(),
-    loadAllDatePickers,
-    { label: 'DatePicker GET /api/date-pickers' }
-  )
+  const { rows, count } = await datePickerRepository.findAndCountActive({
+    limit,
+    offset,
+    search: search || undefined
+  })
+
+  return {
+    items: toDTOList(rows),
+    pagination: buildPaginationMeta({ page, limit, total: count })
+  }
 }
 
 async function getDatePickerByIdService (id) {

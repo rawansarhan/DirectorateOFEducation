@@ -12,6 +12,10 @@ const {
   KEYS,
   invalidateTypeDocs
 } = require('../../../../core/cache/apiCacheService')
+const {
+  parsePaginationQuery,
+  buildPaginationMeta
+} = require('../../../../core/utils/pagination')
 
 function createTypeDocError (code, message) {
   const error = new Error(message)
@@ -107,10 +111,25 @@ async function loadAllTypeDocs () {
   return rows.map(typeDocMapper.toDTO)
 }
 
-async function getAllTypeDocsService () {
-  return getOrLoad(KEYS.typeDocs(), loadAllTypeDocs, {
-    label: 'TypeDoc GET /api/typeDoc'
+async function getAllTypeDocsService (query = {}) {
+  const { page, limit, offset } = parsePaginationQuery(query, {
+    defaultLimit: 10
   })
+  const search = String(query.search || '').trim()
+
+  const { rows, count } = await retryWithBackoff(
+    () => typeDocRepository.findAndCountActive({
+      limit,
+      offset,
+      search: search || undefined
+    }),
+    { label: 'typeDoc.findAndCountActive' }
+  )
+
+  return {
+    items: rows.map(typeDocMapper.toDTO),
+    pagination: buildPaginationMeta({ page, limit, total: count })
+  }
 }
 
 async function getTypeDocByIdService (id) {

@@ -1,8 +1,11 @@
 const dotenv = require('dotenv');
 dotenv.config(); // ✔ لازم أول سطر
 
+const http = require('http');
 const app = require('./app');
 const sequelize = require('../src/core/config/database');
+const { attach: attachNotificationsWs } =
+  require('./notifications/wsNotificationServer');
 const PORT = process.env.PORT || 4000;
 
 // 🔥 الأفضل تشغّل الـ jobs بعد ما تتأكد السيرفر شغال أو DB جاهز
@@ -14,12 +17,17 @@ const { startOutboxWorker } =
 registerListeners()
 startOutboxWorker()
 
+// نلفّ تطبيق Express داخل خادم HTTP صريح كي نُركّب عليه خادم إشعارات الـ
+// WebSocket على نفس المنفذ (لا منفذ ثانٍ، ويعمل خلف Nginx على المسار /ws).
+const server = http.createServer(app);
+attachNotificationsWs(server);
+
 sequelize.authenticate()
   .then(() => {
     console.log('Database connected');
 
-    app.listen(PORT, () => {
-      console.log(`Server is running on port ${PORT}`);
+    server.listen(PORT, () => {
+      console.log(`Server is running on port ${PORT} (HTTP + WebSocket /ws)`);
     });
   })
   .catch(err => {

@@ -1,5 +1,6 @@
 'use strict'
 
+const { Op } = require('sequelize')
 const { TextField } = require('../../../../entities')
 
 async function findById (id) {
@@ -21,6 +22,26 @@ async function findAllActive () {
   })
 }
 
+// جلب مع ترقيم صفحات وبحث. يُرجع { rows, count }.
+async function findAndCountActive ({ limit, offset, search } = {}) {
+  const where = { is_active: true }
+
+  if (search) {
+    const like = { [Op.iLike]: `%${search}%` }
+    where[Op.or] = [
+      { label: like },
+      { id_widget: like }
+    ]
+  }
+
+  return TextField.findAndCountAll({
+    where,
+    order: [['id', 'ASC']],
+    limit,
+    offset
+  })
+}
+
 async function create (data) {
   return TextField.create(data)
 }
@@ -34,6 +55,7 @@ module.exports = {
   findById,
   findByIdWidget,
   findAllActive,
+  findAndCountActive,
   create,
   updateInstance
 }

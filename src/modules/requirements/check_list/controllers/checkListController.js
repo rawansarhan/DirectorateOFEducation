@@ -23,8 +23,8 @@ const createCheckList = asyncHandler(async (req, res) => {
 
 const getAllCheckLists = asyncHandler(async (req, res) => {
   try {
-    const data = await getAllCheckListsService()
-    return ApiResponder.okResponse(res, data, 'تم جلب قوائم الاختيار بنجاح')
+    const result = await getAllCheckListsService(req.query)
+    return ApiResponder.okResponse(res, result, 'تم جلب قوائم الاختيار بنجاح')
   } catch (err) {
     return ApiResponder.badRequestResponse(res, err.message)
   }
