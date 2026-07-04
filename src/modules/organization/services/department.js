@@ -7,6 +7,35 @@ const {
 
 const departmentRepository = require('../repositories/departmentRepository')
 const organizationRepository = require('../repositories/organizationRepository')
+const {
+  getOrLoad,
+  KEYS,
+  invalidateDepartmentLeaves,
+  invalidateDepartmentOverview,
+  invalidateEmployeesByDepartments,
+  invalidateRolesByDepartment
+} = require('../../../core/cache/apiCacheService')
+
+async function invalidateDepartmentStructureCaches ({
+  organizationId,
+  departmentId,
+  parentId = null
+} = {}) {
+  if (organizationId != null) {
+    await invalidateDepartmentLeaves(organizationId)
+  }
+
+  if (departmentId != null) {
+    await invalidateDepartmentOverview(departmentId)
+    await invalidateRolesByDepartment(departmentId)
+  }
+
+  if (parentId != null) {
+    await invalidateDepartmentOverview(parentId)
+  }
+
+  await invalidateEmployeesByDepartments()
+}
 
 // ================= CREATE =================
 async function createDepartmentService(data) {
@@ -40,6 +69,12 @@ async function createDepartmentService(data) {
     organization_id: data.organization_id,
     parent_id: data.parent_id ?? null,
     is_active: true
+  })
+
+  await invalidateDepartmentStructureCaches({
+    organizationId: data.organization_id,
+    departmentId: department.id,
+    parentId: data.parent_id ?? null
   })
 
   return department
@@ -101,7 +136,23 @@ async function updateDepartmentService(data, id) {
   if (data.organization_id !== undefined) payload.organization_id = data.organization_id
   if (data.parent_id !== undefined) payload.parent_id = data.parent_id
 
-  return departmentRepository.updateInstance(department, payload)
+  const updated = await departmentRepository.updateInstance(department, payload)
+
+  await invalidateDepartmentStructureCaches({
+    organizationId: data.organization_id ?? department.organization_id,
+    departmentId: departmentId,
+    parentId: data.parent_id !== undefined ? data.parent_id : department.parent_id
+  })
+
+  if (data.organization_id !== undefined && data.organization_id !== department.organization_id) {
+    await invalidateDepartmentLeaves(department.organization_id)
+  }
+
+  if (data.parent_id !== undefined && data.parent_id !== department.parent_id) {
+    await invalidateDepartmentOverview(department.parent_id)
+  }
+
+  return updated
 }
 
 // ================= TOGGLE STATUS =================
@@ -122,7 +173,15 @@ async function toggleDepartmentStatusService(id) {
     throw err
   }
 
-  return departmentRepository.updateInstance(department, { is_active: !department.is_active })
+  const updated = await departmentRepository.updateInstance(department, { is_active: !department.is_active })
+
+  await invalidateDepartmentStructureCaches({
+    organizationId: department.organization_id,
+    departmentId: departmentId,
+    parentId: department.parent_id
+  })
+
+  return updated
 }
 
 // ================= DELETE =================
@@ -143,7 +202,16 @@ async function deleteDepartmentService(id) {
     throw err
   }
 
+  const organizationId = department.organization_id
+  const parentId = department.parent_id
+
   await departmentRepository.destroyInstance(department)
+
+  await invalidateDepartmentStructureCaches({
+    organizationId,
+    departmentId,
+    parentId
+  })
 
   return { id: departmentId }
 }
@@ -156,22 +224,7 @@ async function getAllDepartmentsService() {
 // ================= GET LEAVES BY ORGANIZATION =================
 // يعيد فقط الأقسام التي لا يوجد لها أبناء (آخر هرمية)
 // مع اسم كامل يمثّل المسار من الجذر: "قسم المحاسبة\شعبة التدقيق"
-async function getLeafDepartmentsByOrganizationService(organizationId) {
-  const orgId = parseInt(organizationId, 10)
-
-  if (!Number.isInteger(orgId) || orgId < 1) {
-    const err = new Error('معرّف المؤسسة غير صالح')
-    err.statusCode = 400
-    throw err
-  }
-
-  const organization = await organizationRepository.findById(orgId)
-  if (!organization) {
-    const err = new Error('المؤسسة غير موجودة')
-    err.statusCode = 404
-    throw err
-  }
-
+async function loadLeafDepartmentsByOrganization (orgId) {
   const departments = await departmentRepository.findAllByOrganizationId(orgId)
 
   if (departments.length === 0) return []
@@ -203,6 +256,29 @@ async function getLeafDepartmentsByOrganizationService(organizationId) {
   })
 }
 
+async function getLeafDepartmentsByOrganizationService(organizationId) {
+  const orgId = parseInt(organizationId, 10)
+
+  if (!Number.isInteger(orgId) || orgId < 1) {
+    const err = new Error('معرّف المؤسسة غير صالح')
+    err.statusCode = 400
+    throw err
+  }
+
+  const organization = await organizationRepository.findById(orgId)
+  if (!organization) {
+    const err = new Error('المؤسسة غير موجودة')
+    err.statusCode = 404
+    throw err
+  }
+
+  return getOrLoad(
+    KEYS.departmentLeaves(orgId),
+    () => loadLeafDepartmentsByOrganization(orgId),
+    { label: `Department leaves GET org:${orgId}` }
+  )
+}
+
 // ================= GET OVERVIEW =================
 // Aggregates everything the department card needs in one call:
 // the manager, the employee list, the sub-sections (child departments)
@@ -214,15 +290,7 @@ async function getLeafDepartmentsByOrganizationService(organizationId) {
 //   * employees = every distinct active user assigned to any role in the dept.
 //   * sections  = the department's direct child departments.
 //   * transactionsCount = transactions owned by those employees.
-async function getDepartmentOverviewService(id) {
-  const departmentId = parseInt(id, 10)
-
-  if (!Number.isInteger(departmentId) || departmentId < 1) {
-    const err = new Error('معرّف القسم غير صالح')
-    err.statusCode = 400
-    throw err
-  }
-
+async function loadDepartmentOverview (departmentId) {
   const department = await departmentRepository.findByIdWithRelations(departmentId)
 
   if (!department) {
@@ -289,6 +357,22 @@ async function getDepartmentOverviewService(id) {
     sectionsCount: sections.length,
     transactionsCount
   }
+}
+
+async function getDepartmentOverviewService(id) {
+  const departmentId = parseInt(id, 10)
+
+  if (!Number.isInteger(departmentId) || departmentId < 1) {
+    const err = new Error('معرّف القسم غير صالح')
+    err.statusCode = 400
+    throw err
+  }
+
+  return getOrLoad(
+    KEYS.departmentOverview(departmentId),
+    () => loadDepartmentOverview(departmentId),
+    { label: `Department overview GET /api/department/${departmentId}/overview` }
+  )
 }
 
 // ================= GET BY ID =================

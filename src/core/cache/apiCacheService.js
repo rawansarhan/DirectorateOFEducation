@@ -22,6 +22,15 @@ const KEYS = {
   rolesByDepartment: (departmentId) => `role:by-dept:${departmentId}`,
   locations: () => 'location:all',
   documentTemplates: () => 'document-templates:active',
+  documentTemplateById: (id) => `document-templates:id:${id}`,
+  departmentOverview: (departmentId) => `department:overview:${departmentId}`,
+  employeesByDepartments: (userId, departmentIds, cursor, limit) => {
+    const deptKey = [...departmentIds].sort((a, b) => a - b).join('-')
+    const cursorKey = cursor ? encodeURIComponent(cursor) : 'start'
+    return `employees:by-depts:${userId}:${deptKey}:c${cursorKey}:l${limit}`
+  },
+  finalDocumentGenerateResponse: (transactionId) =>
+    `final-document:generate:tx:${transactionId}`,
   textFields: () => 'text-fields:all',
   textDropdowns: () => 'text-dropdowns:all',
   radioGroups: () => 'radio-groups:all',
@@ -367,9 +376,29 @@ async function invalidateLocations () {
   console.log(`${LOG_PREFIX} invalidate locations (${count ? 1 : 0} key)`)
 }
 
-async function invalidateDocumentTemplates () {
-  const count = await deleteKey(KEYS.documentTemplates())
-  console.log(`${LOG_PREFIX} invalidate document templates (${count ? 1 : 0} key)`)
+async function invalidateDocumentTemplates (templateId = null) {
+  if (templateId != null) {
+    await deleteKey(KEYS.documentTemplateById(templateId))
+  }
+
+  const count = await deleteKeysByPattern('document-templates:*')
+  console.log(`${LOG_PREFIX} invalidate document templates (${count} key(s))`)
+}
+
+async function invalidateDepartmentOverview (departmentId = null) {
+  if (departmentId != null) {
+    await deleteKey(KEYS.departmentOverview(departmentId))
+    console.log(`${LOG_PREFIX} invalidate department overview — dept ${departmentId}`)
+    return
+  }
+
+  const count = await deleteKeysByPattern('department:overview:*')
+  console.log(`${LOG_PREFIX} invalidate all department overviews (${count} key(s))`)
+}
+
+async function invalidateEmployeesByDepartments () {
+  const count = await deleteKeysByPattern('employees:by-depts:*')
+  console.log(`${LOG_PREFIX} invalidate employees by departments (${count} key(s))`)
 }
 
 async function invalidateWidgetListCache ({ module, cacheKey }) {
@@ -501,13 +530,23 @@ async function invalidateFinalDocument (transactionId) {
   }
 
   const cacheKey = KEYS.finalDocument(transactionId)
+  const generateKey = KEYS.finalDocumentGenerateResponse(transactionId)
   const deleted = await deleteKey(cacheKey)
+  const generateDeleted = await deleteKey(generateKey)
 
   logInvalidate({
     module: 'FinalDocument',
     fullKey: `${API_CACHE_PREFIX}${cacheKey}`,
     deleted
   })
+
+  if (generateDeleted) {
+    logInvalidate({
+      module: 'FinalDocumentGenerate',
+      fullKey: `${API_CACHE_PREFIX}${generateKey}`,
+      deleted: generateDeleted
+    })
+  }
 }
 
 async function invalidateTaskDetails (taskId) {
@@ -638,6 +677,8 @@ module.exports = {
   invalidateRolesByDepartment,
   invalidateLocations,
   invalidateDocumentTemplates,
+  invalidateDepartmentOverview,
+  invalidateEmployeesByDepartments,
   invalidateTextFields,
   invalidateTextDropdowns,
   invalidateRadioGroups,

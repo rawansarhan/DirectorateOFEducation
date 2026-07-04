@@ -35,7 +35,11 @@ const {
   normalizeStoredFilePath,
   toPublicFileUrl
 } = require('../../../../core/utils/filePath')
-const { API_PUBLIC_URL } = require('../../../../core/config/env')
+const { API_PUBLIC_URL, FINAL_DOCUMENT_CACHE_TTL_SECONDS } = require('../../../../core/config/env')
+const {
+  getOrLoad,
+  KEYS
+} = require('../../../../core/cache/apiCacheService')
 const {
   isAuthorityKeyConfigured,
   signDocumentBinding
@@ -418,11 +422,18 @@ async function generateMergedFinalDocument (
     )
 
   if (existingFinalDocument) {
-    return {
-      transaction_id: numericTransactionId,
-      already_exists: true,
-      final_document: mapFinalDocumentRow(existingFinalDocument)
-    }
+    return getOrLoad(
+      KEYS.finalDocumentGenerateResponse(numericTransactionId),
+      async () => ({
+        transaction_id: numericTransactionId,
+        already_exists: true,
+        final_document: mapFinalDocumentRow(existingFinalDocument)
+      }),
+      {
+        label: `final-document:generate:tx:${numericTransactionId}`,
+        ttlSeconds: FINAL_DOCUMENT_CACHE_TTL_SECONDS
+      }
+    )
   }
 
   if (transaction.status !== COMPLETED_STATUS) {

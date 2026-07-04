@@ -30,6 +30,8 @@ const {
   invalidateStageConfig
 } = require('../../../../core/cache/apiCacheService')
 
+const { API_CACHE_TTL_SECONDS } = require('../../../../core/config/env')
+
 const {
   HTTP_STATUS,
   createHttpError
@@ -347,70 +349,79 @@ for (const a of assignments) {
 // GET AUTH STAGE CONFIG (مواطن / موظف — استمارة التقديم)
 // ======================================================
 
+async function loadAuthStageConfigPayload (numericProcessId) {
+  const process = await processRepository.findById(numericProcessId)
+
+  if (!process) {
+    throw createHttpError(
+      'تعريف العملية غير موجود — تحقق من معرّف العملية',
+      HTTP_STATUS.NOT_FOUND,
+      'NOT_FOUND'
+    )
+  }
+
+  const stage = await stageRepository.findFirstAuthStage(numericProcessId)
+
+  if (!stage) {
+    throw createHttpError(
+      'لا توجد مرحلة تقديم (AUTH) مرتبطة بهذه العملية',
+      HTTP_STATUS.NOT_FOUND,
+      'NOT_FOUND'
+    )
+  }
+
+  const stageConfig = await stageConfigRepository.findByStageId(stage.id)
+
+  if (!stageConfig) {
+    throw createHttpError(
+      'لم تُكوَّن استمارة التقديم لهذه العملية بعد',
+      HTTP_STATUS.NOT_FOUND,
+      'NOT_FOUND'
+    )
+  }
+
+  // let draft = null
+  // if (userId) {
+  //   draft = await transactionRepository.findDraftByCode(userId, process.code)
+  // }
+  // const config_json = draft?.data ?? stageConfig.config_json
+  // const data = { config_json }
+  // if (draft) {
+  //   data.transaction_id = draft.id
+  // }
+
+  return {
+    config_json: stageConfig.config_json
+  }
+}
+
 async function getConfig_json (processId, { userId } = {}) {
-  return retryWithBackoff(async () => {
-    const numericProcessId = Number(processId)
+  const numericProcessId = Number(processId)
 
-    if (!Number.isInteger(numericProcessId) || numericProcessId < 1) {
-      throw createHttpError(
-        'معرّف العملية غير صالح — يجب أن يكون رقماً صحيحاً موجباً',
-        HTTP_STATUS.BAD_REQUEST,
-        'VALIDATION_ERROR'
-      )
+  if (!Number.isInteger(numericProcessId) || numericProcessId < 1) {
+    throw createHttpError(
+      'معرّف العملية غير صالح — يجب أن يكون رقماً صحيحاً موجباً',
+      HTTP_STATUS.BAD_REQUEST,
+      'VALIDATION_ERROR'
+    )
+  }
+
+  const data = await getOrLoad(
+    KEYS.stageConfig(numericProcessId),
+    () => retryWithBackoff(
+      () => loadAuthStageConfigPayload(numericProcessId),
+      { label: 'stageConfig.getConfig_json' }
+    ),
+    {
+      label: `stage-config:process:${numericProcessId}`,
+      ttlSeconds: API_CACHE_TTL_SECONDS
     }
+  )
 
-    const process = await processRepository.findById(numericProcessId)
-
-    if (!process) {
-      throw createHttpError(
-        'تعريف العملية غير موجود — تحقق من معرّف العملية',
-        HTTP_STATUS.NOT_FOUND,
-        'NOT_FOUND'
-      )
-    }
-
-    const stage = await stageRepository.findFirstAuthStage(numericProcessId)
-
-    if (!stage) {
-      throw createHttpError(
-        'لا توجد مرحلة تقديم (AUTH) مرتبطة بهذه العملية',
-        HTTP_STATUS.NOT_FOUND,
-        'NOT_FOUND'
-      )
-    }
-
-    const stageConfig =
-      await stageConfigRepository.findByStageId(
-        stage.id
-      )
-
-    if (!stageConfig) {
-      throw createHttpError(
-        'لم تُكوَّن استمارة التقديم لهذه العملية بعد',
-        HTTP_STATUS.NOT_FOUND,
-        'NOT_FOUND'
-      )
-    }
-
-    // let draft = null
-
-    // if (userId) {
-    //   draft = await transactionRepository.findDraftByCode(userId, process.code)
-    // }
-
-    // const config_json = draft?.data ?? stageConfig.config_json
-    // const data = { config_json }
-
-    // if (draft) {
-    //   data.transaction_id = draft.id
-    // }
-
-    return {
-      message: 'تم جلب إعدادات العملية بنجاح',
-      data: {
-        config_json: stageConfig.config_json
-      }}
-  }, { label: 'stageConfig.getConfig_json' })
+  return {
+    message: 'تم جلب إعدادات العملية بنجاح',
+    data
+  }
 }
 module.exports = {
   createStageConfigService,

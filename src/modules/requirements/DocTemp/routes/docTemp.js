@@ -11,7 +11,8 @@ const {
   extractTemplateFieldsById
 } = require('../controllers/docTempController')
 
-const { uploadDocumentTemplate } = require('../../../../core/middleware/upload')
+const { uploadDocumentTemplate, runMulterUpload } = require('../../../../core/middleware/upload')
+const { uploadFileLimiter } = require('../../../../core/security/rateLimitMiddleware')
 const { authMiddleware, authorize } = require('../../../../core/middleware/authMiddleware')
 
 /**
@@ -156,6 +157,9 @@ router.get(
  *     description: |
  *       يقرأ حقول AcroForm من PDF مرفوع، يحفظ الملف في uploads،
  *       ويرجع أسماء الإفراغات مع path و url للملف.
+ *
+ *       **Dedup / quota / rate limit:** نفس آلية POST /api/transaction/files/upload.
+ *       **key** (optional): معرّف السياق — افتراضي `document_template_extract`.
  *     tags: [Document Templates]
  *     security:
  *       - bearerAuth: []
@@ -172,9 +176,15 @@ router.get(
  *                 type: string
  *                 format: binary
  *                 description: ملف PDF يحتوي حقول AcroForm
+ *               key:
+ *                 type: string
+ *                 example: document_template_extract
+ *                 description: اختياري — معرّف سياق الرفع (افتراضي document_template_extract)
  *     responses:
  *       200:
  *         description: تم استخراج أسماء الإفراغات بنجاح
+ *       429:
+ *         description: تجاوز حد الرفع (rate limit أو quota يومي)
  *         content:
  *           application/json:
  *             schema:
@@ -224,9 +234,10 @@ router.get(
  */
 router.post(
   '/extract-fields',
-  uploadDocumentTemplate.single('file'),
   authMiddleware,
-  authorize('CREATE_TEMPLATE'),
+  uploadFileLimiter,
+  runMulterUpload(uploadDocumentTemplate.single('file')),
+  authorize('TEMPLATE_EXTRACT_FIELDS'),
   extractTemplateFieldsFromUpload
 )
 
@@ -257,6 +268,7 @@ router.post(
 router.get(
   '/:id',
   authMiddleware,
+  authorize('TEMPLATE_READ_ONE'),
   getOneActiveDocumentTemplate
 )
 

@@ -115,6 +115,13 @@ const finalDocumentLimiter = createRateLimiter({
   keyGenerator: userAwareKey
 })
 
+const uploadFileLimiter = createRateLimiter({
+  windowMs: Number(process.env.RATE_LIMIT_UPLOAD_WINDOW_MS || 60 * 1000),
+  max: Number(process.env.RATE_LIMIT_UPLOAD_MAX || 15),
+  keyPrefix: 'upload-file',
+  keyGenerator: userAwareKey
+})
+
 module.exports = {
   createRateLimiter,
   authSensitiveLimiter,
@@ -122,5 +129,6 @@ module.exports = {
   signingChallengeLimiter,
   completeTaskLimiter,
   submitTransactionLimiter,
-  finalDocumentLimiter
+  finalDocumentLimiter,
+  uploadFileLimiter
 }

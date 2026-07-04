@@ -8,6 +8,11 @@ const {
   buildCursorPaginationMeta,
   emptyCursorPaginatedResult
 } = require('../../../core/utils/pagination')
+const {
+  getOrLoad,
+  KEYS
+} = require('../../../core/cache/apiCacheService')
+const { API_CACHE_TTL_SECONDS } = require('../../../core/config/env')
 
 function fail (message, statusCode = 400, code = 'VALIDATION_ERROR') {
   const err = new Error(message)
@@ -132,7 +137,7 @@ function shapeDepartmentEmployee ({
   }
 }
 
-async function getDepartmentEmployeesService ({
+async function loadDepartmentEmployees ({
   userId,
   departmentIds,
   cursor = null,
@@ -226,6 +231,36 @@ async function getDepartmentEmployeesService ({
       hasNext
     })
   }
+}
+
+async function getDepartmentEmployeesService ({
+  userId,
+  departmentIds,
+  cursor = null,
+  decodedCursor = null,
+  limit
+}) {
+  const cacheKey = KEYS.employeesByDepartments(
+    userId,
+    departmentIds,
+    cursor,
+    limit
+  )
+
+  return getOrLoad(
+    cacheKey,
+    () => loadDepartmentEmployees({
+      userId,
+      departmentIds,
+      cursor,
+      decodedCursor,
+      limit
+    }),
+    {
+      label: `employees:by-depts:${userId}`,
+      ttlSeconds: API_CACHE_TTL_SECONDS
+    }
+  )
 }
 
 module.exports = {

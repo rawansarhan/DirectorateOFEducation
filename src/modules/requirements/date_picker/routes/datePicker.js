@@ -36,7 +36,7 @@ const {
 router.get(
   '/',
   authMiddleware,
-  authorize('FIELD_READ'),
+  authorize('REQUIREMENTS_READ_ALL'),
   getAllDatePickers
 )
 
@@ -77,7 +77,7 @@ router.get(
 router.post(
   '/',
   authMiddleware,
-  authorize('FIELD_CREATE'),
+  authorize('REQUIREMENTS_CREATE'),
   createDatePicker
 )
 
@@ -104,7 +104,7 @@ router.post(
 router.get(
   '/:id',
   authMiddleware,
-  authorize('GET_ONE_FIELD'),
+  authorize('REQUIREMENTS_READ_ONE'),
   getDatePickerById
 )
 

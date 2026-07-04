@@ -46,7 +46,7 @@ function toPublicFileUrl (filePath) {
 
   return `${getApiBaseUrl()}${storedPath}`
 }
-
+// تستخدم هذه الدالة ل انشاء مدخل للملف في قاعدة البيانات
 function buildStoredFileEntry (file, userId) {
   const storedPath = normalizeStoredFilePath(file.path)
 
@@ -60,7 +60,6 @@ function buildStoredFileEntry (file, userId) {
     uploaded_at: new Date()
   }
 }
-
 function enrichFileEntry (file) {
   if (!file || typeof file !== 'object') {
     return file
@@ -74,7 +73,7 @@ function enrichFileEntry (file) {
     url: file.url || toPublicFileUrl(storedPath)
   }
 }
-
+ 
 function enrichFilePickerWidget (widget) {
   if (!widget || widget.widget_type !== 'file_picker') {
     return widget

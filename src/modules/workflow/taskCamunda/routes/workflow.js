@@ -44,7 +44,7 @@ const {
 
 
 
-const { authMiddleware } = require('../../../../core/middleware/authMiddleware')
+const { authMiddleware, authorize } = require('../../../../core/middleware/authMiddleware')
 
 const {
 
@@ -625,18 +625,21 @@ router.get(
 router.get(
   '/tasks/stats/completed-last-month',
   authMiddleware,
+  authorize('tasks_STATS_COMPLETED_LAST_MONTH'),
   getCompletedLastMonthStatsController
 )
 
 router.get(
   '/tasks/stats/rejected-last-month',
   authMiddleware,
+  authorize('tasks_STATS_REJECTED_LAST_MONTH'),
   getRejectedLastMonthStatsController
 )
 
 router.get(
   '/tasks/stats/active',
   authMiddleware,
+  authorize('tasks_STATS_ACTIVE'),
   getActiveStatsController
 )
 

@@ -21,7 +21,8 @@ const fs = require('fs')
 const path = require('path')
 const documentSignatureRepository = require('../../../workflow/taskCamunda/repositories/documentSignatureRepository')
 const typeDocRepository = require('../../../requirements/typeDoc/repositories/typeDocRepository')
-const { buildStoredFileEntry } = require('../../../../core/utils/filePath')
+const pendingFileUploadRepository = require('../repositories/pendingFileUploadRepository')
+const { buildStoredFileEntry, normalizeStoredFilePath } = require('../../../../core/utils/filePath')
 const { retryWithBackoff } = require('../../../../core/utils/retryWithBackoff')
 const { pickTypeDocIdFromObject } = require('../../../../core/utils/typeDocId')
 
@@ -56,6 +57,26 @@ function assertUploadedFileExists (storedPath, fileKey) {
   if (!fs.existsSync(absolutePath)) {
     throw createDocumentFileError(
       `الملف المشار إليه (${storedPath}) للحقل "${fileKey}" غير موجود — تأكد من رفعه عبر POST /api/transaction/files/upload قبل الإرسال`
+    )
+  }
+}
+
+async function assertUploadedFileOwnedByUser (storedPath, userId, fileKey) {
+  if (!userId) {
+    throw createDocumentFileError(
+      `لا يمكن التحقق من ملكية الملف للحقل "${fileKey}"`
+    )
+  }
+
+  const normalizedPath = normalizeStoredFilePath(storedPath)
+  const ownership = await pendingFileUploadRepository.findByPathAndUser(
+    normalizedPath,
+    userId
+  )
+
+  if (!ownership) {
+    throw createDocumentFileError(
+      `الملف "${normalizedPath}" للحقل "${fileKey}" غير مرفوع من حسابك — ارفعه عبر POST /api/transaction/files/upload`
     )
   }
 }
@@ -104,6 +125,7 @@ async function registerTransactionFile ({
   )
 
   assertUploadedFileExists(stored.path, file.key || file.name || 'unknown')
+  await assertUploadedFileOwnedByUser(stored.path, userId, file.key || file.name || 'unknown')
 
   const document = await retryWithBackoff(
     () =>
@@ -117,6 +139,8 @@ async function registerTransactionFile ({
       ),
     { label: `documentSignature.create:${transactionId}` }
   )
+
+  await pendingFileUploadRepository.markAttachedByPath(stored.path, userId)
 
   return {
     key: file.key || file.name,

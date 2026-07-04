@@ -194,7 +194,7 @@ async function getFinalDocument (transactionId, { userId = null } = {}) {
   //تحقق من صلاحية المعاملة 
   await loadAuthorizedTransaction(transactionId, userId)
 
-  const row = await documentFinalTransactionRepository.findByTransactionId(
+  const row = await documentFinalTransactionRepository.findByTransactionIdCached(
     transactionId
   )
 

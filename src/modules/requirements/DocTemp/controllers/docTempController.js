@@ -13,13 +13,18 @@ const {
 
 function handleDocumentTemplateError (res, err) {
   const statusCode =
-    err.code === 'TEMPLATE_NOT_FOUND' || err.code === 'TYPE_DOC_NOT_FOUND'
-      ? 404
-      : err.code === 'VALIDATION_ERROR' ||
-        err.code === 'FILE_REQUIRED' ||
-        err.code === 'TYPE_DOC_INACTIVE'
-        ? 400
-        : 500
+    err.statusCode ||
+    (err.code === 'UPLOAD_QUOTA_EXCEEDED'
+      ? 429
+      : err.code === 'TEMPLATE_NOT_FOUND' || err.code === 'TYPE_DOC_NOT_FOUND'
+        ? 404
+        : err.code === 'UNAUTHORIZED_FILE'
+          ? 403
+          : err.code === 'VALIDATION_ERROR' ||
+            err.code === 'FILE_REQUIRED' ||
+            err.code === 'TYPE_DOC_INACTIVE'
+            ? 400
+            : 500)
 
   return ApiResponder.error(res, {
     message: err.message || 'حدث خطأ أثناء معالجة قالب الوثيقة',
@@ -39,7 +44,7 @@ const createDocumentTemplate = asyncHandler(async (req, res) => {
       url: req.body?.url
     }
 
-    const result = await createDocumentTemplateService(data)
+    const result = await createDocumentTemplateService(data, { userId: req.user?.id })
 
     return ApiResponder.okResponse(res, result, 'تم إنشاء قالب الوثيقة بنجاح')
   } catch (err) {
@@ -77,7 +82,10 @@ const getOneActiveDocumentTemplate = asyncHandler(async (req, res) => {
 
 const extractTemplateFieldsFromUpload = asyncHandler(async (req, res) => {
   try {
-    const result = await extractTemplateFieldsFromUploadService(req.file)
+    const result = await extractTemplateFieldsFromUploadService(req.file, {
+      userId: req.user?.id,
+      key: req.body?.key
+    })
     return ApiResponder.okResponse(
       res,
       result,

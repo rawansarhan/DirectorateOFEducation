@@ -8,9 +8,11 @@ const {
 
 function handleUploadError (res, err) {
   const statusCode =
-    err.code === 'FILE_REQUIRED' || err.code === 'VALIDATION_ERROR'
-      ? 400
-      : 500
+    err.code === 'UPLOAD_QUOTA_EXCEEDED'
+      ? 429
+      : err.code === 'FILE_REQUIRED' || err.code === 'VALIDATION_ERROR'
+        ? 400
+        : err.statusCode || 500
 
   return ApiResponder.error(res, {
     message: err.message || 'فشل رفع الملف',

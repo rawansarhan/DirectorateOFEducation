@@ -115,7 +115,7 @@ router.post(
 router.get(
   '/admin/review-queue',
   authMiddleware,
-  authorize('PROCESS_VIEW'),
+  authorize('PROCESS_VIEW_NOTACTIVE_NOTAPPROVED'),
   getUnapprovedOrInactiveProcessesController
 )
 
@@ -154,7 +154,7 @@ router.get(
 router.get(
   '/stats',
   authMiddleware,
-  authorize('PROCESS_VIEW'),
+  authorize('PROCESS_VIEW_STATS'),
   getAllProcessDefinitionStatsController
 )
 
@@ -195,7 +195,7 @@ router.get(
 router.get(
   '/admin/missing-stage-config',
   authMiddleware,
-  authorize('PROCESS_VIEW'),
+  authorize('PROCESS_VIEW_MISSING_STAGE_CONFIGE'),
   getProcessesWithMissingStageConfigController
 )
 
@@ -431,7 +431,7 @@ router.get(
 router.get(
   '/:id/details',
   authMiddleware,
-  authorize('PROCESS_VIEW'),
+  authorize('PROCESS_DETAILS'),
   getProcessDetails
 )
 
@@ -489,7 +489,7 @@ router.get(
 router.post(
   '/:id/review',
   authMiddleware,
-  authorize('PROCESS_APPROVE'), // أو permission مناسب
+  authorize('PROCESS_REVIEW'), // أو permission مناسب
   reviewProcessController
 )
 

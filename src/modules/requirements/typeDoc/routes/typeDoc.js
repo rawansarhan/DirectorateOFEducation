@@ -10,7 +10,7 @@ const {
   getTypeDocById
 } = require('../controllers/typeDocController')
 
-const { authMiddleware } = require('../../../../core/middleware/authMiddleware')
+const { authMiddleware, authorize } = require('../../../../core/middleware/authMiddleware')
 
 /**
  * @swagger
@@ -35,7 +35,10 @@ const { authMiddleware } = require('../../../../core/middleware/authMiddleware')
  *       201:
  *         description: تم الإنشاء
  */
-router.post('/', authMiddleware, createTypeDoc)
+router.post('/',
+   authMiddleware,
+   authorize('TYPE_DOC_CREATE'),
+   createTypeDoc)
 
 /**
  * @swagger
@@ -55,7 +58,10 @@ router.post('/', authMiddleware, createTypeDoc)
  *       200:
  *         description: تم التحديث
  */
-router.put('/:id', authMiddleware, updateTypeDoc)
+router.put('/:id', 
+  authMiddleware, 
+  authorize('TYPE_DOC_UPDATE'),
+  updateTypeDoc)
 
 /**
  * @swagger
@@ -69,7 +75,10 @@ router.put('/:id', authMiddleware, updateTypeDoc)
  *       200:
  *         description: قائمة أنواع الوثائق
  */
-router.get('/', authMiddleware, getAllTypeDocs)
+router.get('/',
+   authMiddleware,
+   authorize('TYPE_DOC_READ_ALL'),
+    getAllTypeDocs)
 
 /**
  * @swagger
@@ -89,6 +98,9 @@ router.get('/', authMiddleware, getAllTypeDocs)
  *       200:
  *         description: نوع الوثيقة
  */
-router.get('/:id', authMiddleware, getTypeDocById)
+router.get('/:id',
+   authMiddleware,
+   authorize('TYPE_DOC_READ_ONE'),
+   getTypeDocById)
 
 module.exports = router

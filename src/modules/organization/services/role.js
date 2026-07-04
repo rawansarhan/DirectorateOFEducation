@@ -11,7 +11,27 @@ const organizationRepository = require('../repositories/organizationRepository')
 const departmentRepository = require('../repositories/departmentRepository')
 const roleRepository = require('../repositories/roleRepository')
 const orgDeptRoleRepository = require('../repositories/orgDeptRoleRepository')
-const { invalidateAllUserAccessibleDepartments } = require('../../../core/cache/apiCacheService')
+const {
+  getOrLoad,
+  KEYS,
+  invalidateAllUserAccessibleDepartments,
+  invalidateRolesByDepartment,
+  invalidateEmployeesByDepartments,
+  invalidateDepartmentOverview
+} = require('../../../core/cache/apiCacheService')
+
+async function invalidateDepartmentRoleCaches (departmentId, { includeOverview = true } = {}) {
+  if (departmentId == null) {
+    return
+  }
+
+  await invalidateRolesByDepartment(departmentId)
+  await invalidateEmployeesByDepartments()
+
+  if (includeOverview) {
+    await invalidateDepartmentOverview(departmentId)
+  }
+}
 
 function buildCamundaGroupKey(roleCode, organizationId, departmentId) {
   return `${roleCode}__ORG${organizationId}__DEPT${departmentId}`
@@ -103,6 +123,7 @@ async function createRoleService(data) {
   })
 
   await invalidateAllUserAccessibleDepartments()
+  await invalidateDepartmentRoleCaches(data.department_id)
 
   return orgDeptRoleRepository.findByIdWithRelations(result.orgDeptRole.id)
 }
@@ -209,6 +230,11 @@ async function updateRoleService(data, id) {
   await orgDeptRoleRepository.updateInstance(orgDeptRole, payload)
 
   await invalidateAllUserAccessibleDepartments()
+  await invalidateDepartmentRoleCaches(orgDeptRole.department_id)
+
+  if (data.department_id !== undefined && data.department_id !== orgDeptRole.department_id) {
+    await invalidateDepartmentRoleCaches(data.department_id)
+  }
 
   return orgDeptRoleRepository.findByIdWithRelations(orgDeptRoleId)
 }
@@ -234,6 +260,7 @@ async function toggleRoleStatusService(id) {
   await orgDeptRoleRepository.updateInstance(orgDeptRole, { is_active: !orgDeptRole.is_active })
 
   await invalidateAllUserAccessibleDepartments()
+  await invalidateDepartmentRoleCaches(orgDeptRole.department_id)
 
   return orgDeptRoleRepository.findByIdWithRelations(orgDeptRoleId)
 }
@@ -256,9 +283,12 @@ async function deleteRoleService(id) {
     throw err
   }
 
+  const departmentId = orgDeptRole.department_id
+
   await orgDeptRoleRepository.destroyInstance(orgDeptRole)
 
   await invalidateAllUserAccessibleDepartments()
+  await invalidateDepartmentRoleCaches(departmentId)
 
   return { id: orgDeptRoleId }
 }
@@ -292,6 +322,18 @@ async function getRoleByIdService(id) {
 // ================= GET ROLES BY DEPARTMENT =================
 // يعيد كل الأدوار المرتبطة بقسم محدد (للـ leaf department)
 // ليستخدمها المستخدم عند تسجيل موظف جديد بعد اختيار القسم
+async function loadRolesByDepartment (deptId) {
+  const rows = await orgDeptRoleRepository.findActiveByDepartmentIdWithRole(deptId)
+
+  return rows
+    .filter(r => r.role)
+    .map(r => ({
+      id: r.role.id,
+      name: r.role.name,
+      code: r.role.code
+    }))
+}
+
 async function getRolesByDepartmentService(departmentId) {
   const deptId = parseInt(departmentId, 10)
 
@@ -308,15 +350,11 @@ async function getRolesByDepartmentService(departmentId) {
     throw err
   }
 
-  const rows = await orgDeptRoleRepository.findActiveByDepartmentIdWithRole(deptId)
-
-  return rows
-    .filter(r => r.role)
-    .map(r => ({
-      id: r.role.id,
-      name: r.role.name,
-      code: r.role.code
-    }))
+  return getOrLoad(
+    KEYS.rolesByDepartment(deptId),
+    () => loadRolesByDepartment(deptId),
+    { label: `Role GET /api/role/by-department/${deptId}` }
+  )
 }
 
 module.exports = {

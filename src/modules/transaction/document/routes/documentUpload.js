@@ -9,6 +9,9 @@ const {
   runMulterUpload
 } = require('../../../../core/middleware/upload')
 const {
+  uploadFileLimiter
+} = require('../../../../core/security/rateLimitMiddleware')
+const {
   uploadTransactionFileController
 } = require('../controllers/documentUploadController')
 
@@ -28,7 +31,12 @@ const {
  *       **multipart fields:**
  *       - `file` (required) — الملف
  *       - `type_doc_id` (required) — من stage_config → file_picker.data.type_doc_id
- *       - `key` (optional) — معرّف الودجت (data.id) مثل national_id_files
+ *       - `key` (required) — معرّف file_picker (data.id) مثل national_id_files
+ *
+ *       **Dedup:** نفس الملف (SHA-256) لنفس المستخدم → نفس `path` مع `already_exists: true` (بدون نسخة جديدة على القرص).
+ *       **ملف جديد لنفس key:** يُحفظ كملف مستقل — **لا يُحذف** الملف السابق (نفس picker_key قد يُستخدم بمعاملات متعددة).
+ *       **Quota:** حد يومي per user (TRANSACTION_UPLOAD_DAILY_MAX_FILES / MAX_MB).
+ *       **Rate limit:** uploadFileLimiter (RATE_LIMIT_UPLOAD_MAX / WINDOW_MS).
  *
  *       **حد الحجم:** TRANSACTION_FILE_MAX_MB (افتراضي 25MB)
  *     tags: [Transaction]
@@ -40,7 +48,7 @@ const {
  *         multipart/form-data:
  *           schema:
  *             type: object
- *             required: [file, type_doc_id]
+ *             required: [file, type_doc_id, key]
  *             properties:
  *               file:
  *                 type: string
@@ -56,12 +64,15 @@ const {
  *         description: تم رفع الملف بنجاح
  *       400:
  *         description: ملف أو type_doc_id غير صالح
+ *       429:
+ *         description: تجاوز حد الرفع (rate limit أو quota يومي)
  *       401:
  *         description: غير مصرّح
  */
 router.post(
   '/upload',
   authMiddleware,
+  uploadFileLimiter,
   runMulterUpload(uploadTransactionFile.single('file')),
   uploadTransactionFileController
 )

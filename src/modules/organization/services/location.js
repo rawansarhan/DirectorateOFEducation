@@ -2,6 +2,11 @@
 
 const { ValidateCreateLocation } = require('../validations/locationValidation')
 const locationRepository = require('../repositories/locationRepository')
+const {
+  getOrLoad,
+  KEYS,
+  invalidateLocations
+} = require('../../../core/cache/apiCacheService')
 
 // ================= CREATE =================
 async function createLocationService(data) {
@@ -36,12 +41,18 @@ async function createLocationService(data) {
     parent_id: data.parent_id ?? null
   })
 
+  await invalidateLocations()
+
   return locationRepository.findByIdWithRelations(created.id)
 }
 
 // ================= GET ALL =================
 async function getAllLocationsService() {
-  return locationRepository.findAll()
+  return getOrLoad(
+    KEYS.locations(),
+    () => locationRepository.findAll(),
+    { label: 'Location GET /api/location' }
+  )
 }
 
 module.exports = {

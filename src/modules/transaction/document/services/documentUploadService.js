@@ -3,12 +3,14 @@
 const typeDocRepository = require('../../../requirements/typeDoc/repositories/typeDocRepository')
 const { buildStoredFileEntry } = require('../../../../core/utils/filePath')
 const { pickTypeDocIdFromObject } = require('../../../../core/utils/typeDocId')
-
-function createUploadError (message, code = 'VALIDATION_ERROR') {
-  const err = new Error(message)
-  err.code = code
-  return err
-}
+const { decodeMultipartFilename } = require('../../../../core/utils/uploadFilename')
+const {
+  createUploadError,
+  safeUnlinkUpload,
+  normalizePickerKey,
+  processStagedFileUpload,
+  computeFileContentHash
+} = require('./stagedFileUploadService')
 
 async function resolveActiveTypeDoc (typeDocId) {
   if (!typeDocId) {
@@ -28,45 +30,25 @@ async function resolveActiveTypeDoc (typeDocId) {
   return typeDoc
 }
 
-/**
- * After multer saves the file to uploads/, build the payload item for
- * files[] in submit / complete.
- */
-async function buildTransactionFileUploadResult ({
+function buildUploadResponse ({
+  pickerKey,
+  staged,
   file,
-  key = null,
-  typeDocId,
+  typeDoc,
   userId
 }) {
-  if (!file) {
-    throw createUploadError('الملف مطلوب — استخدم multipart field اسمه "file"', 'FILE_REQUIRED')
-  }
-
-  const resolvedTypeDocId = pickTypeDocIdFromObject({ type_doc_id: typeDocId })
-
-  if (!resolvedTypeDocId) {
-    throw createUploadError('type_doc_id مطلوب ويجب أن يكون رقماً موجباً')
-  }
-
-  const typeDoc = await resolveActiveTypeDoc(resolvedTypeDocId)
-  const storedPath = `/uploads/${file.filename}`
-  const widgetKey =
-    typeof key === 'string' && key.trim()
-      ? key.trim()
-      : null
-
   const stored = buildStoredFileEntry(
     {
-      key: widgetKey || file.fieldname || 'file',
-      path: storedPath,
-      original_name: file.originalname,
-      mime_type: file.mimetype
+      key: pickerKey,
+      path: staged.path,
+      original_name: staged.original_name,
+      mime_type: staged.mime_type
     },
     userId
   )
 
   return {
-    key: widgetKey,
+    key: pickerKey,
     path: stored.path,
     url: stored.url,
     original_name: stored.original_name,
@@ -75,10 +57,48 @@ async function buildTransactionFileUploadResult ({
     type_doc: {
       id: typeDoc.id,
       name: typeDoc.name
-    }
+    },
+    content_hash: staged.content_hash,
+    already_exists: staged.already_exists
   }
 }
 
+async function buildTransactionFileUploadResult ({
+  file,
+  key = null,
+  typeDocId,
+  userId
+}) {
+  const pickerKey = normalizePickerKey(key, { required: true })
+  const resolvedTypeDocId = pickTypeDocIdFromObject({ type_doc_id: typeDocId })
+
+  if (!resolvedTypeDocId) {
+    safeUnlinkUpload(`/uploads/${file?.filename}`)
+    throw createUploadError('type_doc_id مطلوب ويجب أن يكون رقماً موجباً')
+  }
+
+  const typeDoc = await resolveActiveTypeDoc(resolvedTypeDocId)
+
+  const staged = await processStagedFileUpload({
+    file,
+    userId,
+    pickerKey,
+    typeDocId: typeDoc.id
+  })
+
+  return buildUploadResponse({
+    pickerKey,
+    staged,
+    file: file || {
+      originalname: staged.original_name,
+      mimetype: staged.mime_type
+    },
+    typeDoc,
+    userId
+  })
+}
+
 module.exports = {
-  buildTransactionFileUploadResult
+  buildTransactionFileUploadResult,
+  computeFileContentHash
 }

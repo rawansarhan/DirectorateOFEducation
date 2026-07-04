@@ -2,6 +2,7 @@
 
 const multer = require('multer')
 const path = require('path')
+const { normalizeUploadedFiles } = require('../utils/uploadFilename')
 
 // =========================================
 // STORAGE
@@ -147,6 +148,7 @@ function runMulterUpload (middleware) {
         return next(err)
       }
 
+      normalizeUploadedFiles(req)
       next()
     })
   }

@@ -9,13 +9,20 @@ const {
   updateDocumentTemplateValidation,
   formatValidationError
 } = require('../validations/docTempValidations')
-const { invalidateDocumentTemplates } = require('../../../../core/cache/apiCacheService')
+const { invalidateDocumentTemplates, getOrLoad, KEYS } = require('../../../../core/cache/apiCacheService')
 const fs = require('fs')
 const { toPublicFileUrl } = require('../../../../core/utils/filePath')
 const {
   extractPdfAcroFormFieldsFromBytes,
   extractPdfAcroFormFieldsFromPath
 } = require('../../../transaction/document/services/pdfGenerationService')
+const {
+  TEMPLATE_EXTRACT_PICKER_KEY,
+  processStagedFileUpload,
+  resolveAbsoluteUploadPath
+} = require('../../../transaction/document/services/stagedFileUploadService')
+const pendingFileUploadRepository = require('../../../transaction/document/repositories/pendingFileUploadRepository')
+const { normalizeStoredFilePath } = require('../../../../core/utils/filePath')
 
 function mapFieldsForExtractResponse (fields = []) {
   return fields.map(({ id, pdf_field_type, widget_type }) => ({
@@ -44,10 +51,30 @@ function buildExtractFieldsResponse (fields = [], { source = 'upload', file = nu
   }
 }
 
-function createDocTempError (code, message) {
+function createDocTempError (code, message, statusCode = 400) {
   const err = new Error(message)
   err.code = code
+  err.statusCode = statusCode
   return err
+}
+
+async function assertTemplateFileOwnedByUser (filePath, userId) {
+  if (!filePath || !userId) {
+    return
+  }
+
+  const ownership = await pendingFileUploadRepository.findByPathAndUser(
+    normalizeStoredFilePath(filePath),
+    userId
+  )
+
+  if (!ownership) {
+    throw createDocTempError(
+      'UNAUTHORIZED_FILE',
+      'ملف القالب غير مرفوع من حسابك — استخدم POST /api/document-templates/extract-fields أولاً',
+      403
+    )
+  }
 }
 
 function normalizeTypeDocId (data = {}) {
@@ -92,13 +119,17 @@ async function assertTypeDocExists (typeDocId) {
   return typeDoc
 }
 
-async function createDocumentTemplateService (data) {
+async function createDocumentTemplateService (data, { userId = null } = {}) {
   const payload = normalizeCreatePayload(data)
 
   const { error, value } = createDocumentTemplateValidation(payload)
 
   if (error) {
     throw createDocTempError('VALIDATION_ERROR', formatValidationError(error))
+  }
+
+  if (value.path && userId) {
+    await assertTemplateFileOwnedByUser(value.path, userId)
   }
 
   await assertTypeDocExists(value.type_doc_id)
@@ -115,6 +146,10 @@ async function createDocumentTemplateService (data) {
   await invalidateDocumentTemplates()
 
   const created = await documentTemplateRepository.findOneActiveById(documentTemplate.id)
+
+  if (value.path && userId) {
+    await pendingFileUploadRepository.markAttachedByPath(value.path, userId)
+  }
 
   return toDTO(created || documentTemplate)
 }
@@ -157,30 +192,70 @@ async function updateDocumentTemplateService (id, data) {
   return toDTO(created || newTemplate)
 }
 
-async function getAllActiveDocumentTemplatesService () {
+async function loadAllActiveDocumentTemplates () {
   const templates = await documentTemplateRepository.findAllActive()
   return toDTOList(templates)
 }
 
-async function getOneActiveDocumentTemplateService (id) {
-  const template = await documentTemplateRepository.findOneActiveById(id)
-
-  if (!template) {
-    throw createDocTempError('TEMPLATE_NOT_FOUND', 'قالب الوثيقة غير موجود')
-  }
-
-  return toDTO(template)
+async function getAllActiveDocumentTemplatesService () {
+  return getOrLoad(
+    KEYS.documentTemplates(),
+    loadAllActiveDocumentTemplates,
+    { label: 'DocumentTemplate GET /api/document-templates' }
+  )
 }
 
-async function extractTemplateFieldsFromUploadService (file) {
+async function getOneActiveDocumentTemplateService (id) {
+  const templateId = parseInt(id, 10)
+
+  if (!Number.isInteger(templateId) || templateId < 1) {
+    throw createDocTempError('VALIDATION_ERROR', 'معرّف القالب غير صالح')
+  }
+
+  return getOrLoad(
+    KEYS.documentTemplateById(templateId),
+    async () => {
+      const template = await documentTemplateRepository.findOneActiveById(templateId)
+
+      if (!template) {
+        throw createDocTempError('TEMPLATE_NOT_FOUND', 'قالب الوثيقة غير موجود')
+      }
+
+      return toDTO(template)
+    },
+    { label: `DocumentTemplate GET /api/document-templates/${templateId}` }
+  )
+}
+
+async function extractTemplateFieldsFromUploadService (file, { userId, key = null } = {}) {
   if (!file?.path) {
     throw createDocTempError('FILE_REQUIRED', 'ملف PDF مطلوب')
   }
 
-  const templateBytes = fs.readFileSync(file.path)
+  const pickerKey = typeof key === 'string' && key.trim()
+    ? key.trim()
+    : TEMPLATE_EXTRACT_PICKER_KEY
+
+  const staged = await processStagedFileUpload({
+    file,
+    userId,
+    pickerKey,
+    typeDocId: null
+  })
+
+  const templateBytes = fs.readFileSync(resolveAbsoluteUploadPath(staged.path))
   const fields = await extractPdfAcroFormFieldsFromBytes(templateBytes)
 
-  return buildExtractFieldsResponse(fields, { source: 'upload', file })
+  return {
+    ...buildExtractFieldsResponse(fields, {
+      source: 'upload',
+      storedPath: staged.path
+    }),
+    original_name: staged.original_name,
+    content_hash: staged.content_hash,
+    already_exists: staged.already_exists,
+    picker_key: staged.picker_key
+  }
 }
 
 async function extractTemplateFieldsByIdService (id) {
