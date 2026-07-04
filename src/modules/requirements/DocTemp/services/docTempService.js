@@ -10,6 +10,10 @@ const {
   formatValidationError
 } = require('../validations/docTempValidations')
 const { invalidateDocumentTemplates, getOrLoad, KEYS } = require('../../../../core/cache/apiCacheService')
+const {
+  parsePaginationQuery,
+  buildPaginationMeta
+} = require('../../../../core/utils/pagination')
 const fs = require('fs')
 const { toPublicFileUrl } = require('../../../../core/utils/filePath')
 const {
@@ -192,17 +196,22 @@ async function updateDocumentTemplateService (id, data) {
   return toDTO(created || newTemplate)
 }
 
-async function loadAllActiveDocumentTemplates () {
-  const templates = await documentTemplateRepository.findAllActive()
-  return toDTOList(templates)
-}
+async function getAllActiveDocumentTemplatesService (query = {}) {
+  const { page, limit, offset } = parsePaginationQuery(query, {
+    defaultLimit: 10
+  })
+  const search = String(query.search || '').trim()
 
-async function getAllActiveDocumentTemplatesService () {
-  return getOrLoad(
-    KEYS.documentTemplates(),
-    loadAllActiveDocumentTemplates,
-    { label: 'DocumentTemplate GET /api/document-templates' }
-  )
+  const { rows, count } = await documentTemplateRepository.findAndCountActive({
+    limit,
+    offset,
+    search: search || undefined
+  })
+
+  return {
+    items: toDTOList(rows),
+    pagination: buildPaginationMeta({ page, limit, total: count })
+  }
 }
 
 async function getOneActiveDocumentTemplateService (id) {

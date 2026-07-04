@@ -23,8 +23,8 @@ const createRadioGroup = asyncHandler(async (req, res) => {
 
 const getAllRadioGroups = asyncHandler(async (req, res) => {
   try {
-    const data = await getAllRadioGroupsService()
-    return ApiResponder.okResponse(res, data, 'تم جلب مجموعات الاختيار بنجاح')
+    const result = await getAllRadioGroupsService(req.query)
+    return ApiResponder.okResponse(res, result, 'تم جلب مجموعات الاختيار بنجاح')
   } catch (err) {
     return ApiResponder.badRequestResponse(res, err.message)
   }

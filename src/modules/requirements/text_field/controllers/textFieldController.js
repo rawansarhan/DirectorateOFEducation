@@ -23,8 +23,8 @@ const createTextField = asyncHandler(async (req, res) => {
 
 const getAllTextFields = asyncHandler(async (req, res) => {
   try {
-    const data = await getAllTextFieldsService()
-    return ApiResponder.okResponse(res, data, 'تم جلب حقول النص بنجاح')
+    const result = await getAllTextFieldsService(req.query)
+    return ApiResponder.okResponse(res, result, 'تم جلب حقول النص بنجاح')
   } catch (err) {
     return ApiResponder.badRequestResponse(res, err.message)
   }

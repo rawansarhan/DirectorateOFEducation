@@ -12,6 +12,7 @@
     "keys:encrypt": "node scripts/encryptEmployeeKey.js",
     "keys:sign": "node scripts/signMessage.js",
     "keys:sign-usb": "node scripts/signMessageUsb.js",
+    "ws:notifications": "node src/notifications/wsNotificationServer.js",
     "db:seed": "sequelize-cli db:seed:all",
     "db:seed:undo": "sequelize-cli db:seed:undo:all"
   },
@@ -49,6 +50,7 @@
     "serverless-http": "^3.2.0",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
+    "ws": "^8.21.0",
     "xml2js": "^0.6.2"
   },
   "devDependencies": {

@@ -1,3 +1,4 @@
+const { Op } = require('sequelize')
 const { DocumentTemplate, TypeDoc } = require('../../../../entities')
 
 async function findById (id) {
@@ -31,6 +32,30 @@ async function findAllActive () {
   })
 }
 
+// جلب مع ترقيم صفحات وبحث (على اسم القالب). يُرجع { rows, count }.
+async function findAndCountActive ({ limit, offset, search } = {}) {
+  const where = { is_active: true }
+
+  if (search) {
+    where.name = { [Op.iLike]: `%${search}%` }
+  }
+
+  return DocumentTemplate.findAndCountAll({
+    where,
+    include: [
+      {
+        model: TypeDoc,
+        as: 'type_doc',
+        attributes: ['id', 'name']
+      }
+    ],
+    order: [['id', 'DESC']],
+    limit,
+    offset,
+    distinct: true
+  })
+}
+
 async function create (data) {
   return DocumentTemplate.create(data)
 }
@@ -44,6 +69,7 @@ module.exports = {
   findById,
   findOneActiveById,
   findAllActive,
+  findAndCountActive,
   create,
   updateInstance
 }

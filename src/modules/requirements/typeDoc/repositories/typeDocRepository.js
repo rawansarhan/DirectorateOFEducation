@@ -1,5 +1,6 @@
 'use strict'
 
+const { Op } = require('sequelize')
 const { TypeDoc } = require('../../../../entities')
 
 class TypeDocRepository {
@@ -19,6 +20,22 @@ class TypeDocRepository {
     return TypeDoc.findAll({
       where: { is_active: true },
       order: [['name', 'ASC']]
+    })
+  }
+
+  // جلب مع ترقيم صفحات وبحث. يُرجع { rows, count }.
+  async findAndCountActive ({ limit, offset, search } = {}) {
+    const where = { is_active: true }
+
+    if (search) {
+      where.name = { [Op.iLike]: `%${search}%` }
+    }
+
+    return TypeDoc.findAndCountAll({
+      where,
+      order: [['name', 'ASC']],
+      limit,
+      offset
     })
   }
 

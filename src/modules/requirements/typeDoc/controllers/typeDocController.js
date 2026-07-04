@@ -47,7 +47,7 @@ const updateTypeDoc = asyncHandler(async (req, res) => {
 
 const getAllTypeDocs = asyncHandler(async (req, res) => {
   try {
-    const result = await getAllTypeDocsService()
+    const result = await getAllTypeDocsService(req.query)
     return ApiResponder.okResponse(res, result, 'تم جلب أنواع الوثائق بنجاح')
   } catch (err) {
     return handleTypeDocError(res, err)

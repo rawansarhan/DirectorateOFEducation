@@ -25,10 +25,23 @@ const {
  * @swagger
  * /api/date-pickers:
  *   get:
- *     summary: جلب كل منتقيات التاريخ
+ *     summary: جلب كل منتقيات التاريخ (مع ترقيم صفحات وبحث)
  *     tags: [DatePicker]
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer, default: 1, minimum: 1 }
+ *         description: رقم الصفحة
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 10, minimum: 1, maximum: 70 }
+ *         description: عدد العناصر في الصفحة
+ *       - in: query
+ *         name: search
+ *         schema: { type: string }
+ *         description: نص البحث في العنوان (label) أو معرّف الودجت (id_widget)
  *     responses:
  *       200:
  *         description: تم الجلب بنجاح

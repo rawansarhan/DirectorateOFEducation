@@ -5,10 +5,12 @@ const { TextDropdownInputDTO } = require('../dto/TextDropdownInputDTO')
 const { validateCreateTextDropdown } = require('../validations/textDropdownValidations')
 const { toDTO, toDTOList } = require('../mappers/textDropdownMapper')
 const {
-  getOrLoad,
-  KEYS,
   invalidateTextDropdowns
 } = require('../../../../core/cache/apiCacheService')
+const {
+  parsePaginationQuery,
+  buildPaginationMeta
+} = require('../../../../core/utils/pagination')
 
 const WIDGET_PREFIX = 'dropdown'
 const LOG_PREFIX = '[TextDropdown]'
@@ -54,16 +56,27 @@ async function loadAllTextDropdowns () {
   return toDTOList(rows)
 }
 
-async function getAllTextDropdownsService () {
+async function getAllTextDropdownsService (query = {}) {
+  const { page, limit, offset } = parsePaginationQuery(query, {
+    defaultLimit: 10
+  })
+  const search = String(query.search || '').trim()
+
   console.log(
-    `${LOG_PREFIX} GET /api/text-dropdowns — loading list (cache key: api:${KEYS.textDropdowns()})`
+    `${LOG_PREFIX} GET /api/text-dropdowns — page=${page} limit=${limit}` +
+    (search ? ` search="${search}"` : '')
   )
 
-  return getOrLoad(
-    KEYS.textDropdowns(),
-    loadAllTextDropdowns,
-    { label: 'TextDropdown GET /api/text-dropdowns' }
-  )
+  const { rows, count } = await textDropdownRepository.findAndCountActive({
+    limit,
+    offset,
+    search: search || undefined
+  })
+
+  return {
+    items: toDTOList(rows),
+    pagination: buildPaginationMeta({ page, limit, total: count })
+  }
 }
 
 async function getTextDropdownByIdService (id) {

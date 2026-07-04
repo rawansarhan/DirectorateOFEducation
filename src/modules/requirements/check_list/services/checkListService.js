@@ -5,10 +5,12 @@ const { CheckListInputDTO } = require('../dto/CheckListInputDTO')
 const { validateCreateCheckList } = require('../validations/checkListValidations')
 const { toDTO, toDTOList } = require('../mappers/checkListMapper')
 const {
-  getOrLoad,
-  KEYS,
   invalidateCheckLists
 } = require('../../../../core/cache/apiCacheService')
+const {
+  parsePaginationQuery,
+  buildPaginationMeta
+} = require('../../../../core/utils/pagination')
 
 const WIDGET_PREFIX = 'check_list'
 const LOG_PREFIX = '[CheckList]'
@@ -53,16 +55,27 @@ async function loadAllCheckLists () {
   return toDTOList(rows)
 }
 
-async function getAllCheckListsService () {
+async function getAllCheckListsService (query = {}) {
+  const { page, limit, offset } = parsePaginationQuery(query, {
+    defaultLimit: 10
+  })
+  const search = String(query.search || '').trim()
+
   console.log(
-    `${LOG_PREFIX} GET /api/check-lists — loading list (cache key: api:${KEYS.checkLists()})`
+    `${LOG_PREFIX} GET /api/check-lists — page=${page} limit=${limit}` +
+    (search ? ` search="${search}"` : '')
   )
 
-  return getOrLoad(
-    KEYS.checkLists(),
-    loadAllCheckLists,
-    { label: 'CheckList GET /api/check-lists' }
-  )
+  const { rows, count } = await checkListRepository.findAndCountActive({
+    limit,
+    offset,
+    search: search || undefined
+  })
+
+  return {
+    items: toDTOList(rows),
+    pagination: buildPaginationMeta({ page, limit, total: count })
+  }
 }
 
 async function getCheckListByIdService (id) {

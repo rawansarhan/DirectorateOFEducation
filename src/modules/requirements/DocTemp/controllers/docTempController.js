@@ -64,7 +64,7 @@ const updateDocumentTemplate = asyncHandler(async (req, res) => {
 
 const getAllActiveDocumentTemplates = asyncHandler(async (req, res) => {
   try {
-    const result = await getAllActiveDocumentTemplatesService()
+    const result = await getAllActiveDocumentTemplatesService(req.query)
     return ApiResponder.okResponse(res, result, 'تم جلب القوالب بنجاح')
   } catch (err) {
     return handleDocumentTemplateError(res, err)
