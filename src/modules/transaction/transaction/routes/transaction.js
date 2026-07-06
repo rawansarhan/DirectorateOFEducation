@@ -973,10 +973,63 @@ router.get(
  *     responses:
  *       200:
  *         description: تم جلب محتوى المرحلة الأولى
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/TransactionFirstStageEnvelope'
+ *             example:
+ *               success: true
+ *               status_code: 200
+ *               message: تم جلب محتوى المرحلة الأولى بنجاح
+ *               data:
+ *                 transaction_id: 42
+ *                 stage_code: Activity_0wvfirz
+ *                 stage_name: تقديم الطلب
+ *                 auth_type: AUTH
+ *                 completed_by: 3
+ *                 content:
+ *                   stage_name: تقديم الطلب
+ *                   form_id: leave_process_auth
+ *                   form_name: الوثائق المطلوبة للمواطن
+ *                   decision: null
+ *                   note: ''
+ *                   rejection_reason: null
+ *                   completed_by: 3
+ *                   completed_at: 15/01/2026
+ *                   widgets:
+ *                     - widget_type: text_field
+ *                       data:
+ *                         id: student_first_name
+ *                         label: اسم الطالب
+ *                         is_required: true
+ *                       value: روان
+ *                     - widget_type: text_field
+ *                       data:
+ *                         id: student_father_name
+ *                         label: اسم الأب
+ *                         is_required: true
+ *                       value: أحمد
+ *                     - widget_type: file_picker
+ *                       data:
+ *                         id: birth_certificate
+ *                         label: شهادة الميلاد
+ *                         is_required: true
+ *                       value:
+ *                         - path: /uploads/1779540194357-birth-cert.pdf
+ *                           url: http://localhost:4000/uploads/1779540194357-birth-cert.pdf
+ *                   templates:
+ *                     - id_template: 1
+ *                       id_document_instance: 55
+ *                       generated_pdf_path: /uploads/final/tx-42-template.pdf
+ *                       value:
+ *                         student_name: روان
+ *                         father_name: أحمد
  *       401:
  *         description: Unauthorized
+ *       403:
+ *         description: المعاملة ليست ملك المستخدم المصادق
  *       404:
- *         description: المعاملة غير موجودة أو لا تملك صلاحية الوصول
+ *         description: المعاملة غير موجودة أو لا يوجد طلب مقدّم محفوظ
  */
 router.get(
   '/:transactionId/first-stage',

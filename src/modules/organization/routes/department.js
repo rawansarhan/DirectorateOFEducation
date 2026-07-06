@@ -147,6 +147,41 @@ router.get(
  *     responses:
  *       200:
  *         description: نطاق الدوائر المتاحة للمستخدم
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/DepartmentAccessibleScopeEnvelope'
+ *             example:
+ *               success: true
+ *               status_code: 200
+ *               message: تم جلب دوائر نطاق المستخدم بنجاح
+ *               data:
+ *                 root_org_dept_role_ids: [12, 45]
+ *                 org_dept_role_ids: [12, 13, 14, 45, 46]
+ *                 department_ids: [3, 7, 8, 15]
+ *                 departments:
+ *                   - id: 3
+ *                     name: دائرة الشؤون الإدارية
+ *                     organization_id: 1
+ *                     parent_id: null
+ *                     is_active: true
+ *                   - id: 7
+ *                     name: شعبة الموارد البشرية
+ *                     organization_id: 1
+ *                     parent_id: 3
+ *                     is_active: true
+ *                   - id: 8
+ *                     name: شعبة الأرشيف
+ *                     organization_id: 1
+ *                     parent_id: 3
+ *                     is_active: true
+ *                   - id: 15
+ *                     name: دائرة المالية
+ *                     organization_id: 1
+ *                     parent_id: null
+ *                     is_active: true
+ *       401:
+ *         description: غير مصرّح — JWT مفقود أو غير صالح
  */
 router.get(
   '/accessible-scope',

@@ -40,9 +40,13 @@ const {
 const {
   getOrLoad,
   KEYS,
-  invalidateProcessDefinitionsWithType
+  invalidateProcessDefinitionsWithType,
+  invalidateProcessDefinitionDetails
 } = require('../../../../core/cache/apiCacheService')
-const { PROCESS_CACHE_TTL_SECONDS } = require('../../../../core/config/env')
+const {
+  PROCESS_CACHE_TTL_SECONDS,
+  API_CACHE_TTL_SECONDS
+} = require('../../../../core/config/env')
 const {
   paginateArray,
   emptyPaginatedResult
@@ -325,7 +329,7 @@ async function getProcessesByTypeForAdmin (typeTransID, paginationInput) {
 //==================================get details for process=========================
 
 
-async function getProcessDetailsWithValidation(processId) {
+async function loadProcessDetailsWithValidation (processId) {
 
   const process =
     await processRepository.findProcessDetails(processId)
@@ -389,6 +393,23 @@ async function getProcessDetailsWithValidation(processId) {
     }
   }
 }
+
+async function getProcessDetailsWithValidation (processId) {
+  const numericProcessId = parseInt(processId, 10)
+
+  if (!Number.isInteger(numericProcessId) || numericProcessId < 1) {
+    throw new Error('معرّف العملية غير صالح')
+  }
+
+  return getOrLoad(
+    KEYS.processDefinitionDetails(numericProcessId),
+    () => loadProcessDetailsWithValidation(numericProcessId),
+    {
+      label: `ProcessDefinition GET /api/process_definitions/${numericProcessId}/details`,
+      ttlSeconds: API_CACHE_TTL_SECONDS
+    }
+  )
+}
 //=====================================================================================
 //====================== review Process (APPROVE , REJECT) ============================
 
@@ -442,6 +463,7 @@ async function reviewProcess(
   )
   await invalidateAllProcessLists()
   await invalidateProcessDefinitionsWithType()
+  await invalidateProcessDefinitionDetails(processId)
 
   return {
     message:

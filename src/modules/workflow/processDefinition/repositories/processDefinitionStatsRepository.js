@@ -14,6 +14,9 @@ async function findAllProcessDefinitionsWithType () {
       'approval_status',
       'status'
     ],
+    where: {
+      approval_status: 'APPROVED'
+    },
     include: [
       {
         model: db.TypeTrans,

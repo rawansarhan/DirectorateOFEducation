@@ -66,6 +66,7 @@ const KEYS = {
   processDefinitionDepartments: (processDefinitionId) =>
     `process:departments:${processDefinitionId}`,
   processDefinitionsWithType: () => 'process:definitions:with-type',
+  processDefinitionDetails: (processId) => `process:details:${processId}`,
   userAccessibleDepartments: (userId) => `user:accessible-departments:${userId}`
 }
 
@@ -498,8 +499,9 @@ async function invalidateAllAuthProcessCaches () {
 async function invalidateStageConfig (processId = null) {
   if (processId != null) {
     await deleteKey(KEYS.stageConfig(processId))
-    // إعداد المرحلة تغيّر → أبطل أيضاً كاش المرحلة الحالية لنفس العملية
+    // إعداد المرحلة تغيّر → أبطل أيضاً كاش المرحلة الحالية وتفاصيل العملية
     await deleteKeysByPattern(`current-stage:${processId}:*`)
+    await invalidateProcessDefinitionDetails(processId)
     console.log(`${LOG_PREFIX} invalidate stage config — process ${processId}`)
     return
   }
@@ -644,6 +646,25 @@ async function invalidateProcessDefinitionsWithType () {
   )
 }
 
+async function invalidateProcessDefinitionDetails (processDefinitionId = null) {
+  if (processDefinitionId != null) {
+    const deleted = await deleteKey(
+      KEYS.processDefinitionDetails(processDefinitionId)
+    )
+    logInvalidate({
+      module: 'ProcessDefinitionDetails',
+      fullKey: `${API_CACHE_PREFIX}${KEYS.processDefinitionDetails(processDefinitionId)}`,
+      deleted
+    })
+    return
+  }
+
+  const count = await deleteKeysByPattern('process:details:*')
+  console.log(
+    `${LOG_PREFIX} invalidate all process definition details (${count} key(s)) — redis: ${redisStatusLabel()}`
+  )
+}
+
 async function invalidateUserAccessibleDepartments (userId) {
   if (userId == null) {
     return
@@ -701,6 +722,7 @@ module.exports = {
   invalidateEmployeeTaskStats,
   invalidateProcessDefinitionDepartments,
   invalidateProcessDefinitionsWithType,
+  invalidateProcessDefinitionDetails,
   invalidateUserAccessibleDepartments,
   invalidateAllUserAccessibleDepartments
 }

@@ -5,6 +5,9 @@ const processDefinitionRepository =
 const {
   invalidateAllProcessLists
 } = require('../../../../core/cache/processCacheService')
+const {
+  invalidateProcessDefinitionDetails
+} = require('../../../../core/cache/apiCacheService')
 
 async function updateProcessActivationStatus () {
   const now = new Date()
@@ -14,6 +17,7 @@ async function updateProcessActivationStatus () {
 
   if (activated > 0 || deactivated > 0) {
     await invalidateAllProcessLists()
+    await invalidateProcessDefinitionDetails()
   }
 
   console.log(

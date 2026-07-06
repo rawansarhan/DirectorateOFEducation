@@ -27,7 +27,8 @@ const { validateStageAction } = require('../../actions/actionHelpers')
 const {
   getOrLoad,
   KEYS,
-  invalidateStageConfig
+  invalidateStageConfig,
+  invalidateProcessDefinitionDetails
 } = require('../../../../core/cache/apiCacheService')
 
 const { API_CACHE_TTL_SECONDS } = require('../../../../core/config/env')
@@ -336,6 +337,18 @@ for (const a of assignments) {
 
   if (assignmentsToCreate.length > 0) {
     await stageAssignmentRepository.bulkCreate(assignmentsToCreate)
+
+    if (configsToCreate.length === 0) {
+      const processIds = new Set(
+        stages
+          .map(s => s.process_definition_id)
+          .filter(Boolean)
+      )
+
+      for (const processId of processIds) {
+        await invalidateProcessDefinitionDetails(processId)
+      }
+    }
   }
 
   return {

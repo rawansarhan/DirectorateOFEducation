@@ -1016,6 +1016,419 @@ const swaggerOptions = {
           }
         },
 
+        DepartmentAccessibleScopeData: {
+          type: 'object',
+          description:
+            'نطاق الدوائر المتاحة للمستخدم — يُبنى من organization_department_roles في user_role_assignments ثم كل الأبناء/الأحفاد عبر parent_id. النتيجة تُخزَّن في Redis (TTL = API_CACHE_TTL_SECONDS).',
+          properties: {
+            root_org_dept_role_ids: {
+              type: 'array',
+              description: 'معرّفات organization_department_roles الجذرية للمستخدم (تعييناته النشطة)',
+              items: { type: 'integer' },
+              example: [12, 45]
+            },
+            org_dept_role_ids: {
+              type: 'array',
+              description: 'كل معرّفات ODR في الشجرة (جذر + أبناء + أحفاد)',
+              items: { type: 'integer' },
+              example: [12, 13, 14, 45, 46]
+            },
+            department_ids: {
+              type: 'array',
+              description: 'معرّفات الدوائر الفريدة ضمن النطاق (نشطة فقط)',
+              items: { type: 'integer' },
+              example: [3, 7, 8, 15]
+            },
+            departments: {
+              type: 'array',
+              description: 'تفاصيل الدوائر ضمن النطاق',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'integer', example: 3 },
+                  name: { type: 'string', example: 'دائرة الشؤون الإدارية' },
+                  organization_id: { type: 'integer', example: 1 },
+                  parent_id: { type: 'integer', nullable: true, example: null },
+                  is_active: { type: 'boolean', example: true }
+                }
+              },
+              example: [
+                {
+                  id: 3,
+                  name: 'دائرة الشؤون الإدارية',
+                  organization_id: 1,
+                  parent_id: null,
+                  is_active: true
+                },
+                {
+                  id: 7,
+                  name: 'شعبة الموارد البشرية',
+                  organization_id: 1,
+                  parent_id: 3,
+                  is_active: true
+                },
+                {
+                  id: 8,
+                  name: 'شعبة الأرشيف',
+                  organization_id: 1,
+                  parent_id: 3,
+                  is_active: true
+                },
+                {
+                  id: 15,
+                  name: 'دائرة المالية',
+                  organization_id: 1,
+                  parent_id: null,
+                  is_active: true
+                }
+              ]
+            }
+          }
+        },
+
+        DepartmentAccessibleScopeEnvelope: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            status_code: { type: 'integer', example: 200 },
+            message: {
+              type: 'string',
+              example: 'تم جلب دوائر نطاق المستخدم بنجاح'
+            },
+            data: { $ref: '#/components/schemas/DepartmentAccessibleScopeData' }
+          },
+          example: {
+            success: true,
+            status_code: 200,
+            message: 'تم جلب دوائر نطاق المستخدم بنجاح',
+            data: {
+              root_org_dept_role_ids: [12, 45],
+              org_dept_role_ids: [12, 13, 14, 45, 46],
+              department_ids: [3, 7, 8, 15],
+              departments: [
+                {
+                  id: 3,
+                  name: 'دائرة الشؤون الإدارية',
+                  organization_id: 1,
+                  parent_id: null,
+                  is_active: true
+                },
+                {
+                  id: 7,
+                  name: 'شعبة الموارد البشرية',
+                  organization_id: 1,
+                  parent_id: 3,
+                  is_active: true
+                },
+                {
+                  id: 8,
+                  name: 'شعبة الأرشيف',
+                  organization_id: 1,
+                  parent_id: 3,
+                  is_active: true
+                },
+                {
+                  id: 15,
+                  name: 'دائرة المالية',
+                  organization_id: 1,
+                  parent_id: null,
+                  is_active: true
+                }
+              ]
+            }
+          }
+        },
+
+        DepartmentEmployeeByDepartmentsItem: {
+          type: 'object',
+          description: 'صف واحد لكل تعيين موظف في دائرة (organization_department_role)',
+          properties: {
+            assignment_id: { type: 'integer', example: 101 },
+            employee_id: { type: 'integer', example: 22 },
+            first_name: { type: 'string', example: 'أحمد' },
+            last_name: { type: 'string', example: 'الحسن' },
+            father_name: { type: 'string', example: 'محمد' },
+            mother_name: { type: 'string', example: 'فاطمة' },
+            national_id: { type: 'string', example: '01234567890' },
+            organization_department_roles_id: { type: 'integer', example: 12 },
+            department: {
+              type: 'object',
+              nullable: true,
+              properties: {
+                id: { type: 'integer', example: 7 },
+                name: { type: 'string', example: 'شعبة الموارد البشرية' }
+              }
+            },
+            role: {
+              type: 'object',
+              nullable: true,
+              properties: {
+                id: { type: 'integer', example: 4 },
+                name: { type: 'string', example: 'موظف معاملات' },
+                code: { type: 'string', example: 'TRANSACTION_CLERK' }
+              }
+            },
+            tasks: {
+              type: 'object',
+              properties: {
+                in_progress: { type: 'integer', example: 2, description: 'مهام قيد التنفيذ (assigned)' },
+                pending_pickup: { type: 'integer', example: 6, description: 'مهام بانتظار الالتقاط في الدائرة' },
+                active_total: { type: 'integer', example: 8, description: 'in_progress + pending_pickup للموظف' },
+                completed: { type: 'integer', example: 34, description: 'مراحل مكتملة للموظف في هذا ODR' }
+              }
+            },
+            workload_percent: {
+              type: 'integer',
+              minimum: 0,
+              maximum: 100,
+              example: 45,
+              description: 'نسبة عبء العمل (0–100)'
+            },
+            status: {
+              type: 'string',
+              enum: ['inactive', 'low_active', 'active', 'overloaded'],
+              example: 'active'
+            },
+            status_label: {
+              type: 'string',
+              enum: ['غير نشط', 'قليل النشاط', 'نشط', 'مثقل'],
+              example: 'نشط'
+            }
+          }
+        },
+
+        DepartmentEmployeesByDepartmentsEnvelope: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            status_code: { type: 'integer', example: 200 },
+            message: {
+              type: 'string',
+              example: 'تم جلب موظفي الدوائر بنجاح'
+            },
+            data: {
+              type: 'object',
+              properties: {
+                items: {
+                  type: 'array',
+                  items: { $ref: '#/components/schemas/DepartmentEmployeeByDepartmentsItem' }
+                },
+                pagination: {
+                  type: 'object',
+                  properties: {
+                    limit: { type: 'integer', example: 3 },
+                    cursor: { type: 'string', nullable: true, example: null },
+                    next_cursor: {
+                      type: 'string',
+                      nullable: true,
+                      example: 'eyJrIjoiZGVwdF9lbXAiLCJpZCI6MTAxfQ=='
+                    },
+                    has_next: { type: 'boolean', example: true },
+                    has_prev: { type: 'boolean', example: false }
+                  }
+                }
+              }
+            }
+          },
+          example: {
+            success: true,
+            status_code: 200,
+            message: 'تم جلب موظفي الدوائر بنجاح',
+            data: {
+              items: [
+                {
+                  assignment_id: 101,
+                  employee_id: 22,
+                  first_name: 'أحمد',
+                  last_name: 'الحسن',
+                  father_name: 'محمد',
+                  mother_name: 'فاطمة',
+                  national_id: '01234567890',
+                  organization_department_roles_id: 12,
+                  department: { id: 7, name: 'شعبة الموارد البشرية' },
+                  role: { id: 4, name: 'موظف معاملات', code: 'TRANSACTION_CLERK' },
+                  tasks: {
+                    in_progress: 2,
+                    pending_pickup: 6,
+                    active_total: 8,
+                    completed: 34
+                  },
+                  workload_percent: 45,
+                  status: 'active',
+                  status_label: 'نشط'
+                },
+                {
+                  assignment_id: 102,
+                  employee_id: 23,
+                  first_name: 'سارة',
+                  last_name: 'يعقوب',
+                  father_name: 'خالد',
+                  mother_name: 'لينا',
+                  national_id: '09876543210',
+                  organization_department_roles_id: 12,
+                  department: { id: 7, name: 'شعبة الموارد البشرية' },
+                  role: { id: 4, name: 'موظف معاملات', code: 'TRANSACTION_CLERK' },
+                  tasks: {
+                    in_progress: 0,
+                    pending_pickup: 0,
+                    active_total: 0,
+                    completed: 12
+                  },
+                  workload_percent: 0,
+                  status: 'inactive',
+                  status_label: 'غير نشط'
+                },
+                {
+                  assignment_id: 115,
+                  employee_id: 31,
+                  first_name: 'عمر',
+                  last_name: 'الدرويش',
+                  father_name: 'يوسف',
+                  mother_name: 'هناء',
+                  national_id: '01122334455',
+                  organization_department_roles_id: 14,
+                  department: { id: 8, name: 'شعبة الأرشيف' },
+                  role: { id: 5, name: 'مراجع', code: 'REVIEWER' },
+                  tasks: {
+                    in_progress: 5,
+                    pending_pickup: 3,
+                    active_total: 8,
+                    completed: 67
+                  },
+                  workload_percent: 72,
+                  status: 'overloaded',
+                  status_label: 'مثقل'
+                }
+              ],
+              pagination: {
+                limit: 3,
+                cursor: null,
+                next_cursor: 'eyJrIjoiZGVwdF9lbXAiLCJpZCI6MTE1fQ==',
+                has_next: true,
+                has_prev: false
+              }
+            }
+          }
+        },
+
+        ProcessDefinitionStatsItem: {
+          type: 'object',
+          properties: {
+            process_definition_id: { type: 'integer', example: 5 },
+            process_name: { type: 'string', example: 'طلب إجازة سنوية' },
+            process_code: { type: 'string', example: 'LEAVE_ANNUAL_V1' },
+            transaction_type_name: { type: 'string', nullable: true, example: 'إجازة' },
+            transaction_type_code: { type: 'string', nullable: true, example: 'LEAVE' },
+            is_active: { type: 'boolean', example: true },
+            approval_status: {
+              type: 'string',
+              example: 'APPROVED',
+              description: 'مثل APPROVED أو PENDING'
+            },
+            transactions: {
+              type: 'object',
+              description: 'أعداد المعاملات حسب الحالة (تُحسب طازجة كل طلب)',
+              properties: {
+                pending_pickup: { type: 'integer', example: 4 },
+                in_progress: { type: 'integer', example: 12 },
+                completed: { type: 'integer', example: 156 },
+                rejected: { type: 'integer', example: 3 }
+              }
+            },
+            departments: {
+              type: 'array',
+              description: 'الدوائر المرتبطة عبر stage_assignments → organization_department_roles',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'integer', example: 7 },
+                  name: { type: 'string', example: 'شعبة الموارد البشرية' }
+                }
+              }
+            }
+          }
+        },
+
+        ProcessDefinitionStatsEnvelope: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            status_code: { type: 'integer', example: 200 },
+            message: {
+              type: 'string',
+              example: 'تم جلب إحصائيات العمليات بنجاح'
+            },
+            data: {
+              type: 'object',
+              properties: {
+                items: {
+                  type: 'array',
+                  items: { $ref: '#/components/schemas/ProcessDefinitionStatsItem' }
+                },
+                period: {
+                  type: 'object',
+                  description: 'نطاق التاريخ المطبّق على عدّ المعاملات (null = بدون فلتر)',
+                  properties: {
+                    from_date: { type: 'string', format: 'date', nullable: true, example: '2026-01-01' },
+                    to_date: { type: 'string', format: 'date', nullable: true, example: '2026-01-31' }
+                  }
+                }
+              }
+            }
+          },
+          example: {
+            success: true,
+            status_code: 200,
+            message: 'تم جلب إحصائيات العمليات بنجاح',
+            data: {
+              items: [
+                {
+                  process_definition_id: 5,
+                  process_name: 'طلب إجازة سنوية',
+                  process_code: 'LEAVE_ANNUAL_V1',
+                  transaction_type_name: 'إجازة',
+                  transaction_type_code: 'LEAVE',
+                  is_active: true,
+                  approval_status: 'APPROVED',
+                  transactions: {
+                    pending_pickup: 4,
+                    in_progress: 12,
+                    completed: 156,
+                    rejected: 3
+                  },
+                  departments: [
+                    { id: 7, name: 'شعبة الموارد البشرية' },
+                    { id: 3, name: 'دائرة الشؤون الإدارية' }
+                  ]
+                },
+                {
+                  process_definition_id: 8,
+                  process_name: 'طلب شهادة حسن سيرة',
+                  process_code: 'GOOD_CONDUCT_V2',
+                  transaction_type_name: 'شهادة',
+                  transaction_type_code: 'CERTIFICATE',
+                  is_active: true,
+                  approval_status: 'APPROVED',
+                  transactions: {
+                    pending_pickup: 0,
+                    in_progress: 5,
+                    completed: 89,
+                    rejected: 1
+                  },
+                  departments: [
+                    { id: 15, name: 'دائرة المالية' },
+                    { id: 8, name: 'شعبة الأرشيف' }
+                  ]
+                }
+              ],
+              period: {
+                from_date: '2026-01-01',
+                to_date: '2026-01-31'
+              }
+            }
+          }
+        },
+
         // ======================== Role ==========================
         RoleTemplate: {
           type: 'object',
@@ -1547,6 +1960,151 @@ const swaggerOptions = {
             is_active: { type: 'boolean', example: true },
             created_at: { type: 'string', format: 'date-time' },
             updated_at: { type: 'string', format: 'date-time' }
+          }
+        },
+
+        TransactionFirstStageContent: {
+          type: 'object',
+          description: 'محتوى مرحلة التقديم (AUTH) كما سُجّل في transaction.data',
+          properties: {
+            stage_name: { type: 'string', nullable: true, example: 'تقديم الطلب' },
+            form_id: { type: 'string', nullable: true, example: 'leave_process_auth' },
+            form_name: { type: 'string', nullable: true, example: 'الوثائق المطلوبة للمواطن' },
+            decision: { type: 'string', nullable: true, example: null },
+            note: { type: 'string', example: '' },
+            rejection_reason: { type: 'string', nullable: true, example: null },
+            completed_by: { type: 'integer', example: 3 },
+            completed_at: {
+              type: 'string',
+              nullable: true,
+              example: '15/01/2026',
+              description: 'صيغة dd/mm/yyyy'
+            },
+            widgets: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  widget_type: { type: 'string', example: 'text_field' },
+                  data: {
+                    type: 'object',
+                    properties: {
+                      id: { type: 'string', example: 'student_first_name' },
+                      label: { type: 'string', example: 'اسم الطالب' },
+                      is_required: { type: 'boolean', example: true }
+                    }
+                  },
+                  value: { description: 'قيمة الحقل كما سُجّلت عند التقديم' }
+                }
+              }
+            },
+            templates: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id_template: { type: 'integer', nullable: true, example: 1 },
+                  id_document_instance: { type: 'integer', nullable: true, example: 55 },
+                  generated_pdf_path: { type: 'string', nullable: true, example: '/uploads/final/tx-42-template.pdf' },
+                  value: { type: 'object', example: { student_name: 'روان' } }
+                }
+              }
+            }
+          }
+        },
+
+        TransactionFirstStageResponse: {
+          type: 'object',
+          properties: {
+            transaction_id: { type: 'integer', example: 42 },
+            stage_code: { type: 'string', example: 'Activity_0wvfirz' },
+            stage_name: { type: 'string', example: 'تقديم الطلب' },
+            auth_type: { type: 'string', enum: ['AUTH', 'NOAUTH'], example: 'AUTH' },
+            completed_by: { type: 'integer', example: 3 },
+            content: { $ref: '#/components/schemas/TransactionFirstStageContent' }
+          }
+        },
+
+        TransactionFirstStageEnvelope: {
+          allOf: [
+            { $ref: '#/components/schemas/ApiSuccessResponse' },
+            {
+              type: 'object',
+              properties: {
+                message: {
+                  type: 'string',
+                  example: 'تم جلب محتوى المرحلة الأولى بنجاح'
+                },
+                data: { $ref: '#/components/schemas/TransactionFirstStageResponse' }
+              }
+            }
+          ],
+          example: {
+            success: true,
+            status_code: 200,
+            message: 'تم جلب محتوى المرحلة الأولى بنجاح',
+            data: {
+              transaction_id: 42,
+              stage_code: 'Activity_0wvfirz',
+              stage_name: 'تقديم الطلب',
+              auth_type: 'AUTH',
+              completed_by: 3,
+              content: {
+                stage_name: 'تقديم الطلب',
+                form_id: 'leave_process_auth',
+                form_name: 'الوثائق المطلوبة للمواطن',
+                decision: null,
+                note: '',
+                rejection_reason: null,
+                completed_by: 3,
+                completed_at: '15/01/2026',
+                widgets: [
+                  {
+                    widget_type: 'text_field',
+                    data: {
+                      id: 'student_first_name',
+                      label: 'اسم الطالب',
+                      is_required: true
+                    },
+                    value: 'روان'
+                  },
+                  {
+                    widget_type: 'text_field',
+                    data: {
+                      id: 'student_father_name',
+                      label: 'اسم الأب',
+                      is_required: true
+                    },
+                    value: 'أحمد'
+                  },
+                  {
+                    widget_type: 'file_picker',
+                    data: {
+                      id: 'birth_certificate',
+                      label: 'شهادة الميلاد',
+                      is_required: true
+                    },
+                    value: [
+                      {
+                        path: '/uploads/1779540194357-birth-cert.pdf',
+                        url: 'http://localhost:4000/uploads/1779540194357-birth-cert.pdf'
+                      }
+                    ]
+                  }
+                ],
+                templates: [
+                  {
+                    id_template: 1,
+                    id_document_instance: 55,
+                    generated_pdf_path: '/uploads/final/tx-42-template.pdf',
+                    value: {
+                      student_name: 'روان',
+                      father_name: 'أحمد'
+                    }
+                  }
+                ]
+              }
+            }
           }
         },
 

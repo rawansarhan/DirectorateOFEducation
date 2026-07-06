@@ -64,21 +64,38 @@ function toAdminProcessByTypeItem (process) {
 //============================================================================================
 //=================================== PROCESS DETAILS MAPPER =================================
 
+function toPlainModel (model) {
+  if (!model) {
+    return null
+  }
+
+  return typeof model.get === 'function'
+    ? model.get({ plain: true })
+    : model
+}
+
 function mapStageAssignment (assignment) {
-  const role = assignment.organization_department_role
+  const odr = toPlainModel(assignment.organization_department_role)
 
   const mapped = {
     organization_department_roles_id:
       assignment.organization_department_roles_id
   }
 
-  if (role) {
-    mapped.role = {
-      id: role.id,
-      is_active: role.is_active,
-      department: role.department?.name || role.department_name || null,
-      organization: role.organization?.name || role.organization_name || null
-    }
+  if (!odr) {
+    return mapped
+  }
+
+  mapped.role = {
+    id: odr.id,
+    name: odr.role?.name ?? null,
+    is_active: odr.is_active,
+    organization: odr.organization
+      ? { name: odr.organization.name ?? null }
+      : null,
+    department: odr.department
+      ? { name: odr.department.name ?? null }
+      : null
   }
 
   return mapped

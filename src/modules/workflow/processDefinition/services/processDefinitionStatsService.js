@@ -57,6 +57,19 @@ async function loadCachedProcessDepartments (processDefinitionId) {
   )
 }
 
+function hasTransactionsInPeriod (counts) {
+  if (!counts) {
+    return false
+  }
+
+  return (
+    counts.pending_pickup +
+    counts.in_progress +
+    counts.completed +
+    counts.rejected
+  ) > 0
+}
+
 function shapeProcessDefinitionStats ({
   processDefinition,
   transactionCounts,
@@ -96,17 +109,25 @@ async function buildProcessDefinitionStatsList ({ fromDate, toDate }) {
     })
   ])
 
-  const items = await Promise.all(
-    processDefinitions.map(async processDefinition => {
-      const departments = await loadCachedProcessDepartments(processDefinition.id)
+  const items = (
+    await Promise.all(
+      processDefinitions.map(async processDefinition => {
+        const transactionCounts = transactionCountMap.get(processDefinition.id)
 
-      return shapeProcessDefinitionStats({
-        processDefinition,
-        transactionCounts: transactionCountMap.get(processDefinition.id),
-        departments
+        if (!hasTransactionsInPeriod(transactionCounts)) {
+          return null
+        }
+
+        const departments = await loadCachedProcessDepartments(processDefinition.id)
+
+        return shapeProcessDefinitionStats({
+          processDefinition,
+          transactionCounts,
+          departments
+        })
       })
-    })
-  )
+    )
+  ).filter(Boolean)
 
   return {
     items,

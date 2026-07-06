@@ -1,5 +1,8 @@
 const {
-  OrgDeptRole
+  OrgDeptRole,
+  Role,
+  Organization,
+  Department
 } = require('../../../../entities')
 const Sequelize = require('sequelize')
 const Op = Sequelize.Op
@@ -77,6 +80,23 @@ async findAllByIds(ids) {
       'department_id',
       'role_id',
       'is_active'
+    ],
+    include: [
+      {
+        model: Role,
+        as: 'role',
+        attributes: ['id', 'name', 'code']
+      },
+      {
+        model: Organization,
+        as: 'organization',
+        attributes: ['id', 'name']
+      },
+      {
+        model: Department,
+        as: 'department',
+        attributes: ['id', 'name']
+      }
     ]
   })
 }
