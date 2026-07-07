@@ -685,7 +685,7 @@ async function verifyLoginOtp (
   await otpCodeRepository.destroyInstance(record)
 
   const roleAssign =
-    await userRoleAssignmentRepository.findActiveRolesByUserId(
+    await userRoleAssignmentRepository.findActiveRolesDetailedByUserId(
       user.id
     )
 
@@ -705,9 +705,19 @@ async function verifyLoginOtp (
 
   return {
     user: new LoginOutputDTO(user),
-    roles: roleAssign.map(
-      r => r.organization_department_roles_id
-    ),
+    roles: roleAssign.map(item => {
+      const odr = item.org_department_role
+      const role = odr?.role
+      const department = odr?.department
+
+      return {
+        organization_department_roles_id: item.organization_department_roles_id,
+        role_id: role?.id ?? null,
+        role_name: role?.name ?? null,
+        department_id: department?.id ?? null,
+        department_name: department?.name ?? null
+      }
+    }),
     token: accessToken,
     refreshToken,
   }

@@ -66,11 +66,15 @@ module.exports = {
       },
       {
         organization_department_roles_id: roleMap.TECHNICAL_OFFICER,
-        permission_id: permMap.TYPETPROCESS_VIEW
+        permission_id: permMap.TYPETPROCESS_VIEW_ALL
+      },
+      {
+        organization_department_roles_id: roleMap.TECHNICAL_OFFICER,
+        permission_id: permMap.TYPETPROCESS_VIEW_ONLY_ACTIVE
       },
           {
         organization_department_roles_id: roleMap.CITIZEN,
-        permission_id: permMap.TYPETPROCESS_VIEW
+        permission_id: permMap.TYPETPROCESS_VIEW_ONLY_ACTIVE
       },
       {
         organization_department_roles_id: roleMap.TECHNICAL_OFFICER,
