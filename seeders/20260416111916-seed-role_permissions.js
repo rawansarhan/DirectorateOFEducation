@@ -250,6 +250,68 @@ module.exports = {
       {
         organization_department_roles_id: roleMap.TECHNICAL_OFFICER,
         permission_id: permMap.EMPLOYEE_UPDATE
+      },
+
+      // ================= PROCESS (review queue) =================
+      {
+        organization_department_roles_id: roleMap.TECHNICAL_OFFICER,
+        permission_id: permMap.PROCESS_VIEW_NOTACTIVE_NOTAPPROVED
+      },
+
+      // ================= REQUIREMENTS =================
+      {
+        organization_department_roles_id: roleMap.TECHNICAL_OFFICER,
+        permission_id: permMap.REQUIREMENTS_CREATE
+      },
+      {
+        organization_department_roles_id: roleMap.TECHNICAL_OFFICER,
+        permission_id: permMap.REQUIREMENTS_READ_ALL
+      },
+      {
+        organization_department_roles_id: roleMap.TECHNICAL_OFFICER,
+        permission_id: permMap.REQUIREMENTS_READ_ONE
+      },
+
+      // ================= TYPE DOC =================
+      {
+        organization_department_roles_id: roleMap.TECHNICAL_OFFICER,
+        permission_id: permMap.TYPE_DOC_CREATE
+      },
+      {
+        organization_department_roles_id: roleMap.TECHNICAL_OFFICER,
+        permission_id: permMap.TYPE_DOC_UPDATE
+      },
+      {
+        organization_department_roles_id: roleMap.TECHNICAL_OFFICER,
+        permission_id: permMap.TYPE_DOC_READ_ALL
+      },
+      {
+        organization_department_roles_id: roleMap.TECHNICAL_OFFICER,
+        permission_id: permMap.TYPE_DOC_READ_ONE
+      },
+
+      // ================= TEMPLATE (extract fields / read one) =================
+      {
+        organization_department_roles_id: roleMap.TECHNICAL_OFFICER,
+        permission_id: permMap.TEMPLATE_EXTRACT_FIELDS
+      },
+      {
+        organization_department_roles_id: roleMap.TECHNICAL_OFFICER,
+        permission_id: permMap.TEMPLATE_READ_ONE
+      },
+
+      // ================= TASKS STATS =================
+      {
+        organization_department_roles_id: roleMap.TECHNICAL_OFFICER,
+        permission_id: permMap.tasks_STATS_ACTIVE
+      },
+      {
+        organization_department_roles_id: roleMap.TECHNICAL_OFFICER,
+        permission_id: permMap.tasks_STATS_COMPLETED_LAST_MONTH
+      },
+      {
+        organization_department_roles_id: roleMap.TECHNICAL_OFFICER,
+        permission_id: permMap.tasks_STATS_REJECTED_LAST_MONTH
       }
     ]
 
