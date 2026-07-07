@@ -80,9 +80,8 @@ async function isEmployeeUser (userId) {
 }
 
 async function buildAuthResponse (user, clientMeta = {}) {
-  const roleAssign = await userRoleAssignmentRepository.findActiveRolesByUserId(
-    user.id
-  )
+  const roleAssign =
+    await userRoleAssignmentRepository.findActiveRolesDetailedByUserId(user.id)
 
   const { accessToken, refreshToken } = await tokenService.issueTokens(
     user.id,
@@ -93,7 +92,19 @@ async function buildAuthResponse (user, clientMeta = {}) {
     token: accessToken,
     refreshToken,
     user: new LoginOutputDTO(user),
-    roles: roleAssign.map(item => item.organization_department_roles_id)
+    roles: roleAssign.map(item => {
+      const odr = item.org_department_role
+      const role = odr?.role
+      const department = odr?.department
+
+      return {
+        organization_department_roles_id: item.organization_department_roles_id,
+        role_id: role?.id ?? null,
+        role_name: role?.name ?? null,
+        department_id: department?.id ?? null,
+        department_name: department?.name ?? null
+      }
+    })
   }
 }
 
