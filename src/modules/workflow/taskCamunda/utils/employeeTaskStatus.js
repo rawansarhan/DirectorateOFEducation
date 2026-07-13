@@ -114,5 +114,6 @@ module.exports = {
   calculateProgressPercent,
   buildApplicantName,
   resolveDepartmentName,
-  isLockedByUser
+  isLockedByUser,
+  isLockExpired
 }
