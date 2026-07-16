@@ -5,7 +5,8 @@ const path = require('path')
 const Joi = require('joi')
 const {
   normalizeStoredFilePath,
-  toPublicFileUrl
+  toPublicFileUrl,
+  resolveAbsoluteUploadPath
 } = require('../../../../core/utils/filePath')
 const { validateDocumentTemplateConfigJson } = require('../../../workflow/stageConfig/validations/stageConfigSchema')
 const CONFIG_JSON_ROOT_KEYS = new Set([
@@ -108,10 +109,7 @@ function resolveTemplateFileReference ({ path: storedPath, url }) {
     return { error: 'path غير صالح — يجب أن يكون مساراً تحت /uploads/' }
   }
 
-  const absolutePath = path.join(
-    process.cwd(),
-    normalizedPath.replace(/^\//, '')
-  )
+  const absolutePath = resolveAbsoluteUploadPath(normalizedPath)
 
   if (!fs.existsSync(absolutePath)) {
     return { error: 'ملف القالب غير موجود على القرص — ارفعه أولاً عبر extract-fields' }

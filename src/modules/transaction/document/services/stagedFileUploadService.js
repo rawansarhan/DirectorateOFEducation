@@ -1,11 +1,14 @@
 'use strict'
 
 const fs = require('fs')
-const path = require('path')
 const { createHash } = require('crypto')
 
 const pendingFileUploadRepository = require('../repositories/pendingFileUploadRepository')
-const { normalizeStoredFilePath, toPublicFileUrl } = require('../../../../core/utils/filePath')
+const {
+  normalizeStoredFilePath,
+  toPublicFileUrl,
+  resolveAbsoluteUploadPath
+} = require('../../../../core/utils/filePath')
 const { decodeMultipartFilename } = require('../../../../core/utils/uploadFilename')
 const {
   TRANSACTION_UPLOAD_DAILY_MAX_FILES,
@@ -31,20 +34,13 @@ function safeUnlinkUpload (storedPath) {
     return
   }
 
-  const absolutePath = path.join(
-    process.cwd(),
-    String(storedPath).replace(/^\//, '')
-  )
-
   try {
+    const absolutePath = resolveAbsoluteUploadPath(storedPath)
+
     if (fs.existsSync(absolutePath)) {
       fs.unlinkSync(absolutePath)
     }
   } catch {}
-}
-
-function resolveAbsoluteUploadPath (storedPath) {
-  return path.join(process.cwd(), String(storedPath).replace(/^\//, ''))
 }
 
 function normalizePickerKey (key, { required = true, fallback = null } = {}) {

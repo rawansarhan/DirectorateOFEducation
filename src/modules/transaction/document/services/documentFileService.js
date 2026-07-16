@@ -22,7 +22,7 @@ const path = require('path')
 const documentSignatureRepository = require('../../../workflow/taskCamunda/repositories/documentSignatureRepository')
 const typeDocRepository = require('../../../requirements/typeDoc/repositories/typeDocRepository')
 const pendingFileUploadRepository = require('../repositories/pendingFileUploadRepository')
-const { buildStoredFileEntry, normalizeStoredFilePath } = require('../../../../core/utils/filePath')
+const { buildStoredFileEntry, normalizeStoredFilePath, resolveAbsoluteUploadPath } = require('../../../../core/utils/filePath')
 const { retryWithBackoff } = require('../../../../core/utils/retryWithBackoff')
 const { pickTypeDocIdFromObject } = require('../../../../core/utils/typeDocId')
 
@@ -52,7 +52,7 @@ function assertUploadedFileExists (storedPath, fileKey) {
     )
   }
 
-  const absolutePath = path.join(process.cwd(), storedPath.replace(/^\//, ''))
+  const absolutePath = resolveAbsoluteUploadPath(storedPath)
 
   if (!fs.existsSync(absolutePath)) {
     throw createDocumentFileError(

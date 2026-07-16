@@ -17,13 +17,12 @@ const {
   isAuthorityKeyConfigured
 } = require('../../integrityChain/services/authoritySignatureService')
 const { createTransactionError } = require('../../transaction/utils/transactionErrors')
-const { normalizeStoredFilePath } = require('../../../../core/utils/filePath')
+const {
+  normalizeStoredFilePath,
+  resolveAbsoluteUploadPath
+} = require('../../../../core/utils/filePath')
 
 const COMPLETED_STATUS = 'completed'
-
-function resolveAbsoluteUploadPath (storedPath) {
-  return path.join(process.cwd(), String(storedPath || '').replace(/^\//, ''))
-}
 
 function fileExistsOnDisk (storedPath) {
   const normalized = normalizeStoredFilePath(storedPath)
@@ -32,7 +31,11 @@ function fileExistsOnDisk (storedPath) {
     return false
   }
 
-  return fs.existsSync(resolveAbsoluteUploadPath(normalized))
+  try {
+    return fs.existsSync(resolveAbsoluteUploadPath(normalized))
+  } catch {
+    return false
+  }
 }
 
 function buildCheck ({ id, ok, message, details = null }) {

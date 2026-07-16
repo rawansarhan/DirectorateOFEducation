@@ -30,7 +30,10 @@ const path = require('path')
 const { createHash } = require('crypto')
 const fontkit = require('@pdf-lib/fontkit')
 const { PDFDocument, StandardFonts, rgb } = require('pdf-lib')
-const { normalizeStoredFilePath } = require('../../../../core/utils/filePath')
+const {
+  normalizeStoredFilePath,
+  resolveAbsoluteUploadPath
+} = require('../../../../core/utils/filePath')
 const { injectIntegrityQr } = require('./qrStampService')
 const { API_PUBLIC_URL } = require('../../../../core/config/env')
 
@@ -73,17 +76,6 @@ async function embedUnicodeFont (pdfDoc) {
   const fontBytes = fs.readFileSync(fontPath)
 
   return pdfDoc.embedFont(fontBytes, { subset: true })
-}
-
-/** يحوّل /uploads/file.pdf إلى مسار مطلق على القرص */
-function resolveAbsoluteUploadPath (storedPath) {
-  const normalized = normalizeStoredFilePath(storedPath)
-
-  if (!normalized) {
-    throw new Error('مسار ملف القالب غير صالح')
-  }
-
-  return path.join(process.cwd(), normalized.replace(/^\//, ''))
 }
 
 /** مفاتيح widgets[].data.id من config_json — للتحقق قبل الملء */

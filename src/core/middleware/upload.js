@@ -3,13 +3,14 @@
 const multer = require('multer')
 const path = require('path')
 const { normalizeUploadedFiles } = require('../utils/uploadFilename')
+const { ensureUploadsRoot } = require('../utils/filePath')
 
 // =========================================
-// STORAGE
+// STORAGE — مجلد uploads ثابت بجذر المشروع
 // =========================================
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, 'uploads/')
+    cb(null, ensureUploadsRoot())
   },
 
   filename: (req, file, cb) => {
@@ -124,7 +125,7 @@ const finalTransactionPdfFilter = (req, file, cb) => {
 
 const finalTransactionStorage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, 'uploads/')
+    cb(null, ensureUploadsRoot())
   },
   filename: (req, file, cb) => {
     const txId = String(req.params?.transactionId || 'unknown')

@@ -4,6 +4,7 @@ const dotenv = require('dotenv')
 const cors = require('cors')
 const errorHandler = require('./core/middleware/errorMiddleware')
 const { setupSwagger } = require('./swagger')
+const { getUploadsRoot } = require('./core/utils/filePath')
 
 dotenv.config()
 
@@ -15,7 +16,7 @@ app.use(cors())
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')))
+app.use('/uploads', express.static(getUploadsRoot()))
 app.use('/public', express.static(path.join(__dirname, '../public')))
 
 setupSwagger(app)

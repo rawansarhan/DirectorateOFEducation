@@ -1,4 +1,51 @@
 const path = require('path')
+const fs = require('fs')
+
+/** جذر المشروع (…/DirectorateOFEducation) — ثابت بغضّ النظر عن process.cwd() */
+const PROJECT_ROOT = path.resolve(__dirname, '../../..')
+
+function getUploadsRoot () {
+  const configured = process.env.UPLOADS_DIR
+
+  if (configured && String(configured).trim()) {
+    return path.isAbsolute(configured)
+      ? configured
+      : path.join(PROJECT_ROOT, configured)
+  }
+
+  return path.join(PROJECT_ROOT, 'uploads')
+}
+
+function ensureUploadsRoot () {
+  const root = getUploadsRoot()
+
+  if (!fs.existsSync(root)) {
+    fs.mkdirSync(root, { recursive: true })
+  }
+
+  return root
+}
+
+/**
+ * يحوّل مسار مخزّن مثل /uploads/file.pdf إلى مسار مطلق على القرص.
+ * يستخدم مجلد uploads الثابت بجانب المشروع — لا يعتمد على process.cwd().
+ */
+function resolveAbsoluteUploadPath (storedPath) {
+  const normalized = normalizeStoredFilePath(storedPath)
+
+  if (!normalized) {
+    throw new Error('مسار الملف غير صالح')
+  }
+
+  const relative = normalized.replace(/^\/+/, '')
+  const uploadsPrefix = 'uploads/'
+
+  if (!relative.toLowerCase().startsWith(uploadsPrefix)) {
+    throw new Error('مسار الملف يجب أن يكون تحت /uploads/')
+  }
+
+  return path.join(getUploadsRoot(), relative.slice(uploadsPrefix.length))
+}
 
 function getApiBaseUrl () {
   return (
@@ -161,6 +208,10 @@ function enrichStagesData (stagesData = {}) {
 }
 
 module.exports = {
+  PROJECT_ROOT,
+  getUploadsRoot,
+  ensureUploadsRoot,
+  resolveAbsoluteUploadPath,
   getApiBaseUrl,
   normalizeStoredFilePath,
   toPublicFileUrl,
