@@ -22,7 +22,8 @@ const {
   computeCumulativeHash,
   computeLinkHash,
   buildQrPayload,
-  verifySignatureValue
+  verifySignatureValue,
+  resolveStageDataForIntegrity
 } = require('../utils/integrityChainUtils')
 
 async function ensureGenesisHash (transactionLike, { transaction: dbTransaction } = {}) {
@@ -192,7 +193,7 @@ function verifyLinkChainStructure (transaction, links = []) {
     }
 
     const stageDataHash = computeStageDataHash(
-      transaction.data?.[link.stage_code] || {}
+      resolveStageDataForIntegrity(transaction.data, link.stage_code)
     )
 
     if (stageDataHash !== link.stage_data_hash) {

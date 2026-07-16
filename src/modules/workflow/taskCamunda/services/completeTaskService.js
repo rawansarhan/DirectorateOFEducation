@@ -1036,7 +1036,9 @@ async function completeTaskCore ({
         challengeId: signingRequest?.challengeId || null,
         stageId: stage.id,
         stageCode: stage.code,
-        stageData: transactionData[stage.code],
+        stageData: persistAuthSubmissionAtRoot
+          ? buildRootSubmissionSnapshot(transactionData)
+          : transactionData[stage.code],
         signatureHash: digitalSignatureRecord.signed_hash,
         signedAt: digitalSignatureRecord.signed_at,
         dbTransaction: dbTx

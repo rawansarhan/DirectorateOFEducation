@@ -48,7 +48,7 @@ const {
   persistVerifiedSignature,
   buildDraftSubmitTaskId
 } = require('../../../workflow/taskCamunda/services/transactionSigningService')
-const { ensureGenesisHash } =
+const { ensureGenesisHash, appendIntegrityLink } =
   require('../../integrityChain/services/integrityChainService')
 const { ensureTransactionIdProcess } =
   require('../services/transactionIdProcessService')
@@ -589,12 +589,13 @@ async function submitTransaction (
 
       let registeredFiles = []
       let registeredTemplates = []
+      let digitalSignatureRecord = null
       const processCode = current.code
       let storedData = null
 
       await db.sequelize.transaction(async (dbTransaction) => {
         if (requiresSignature && submitSignature) {
-          await persistVerifiedSignature({
+          digitalSignatureRecord = await persistVerifiedSignature({
             challengeId: submitSignature.challengeId,
             signature: submitSignature.signature,
             userId,
@@ -642,6 +643,21 @@ async function submitTransaction (
 
         await ensureTransactionIdProcess(current, { transaction: dbTransaction })
         await ensureGenesisHash(current, { transaction: dbTransaction })
+
+        // توقيع تقديم الموظف يجب أن يدخل سلسلة النزاهة — وإلا مسح QR يفشل بـ incomplete
+        if (digitalSignatureRecord) {
+          await appendIntegrityLink({
+            transactionId: current.id,
+            digitalSignatureId: digitalSignatureRecord.digital_signature_id,
+            challengeId: submitSignature.challengeId,
+            stageId: stage.id,
+            stageCode: stage.code,
+            stageData: storedData,
+            signatureHash: digitalSignatureRecord.signed_hash,
+            signedAt: digitalSignatureRecord.signed_at,
+            dbTransaction
+          })
+        }
       })
 
       try {

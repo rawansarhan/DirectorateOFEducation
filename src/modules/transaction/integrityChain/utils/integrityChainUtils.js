@@ -9,9 +9,19 @@ const INTERNAL_DATA_KEYS = new Set([
   '_digital_signatures',
   '_digital_signatures_ledger',
   '_executedServiceTasks',
+  '_generate_pdf_rejection',
   'schema_version',
   'submission',
   'files_meta'
+])
+
+/** حقول تتغير بعد التوقيع ولا يجب أن تكسر سلسلة النزاهة */
+const STAGE_HASH_EXCLUDED_KEYS = new Set([
+  ...INTERNAL_DATA_KEYS,
+  'completed_by',
+  'completed_at',
+  'digital_signature',
+  'rejection_reason'
 ])
 
 function hashValue (value) {
@@ -34,6 +44,68 @@ function stableStringify (value) {
     .join(',')}}`
 }
 
+function sanitizeStageDataForHash (stageData = {}) {
+  if (!stageData || typeof stageData !== 'object' || Array.isArray(stageData)) {
+    return {}
+  }
+
+  const sanitized = {}
+
+  for (const [key, value] of Object.entries(stageData)) {
+    if (STAGE_HASH_EXCLUDED_KEYS.has(key) || key.startsWith('_')) {
+      continue
+    }
+
+    sanitized[key] = value
+  }
+
+  return sanitized
+}
+
+/**
+ * يحل بيانات المرحلة للتحقق:
+ * - عادةً تحت transaction.data[stage_code]
+ * - مرحلة AUTH تُحفظ أحياناً في جذر data (form_id/widgets)
+ */
+function resolveStageDataForIntegrity (transactionData = {}, stageCode = null) {
+  const nested = stageCode ? transactionData?.[stageCode] : null
+
+  if (
+    nested &&
+    typeof nested === 'object' &&
+    !Array.isArray(nested) &&
+    (nested.form_id != null || Array.isArray(nested.widgets) || nested.stage_name != null)
+  ) {
+    return nested
+  }
+
+  if (
+    transactionData &&
+    typeof transactionData === 'object' &&
+    (transactionData.form_id != null || Array.isArray(transactionData.widgets))
+  ) {
+    const rootSnapshot = {}
+    for (const key of [
+      'stage_name',
+      'form_id',
+      'form_name',
+      'widgets',
+      'templates',
+      'decision',
+      'note',
+      'files',
+      'fields'
+    ]) {
+      if (Object.prototype.hasOwnProperty.call(transactionData, key)) {
+        rootSnapshot[key] = transactionData[key]
+      }
+    }
+    return rootSnapshot
+  }
+
+  return nested && typeof nested === 'object' ? nested : {}
+}
+
 function buildGenesisHash ({ transactionId, processCode, createdAt }) {
   return hashValue(
     stableStringify({
@@ -46,7 +118,7 @@ function buildGenesisHash ({ transactionId, processCode, createdAt }) {
 }
 
 function computeStageDataHash (stageData = {}) {
-  return hashValue(stableStringify(stageData))
+  return hashValue(stableStringify(sanitizeStageDataForHash(stageData)))
 }
 
 function computeCumulativeHash ({
@@ -124,8 +196,11 @@ function verifySignatureValue ({
 module.exports = {
   INTEGRITY_CHAIN_VERSION,
   INTERNAL_DATA_KEYS,
+  STAGE_HASH_EXCLUDED_KEYS,
   hashValue,
   stableStringify,
+  sanitizeStageDataForHash,
+  resolveStageDataForIntegrity,
   buildGenesisHash,
   computeStageDataHash,
   computeCumulativeHash,
