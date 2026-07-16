@@ -84,6 +84,10 @@ async function loadTaskContext (taskId) {
 ///////////////////////////////////////////////////////////////////////
 const USER_TASK_TYPES = ['USER_TASK', 'APPROVAL', 'UPLOAD']
 
+/**
+ * توقيع USB إلزامي لكل USER_TASK / APPROVAL / UPLOAD (ما عدا auto-complete).
+ * يُتجاهل requires_digital_signature في stageConfig — لا يُسمح بالمرور بدون توقيع.
+ */
 function requiresDigitalSignature (
   stage,
   payload = {},
@@ -94,13 +98,7 @@ function requiresDigitalSignature (
     return false
   }
 
-  if (!USER_TASK_TYPES.includes(stage.type)) {
-    return false
-  }
-
-  const config = stageConfig?.config_json || {}
-
-  if (config.requires_digital_signature === false) {
+  if (!stage || !USER_TASK_TYPES.includes(stage.type)) {
     return false
   }
 
@@ -191,8 +189,14 @@ async function createSigningChallenge ({
     userId
   })
 
-  if (!forceSignature && !requiresDigitalSignature(context.stage, payload, context.stageConfig)) {
-    throw new Error('Digital signature is not required for this task')
+  // USER_TASK + تقديم الموظف: التوقيع دائماً مطلوب (يُتجاهل requires_digital_signature: false)
+  if (
+    !forceSignature &&
+    !requiresDigitalSignature(context.stage, payload, context.stageConfig)
+  ) {
+    const error = new Error('التوقيع الرقمي غير مطلوب لهذه المرحلة')
+    error.code = 'SIGNATURE_NOT_REQUIRED'
+    throw error
   }
 
   const { error: validationError, value: validatedPayload } =

@@ -1203,7 +1203,7 @@ router.post(
 
  *     description: |
 
- *       **الخطوة 2** قبل `complete` عندما تتطلب المرحلة توقيع USB.
+ *       **الخطوة 2** قبل `complete` — توقيع USB إلزامي دائماً لمهام المستخدم (لا يُتجاوز بـ `requires_digital_signature: false`).
 
  *
 
@@ -1351,11 +1351,11 @@ router.post(
 
  *
 
- *       **تسلسل (مع توقيع USB):** GET `/tasks/{taskId}` → POST `/signing-challenge` → وقّع `message` → POST `/complete`
+ *       **تسلسل (توقيع USB إلزامي دائماً):** GET `/tasks/{taskId}` → POST `/signing-challenge` → وقّع `message` → POST `/complete`
 
  *
 
- *       **القالب (إلزامي):** `form_id`, `form_name`, `widgets[]` + `value`, `templates[]`, `decision`, `note`, `signature`
+ *       **القالب (إلزامي):** `form_id`, `form_name`, `widgets[]` + `value`, `templates[]`, `decision`, `note`, `signature` — بدون `signature` يُرفض الطلب
 
  *
 

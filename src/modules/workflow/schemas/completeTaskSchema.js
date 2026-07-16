@@ -14,13 +14,11 @@ const completeTaskPayloadSchema = buildStrictFormPayloadSchema({
   includeTemplates: true,
   includeDecision: true,
   includeExpectedVersion: true,
-  allowSignature: true,
+  requireSignature: true,
   allowRejectionReason: true
 }).keys({
-  decision: taskDecisionSchema.when('signature', {
-    is: Joi.exist(),
-    then: Joi.required(),
-    otherwise: Joi.optional()
+  decision: taskDecisionSchema.required().messages({
+    'any.required': 'decision مطلوب — approve أو reject'
   })
 })
 

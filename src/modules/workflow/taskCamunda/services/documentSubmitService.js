@@ -182,7 +182,8 @@ async function completeDraftDocumentSubmit ({
 
   const result = await submitTransaction(transactionId, submitPayload, {
     userId,
-    clientMeta
+    clientMeta,
+    requireSignature: true
   })
 
   return {

@@ -619,14 +619,16 @@ async function completeTaskCore ({
   const isReject = signingDecision === 'reject'
 
   const stageConfig = await stageConfigRepository.findByStageId(stage.id)
+  // توقيع USB إلزامي دائماً لمهام المستخدم (ما عدا auto-complete) — لا يُتجاوز بـ requires_digital_signature: false
   const needsSignature =
-    requireSignature ||
-    requiresDigitalSignature(
-      stage,
-      payload,
-      stageConfig,
-      { isAutoComplete }
-    )
+    !isAutoComplete &&
+    (requireSignature ||
+      requiresDigitalSignature(
+        stage,
+        payload,
+        stageConfig,
+        { isAutoComplete }
+      ))
 
   logStep('DECISION_RESOLVED', {
     decision: signingDecision || payload.decision || 'none',
@@ -696,15 +698,19 @@ async function completeTaskCore ({
     const signature = payload.signature?.signature
 
     if (!challengeId || !signature) {
-      throw new Error(
-        'Digital signature is required. Call POST /tasks/:taskId/signing-challenge first.'
+      const error = new Error(
+        'التوقيع الرقمي مطلوب — POST /api/workflow/tasks/{taskId}/signing-challenge ثم أرسل signature مع complete'
       )
+      error.code = 'SIGNATURE_REQUIRED'
+      throw error
     }
 
     if (!signingDecision) {
-      throw new Error(
-        'decision is required when completing a task with digital signature'
+      const error = new Error(
+        'decision مطلوب عند إكمال المهمة مع التوقيع الرقمي (approve أو reject)'
       )
+      error.code = 'VALIDATION_ERROR'
+      throw error
     }
 
     signingRequest = {

@@ -181,7 +181,8 @@ const stageConfigJsonSchema = Joi.object({
   widgets: Joi.array().items(widgetSchema).default([]),
   template: Joi.array().items(templateItemSchema).default([]),
   actions: Joi.array().items(stageActionSchema).optional(),
-  requires_digital_signature: Joi.boolean().optional()
+  // مُتجاهَل في التشغيل: التوقيع USB إلزامي دائماً لـ USER_TASK (لا يُسمح بالمرور بدون توقيع)
+  requires_digital_signature: Joi.boolean().optional().default(true)
 }).unknown(false)
 
 function assertValidRegex (regex) {

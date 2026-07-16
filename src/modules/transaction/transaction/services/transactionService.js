@@ -477,7 +477,8 @@ async function submitTransaction (
   {
     userId,
     idempotencyKey: idempotencyKeyOverride = null,
-    clientMeta = {}
+    clientMeta = {},
+    requireSignature = false
   } = {}
 ) {
   const numericId = parsePositiveInt(transactionId, 'معرّف المعاملة')
@@ -561,14 +562,15 @@ async function submitTransaction (
         })
       })
 
-      const requiresSignature = await userRequiresSubmitSignature(userId)
+      const requiresSignature =
+        requireSignature || (await userRequiresSubmitSignature(userId))
       const submitSignature = extractSubmitSignature(normalized)
 
       if (requiresSignature) {
         if (!submitSignature) {
           throw createTransactionError(
             'SIGNATURE_REQUIRED',
-            'التوقيع الرقمي مطلوب — POST /api/transaction/{transactionId}/submit-documents/signing-challenge ثم أرسل signature مع submit'
+            'التوقيع الرقمي مطلوب — POST /api/transaction/process/{processId}/submit-documents/signing-challenge ثم أرسل signature مع complete'
           )
         }
 

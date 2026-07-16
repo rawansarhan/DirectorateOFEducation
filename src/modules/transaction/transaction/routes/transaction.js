@@ -229,6 +229,8 @@ router.post(
  *          `first_name`, `last_name`, `father_name`, `mother_name`, `national_id`
  *       4. يتحقق من PIN ويرجع `transaction_id` للخطوة التالية (complete/submit)
  *
+ *       **توقيع USB إلزامي** — لا يُسمح بالتقديم بدون توقيع.
+ *
  *       **تسلسل:** signing-challenge → وقّع `message` → `POST .../submit-documents/complete` (بـ `transaction_id` من الرد)
  *     tags: [Transaction]
  *     security:
@@ -305,6 +307,8 @@ router.post(
  *       **مسودة draft:** يقدّم المعاملة ويبدأ workflow (نفس submit + signature).
  *
  *       **in_progress:** يكمل مهمة Camunda النشطة.
+ *
+ *       **توقيع USB إلزامي دائماً** — بدون `signature` يُرفض الطلب.
  *
  *       **تسلسل الموظف:** signing-challenge → وقّع `message` → POST هذا المسار
  *     tags: [Transaction]
