@@ -114,15 +114,22 @@ async function countCompletedStagesByUsersAndOdrs ({
     return new Map()
   }
 
+  // يجب ربط المرحلة عبر process_definition_id لنفس process_instance —
+  // الربط بـ stage_code وحده يضاعف العد عند تكرار نفس الكود عبر عمليات متعددة.
   const rows = await db.sequelize.query(
     `
       SELECT
         pis.assigned_to AS user_id,
         sa.organization_department_roles_id AS org_dept_role_id,
-        COUNT(*)::int AS completed_count
+        COUNT(DISTINCT pis.id)::int AS completed_count
       FROM process_instance_stage pis
-      INNER JOIN stages s ON s.code = pis.stage_code
-      INNER JOIN stage_assignments sa ON sa.stage_id = s.id
+      INNER JOIN process_instances pi
+        ON pi.transaction_id = pis.transaction_id
+      INNER JOIN stages s
+        ON s.code = pis.stage_code
+       AND s.process_definition_id = pi.process_definition_id
+      INNER JOIN stage_assignments sa
+        ON sa.stage_id = s.id
       WHERE pis.status = 'completed'
         AND pis.assigned_to IN (:userIds)
         AND sa.organization_department_roles_id IN (:orgDeptRoleIds)
