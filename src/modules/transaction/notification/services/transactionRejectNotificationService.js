@@ -1,28 +1,48 @@
 'use strict'
 
-const { sendAndPersistNotification } = require('./notificationService')
+const processRepository = require('../../../workflow/processDefinition/repositories/processRepository')
+const { deliverNotificationToUser } = require('./notificationDeliveryService')
+// 
+async function resolveProcessName ({
+  transaction,
+  processDefinitionId = null,
+  processName = null
+}) {
+  if (processName) {
+    return processName
+  }
+
+  if (processDefinitionId) {
+    const process = await processRepository.findById(processDefinitionId)
+
+    if (process?.name) {
+      return process.name
+    }
+  }
+
+  return transaction?.id_process || String(transaction?.id || '')
+}
 
 async function notifyTransactionOwnerOnReject ({
   transaction,
   stage,
   note = '',
-  rejectionReason = '',
+  processDefinitionId = null,
+  processName = null,
   processInstanceId = null,
   sentByUserId = null
 }) {
   const userId = transaction?.user_id
-
-  const idProcess = transaction.id_process || ''
-  const reference = idProcess || String(transaction?.id || '')
   const trimmedNote = String(note || '').trim()
-  const trimmedReason = String(rejectionReason || '').trim()
-  const employeeMessage = trimmedNote || trimmedReason
+  const resolvedProcessName = await resolveProcessName({
+    transaction,
+    processDefinitionId,
+    processName
+  })
 
-  const message = employeeMessage
-    ? `تم رفض معاملتك (${reference}). ${employeeMessage}`
-    : `تم رفض معاملتك (${reference}).`
+  const message = `لقد تم رفض معاملتك (${resolvedProcessName}) بسبب (${trimmedNote})`
 
-  return sendAndPersistNotification({
+  return deliverNotificationToUser({
     userId,
     sentByUserId,
     title: 'تم رفض المعاملة',
@@ -33,11 +53,11 @@ async function notifyTransactionOwnerOnReject ({
     data: {
       type: 'transaction_rejected',
       transactionId: String(transaction?.id || ''),
-      idProcess,
+      processName: resolvedProcessName,
+      idProcess: transaction.id_process || '',
       stageCode: stage?.code || '',
       stageName: stage?.name || '',
       note: trimmedNote,
-      rejectionReason: trimmedReason,
       processInstanceId: String(processInstanceId || '')
     }
   })

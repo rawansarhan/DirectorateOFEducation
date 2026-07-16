@@ -5,10 +5,18 @@ const {
   UserRoleAssignment,
   OrgDeptRole
 } = require('../../../../entities')
-const { sendAndPersistNotification } = require('../../../transaction/notification/services/notificationService')
+const { deliverNotificationToUser } = require('../../../transaction/notification/services/notificationDeliveryService')
+
+function resolveCamundaGroupKey (payload) {
+  return (
+    payload.to_camunda_group_key ||
+    payload.to_organization_department_roles_camunda_group_key ||
+    null
+  )
+}
 
 function isAuthNotificationTarget (payload, orgDeptRole) {
-  const targetKey = payload.to_organization_department_roles_camunda_group_key
+  const targetKey = resolveCamundaGroupKey(payload)
 
   if (targetKey === 'AUTH') {
     return true
@@ -18,6 +26,24 @@ function isAuthNotificationTarget (payload, orgDeptRole) {
 }
 
 async function resolveNotificationRecipients (payload, context) {
+  if (payload.to_user_id != null) {
+    const user = await User.findOne({
+      where: {
+        id: payload.to_user_id,
+        is_active: true
+      },
+      attributes: ['id', 'userName', 'email']
+    })
+
+    return {
+      targetType: 'direct_user',
+      channel: 'websocket',
+      organization_department_roles_id: null,
+      camunda_group_key: null,
+      users: user ? [user] : []
+    }
+  }
+
   const roleId = payload.to_organization_department_roles_id
   let orgDeptRole = null
 
@@ -48,18 +74,16 @@ async function resolveNotificationRecipients (payload, context) {
 
     return {
       targetType: 'transaction_owner',
+      channel: 'firebase',
       organization_department_roles_id: roleId || null,
-      camunda_group_key:
-        payload.to_organization_department_roles_camunda_group_key ||
-        orgDeptRole?.camunda_group_key ||
-        'AUTH',
+      camunda_group_key: resolveCamundaGroupKey(payload) || orgDeptRole?.camunda_group_key || 'AUTH',
       users: owner ? [owner] : []
     }
   }
 
   if (!roleId) {
     throw new Error(
-      'SEND_NOTIFICATION payload requires to (organization_department_roles_id) or to_camunda_group_key=AUTH'
+      'SEND_NOTIFICATION payload requires to (user_id), to_organization_department_roles_id, or to_camunda_group_key=AUTH'
     )
   }
 
@@ -79,6 +103,7 @@ async function resolveNotificationRecipients (payload, context) {
 
   return {
     targetType: 'role_members',
+    channel: 'websocket',
     organization_department_roles_id: roleId,
     camunda_group_key: orgDeptRole?.camunda_group_key || null,
     users: assignments.map(item => item.user).filter(Boolean)
@@ -100,7 +125,7 @@ class SendNotificationStrategy {
     if (!target.users.length) {
       return {
         type: 'notification',
-        channel: 'firebase',
+        channel: target.channel,
         status: 'skipped',
         reason: 'No active users found for notification target',
         targetType: target.targetType,
@@ -127,7 +152,7 @@ class SendNotificationStrategy {
     let failedTotal = 0
 
     for (const user of target.users) {
-      const result = await sendAndPersistNotification({
+      const result = await deliverNotificationToUser({
         userId: user.id,
         sentByUserId: context.userId || null,
         title,
@@ -135,7 +160,8 @@ class SendNotificationStrategy {
         type: notificationType,
         transactionId: context.transaction?.id || null,
         processInstanceId: context.processInstance?.id || null,
-        data: pushData
+        data: pushData,
+        channel: target.channel
       })
 
       sentTotal += result.sent || 0
@@ -145,6 +171,7 @@ class SendNotificationStrategy {
         userId: user.id,
         userName: user.userName,
         notificationId: result.notificationId || null,
+        channel: result.channel || target.channel,
         sent: result.sent || 0,
         failed: result.failed || 0,
         skipped: Boolean(result.skipped),
@@ -165,7 +192,7 @@ class SendNotificationStrategy {
 
     return {
       type: 'notification',
-      channel: 'firebase',
+      channel: target.channel,
       status,
       targetType: target.targetType,
       organization_department_roles_id: target.organization_department_roles_id,

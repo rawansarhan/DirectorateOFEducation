@@ -207,8 +207,8 @@ router.post(
  *         description: المسار للمواطن فقط — الموظف يُرفض هنا ويستخدم مسار التوقيع
  *       404:
  *         description: العملية غير موجودة
- *       502:
- *         description: فشل بدء workflow
+ *       500:
+ *         description: فشل بدء workflow — راجع message للتفاصيل (غالباً بيانات القوالب/widgets)
  */
 router.post(
   '/submit/process/:processId',

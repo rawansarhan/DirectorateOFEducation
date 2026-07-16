@@ -131,7 +131,7 @@ function httpStatusForError (error) {
   }
 
   if (error?.code === 'WORKFLOW_START_FAILED') {
-    return 502
+    return 500
   }
 
   return 500

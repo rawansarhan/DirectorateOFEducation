@@ -6,6 +6,9 @@ const OutboxRepository = require('../repositories/OutboxRepository')
 const eventBus = require('../../events/eventBus')
 const EVENTS = require('../../events/types')
 const { RETRY_MAX_ATTEMPTS } = require('../../../config/env')
+const {
+  handleGeneratePdfFailure
+} = require('../../../../modules/transaction/notification/services/generatePdfFailureHandlerService')
 
 function payloadTransactionId (payload) {
   return Number(payload?.transaction_id)
@@ -56,6 +59,12 @@ async function failGeneratePdfEvent (event, error) {
     },
     { where: { id: event.id } }
   )
+
+  if (nextPayload._retry_count >= RETRY_MAX_ATTEMPTS) {
+    handleGeneratePdfFailure(nextPayload, error).catch(err => {
+      console.error('[GeneratePdfFailure] handler error:', err.message)
+    })
+  }
 
   return {
     event_id: event.id,

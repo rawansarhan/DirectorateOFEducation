@@ -8,13 +8,12 @@
  * التدفق الكامل:
  *   1) USER_TASK (complete / submit-documents/complete):
  *        templates: [{ id: 1, values: { employee: "...", job: "..." } }]
- *      → documentInstanceService ينشئ document_instance:
- *        data_json = values, generated_pdf_path = null
+ *      → تُحفظ القيم في transaction.data فقط (بدون document_instance)
  *
  *   2) SERVICE_TASK (stage_config action GENERATE_PDF):
  *        payload: { template_id: 1 }
- *      → GeneratePDF strategy يستدعي generatePdfFromTemplate()
- *      → يملأ PDF ويحدّث document_instance.generated_pdf_path
+ *      → يملأ PDF من القيم المخزّنة
+ *      → عند النجاح فقط يُنشأ document_instance + generated_pdf_path
  *
  * مطابقة الحقول (ACROFORM — مثل docs/file 1 (3).pdf):
  *   - أسماء حقول PDF الداخلية (manager-name, employee, job, department)
@@ -533,20 +532,19 @@ function buildGeneratedPdfPath ({ transactionId, templateId, instanceId }) {
 }
 
 /**
- * نقطة الدخول الرئيسية — يُستدعى من GeneratePDF strategy
+ * يملأ حقول القالب في الذاكرة فقط — بدون إنشاء document_instance وبدون حفظ ملف.
  */
-async function generatePdfFromTemplate ({
+async function fillTemplatePdfDocument ({
   documentTemplate,
-  documentInstance,
-  genesisHash = null
+  dataJson
 }) {
   if (!documentTemplate?.file_path) {
     throw new Error('ملف القالب غير موجود')
   }
 
-  if (!documentInstance?.data_json) {
+  if (!dataJson || typeof dataJson !== 'object') {
     throw new Error(
-      'document_instance لا يحتوي values — يجب إرسال templates في مرحلة USER_TASK أولاً'
+      'قيم القالب غير موجودة — يجب إرسال templates[{ id, widgets/value }] في USER_TASK أولاً'
     )
   }
 
@@ -560,13 +558,13 @@ async function generatePdfFromTemplate ({
   const pdfSettings = resolvePdfSettings(configJson)
   const values = resolveValuesForEngine({
     engineType: documentTemplate.engine_type,
-    dataJson: documentInstance.data_json,
+    dataJson,
     configJson,
     pdfSettings
   })
 
   if (!Object.keys(values).length) {
-    throw new Error('لا توجد قيم للملء في document_instance.data_json')
+    throw new Error('لا توجد قيم للملء في بيانات القالب')
   }
 
   const templateBytes = fs.readFileSync(templateAbsolutePath)
@@ -579,7 +577,6 @@ async function generatePdfFromTemplate ({
 
   let fillResult = { filled: [], skipped: [] }
 
-  // ACROFORM أولاً أو POSITIONED حسب engine_type — مع fallback للطريقة الأخرى
   if (documentTemplate.engine_type === 'POSITIONED') {
     fillResult = await fillPositionedPdf({
       pdfDoc,
@@ -620,6 +617,34 @@ async function generatePdfFromTemplate ({
     )
   }
 
+  return {
+    pdfDoc,
+    configJson,
+    values,
+    filled_keys: fillResult.filled,
+    skipped_keys: fillResult.skipped,
+    flattened: fillResult.flattened === true
+  }
+}
+
+/**
+ * يحفظ PDF المملوء بعد وجود document_instance (حقن QR + كتابة الملف).
+ */
+async function persistFilledPdfDocument ({
+  pdfDoc,
+  configJson = {},
+  documentTemplate,
+  documentInstance,
+  genesisHash = null,
+  values = {},
+  filled_keys: filledKeys = [],
+  skipped_keys: skippedKeys = [],
+  flattened = false
+}) {
+  if (!documentInstance?.id) {
+    throw new Error('document_instance مطلوب قبل حفظ ملف GENERATE_PDF')
+  }
+
   const outputStoredPath = buildGeneratedPdfPath({
     transactionId: documentInstance.transaction_id,
     templateId: documentTemplate.id,
@@ -633,7 +658,6 @@ async function generatePdfFromTemplate ({
     fs.mkdirSync(uploadsDir, { recursive: true })
   }
 
-  // حقن رمز QR موقّع يشير لسلسلة نزاهة المعاملة — قبل الحفظ ليكون ضمن content_hash
   const qrResult = await injectIntegrityQr({
     pdfDoc,
     configJson,
@@ -646,18 +670,49 @@ async function generatePdfFromTemplate ({
   const pdfBytes = await pdfDoc.save()
   fs.writeFileSync(outputAbsolutePath, pdfBytes)
 
-  // content_hash = SHA-256 للملف النهائي (متضمناً رمز QR) — للمطابقة عند التحقق
   const contentHash = createHash('sha256').update(pdfBytes).digest('hex')
 
   return {
     generated_pdf_path: outputStoredPath,
     content_hash: contentHash,
     qr: qrResult,
-    filled_keys: fillResult.filled,
-    skipped_keys: fillResult.skipped,
-    flattened: fillResult.flattened === true,
+    filled_keys: filledKeys,
+    skipped_keys: skippedKeys,
+    flattened,
     values_used: values
   }
+}
+
+/**
+ * نقطة الدخول الرئيسية — يُستدعى عند وجود document_instance جاهز.
+ */
+async function generatePdfFromTemplate ({
+  documentTemplate,
+  documentInstance,
+  genesisHash = null
+}) {
+  if (!documentInstance?.data_json) {
+    throw new Error(
+      'document_instance لا يحتوي values — يجب إرسال templates في مرحلة USER_TASK أولاً'
+    )
+  }
+
+  const filled = await fillTemplatePdfDocument({
+    documentTemplate,
+    dataJson: documentInstance.data_json
+  })
+
+  return persistFilledPdfDocument({
+    pdfDoc: filled.pdfDoc,
+    configJson: filled.configJson,
+    documentTemplate,
+    documentInstance,
+    genesisHash,
+    values: filled.values,
+    filled_keys: filled.filled_keys,
+    skipped_keys: filled.skipped_keys,
+    flattened: filled.flattened
+  })
 }
 
 /**
@@ -797,6 +852,8 @@ async function extractPdfAcroFormFieldsFromPath (storedPath) {
 }
 
 module.exports = {
+  fillTemplatePdfDocument,
+  persistFilledPdfDocument,
   generatePdfFromTemplate,
   collectWidgetKeys,
   filterValuesByTemplateKeys,

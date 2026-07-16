@@ -6,10 +6,11 @@
  * =============================================================================
  *
  * يُنفَّذ توليد PDF **متزامناً** أولاً؛ عند الفشل يُenqueue في outbox لإعادة المحاولة.
+ * document_instance يُنشأ فقط داخل executeGeneratePdfJob بعد نجاح الملء/الحفظ.
  */
 
-const documentInstanceRepository = require('../../../transaction/document/repositories/documentInstanceRepository')
 const documentTemplateRepository = require('../../../requirements/DocTemp/repositories/documentTemplateRepository')
+const documentInstanceRepository = require('../../../transaction/document/repositories/documentInstanceRepository')
 const { enqueueOutboxEvent } = require('../../../../core/shared/outbox/services/outboxEnqueueService')
 const {
   executeGeneratePdfJob
@@ -29,18 +30,6 @@ class GeneratePdfStrategy {
       throw new Error('GENERATE_PDF: transaction غير موجود في السياق')
     }
 
-    const documentInstance =
-      await documentInstanceRepository.findByTransactionAndTemplate(
-        transactionId,
-        templateId
-      )
-
-    if (!documentInstance) {
-      throw new Error(
-        `document_instance غير موجود — أرسل templates[{ id: ${templateId}, values: {...} }] في USER_TASK أولاً`
-      )
-    }
-
     const documentTemplate = await documentTemplateRepository.findOneActiveById(
       templateId
     )
@@ -51,15 +40,21 @@ class GeneratePdfStrategy {
       )
     }
 
-    if (documentInstance.generated_pdf_path) {
+    const existingInstance =
+      await documentInstanceRepository.findByTransactionAndTemplate(
+        transactionId,
+        templateId
+      )
+
+    if (existingInstance?.generated_pdf_path) {
       return {
         type: 'pdf',
         status: 'generated',
         skipped: true,
         template_id: templateId,
-        document_instance_id: documentInstance.id,
+        document_instance_id: existingInstance.id,
         transaction_id: transactionId,
-        generated_pdf_path: documentInstance.generated_pdf_path,
+        generated_pdf_path: existingInstance.generated_pdf_path,
         engine_type: documentTemplate.engine_type
       }
     }
@@ -67,7 +62,7 @@ class GeneratePdfStrategy {
     const jobPayload = {
       transaction_id: transactionId,
       template_id: templateId,
-      document_instance_id: documentInstance.id,
+      document_instance_id: existingInstance?.id || null,
       stage_code: context?.stage?.code || null,
       user_id: context?.userId || null
     }
@@ -77,10 +72,10 @@ class GeneratePdfStrategy {
 
       return {
         type: 'pdf',
-        status: result.skipped ? 'generated' : 'generated',
+        status: 'generated',
         skipped: Boolean(result.skipped),
         template_id: templateId,
-        document_instance_id: documentInstance.id,
+        document_instance_id: result.document_instance_id,
         transaction_id: transactionId,
         generated_pdf_path: result.generated_pdf_path,
         engine_type: documentTemplate.engine_type
@@ -94,7 +89,7 @@ class GeneratePdfStrategy {
         queued_after_failure: true,
         error: error.message,
         template_id: templateId,
-        document_instance_id: documentInstance.id,
+        document_instance_id: null,
         transaction_id: transactionId,
         generated_pdf_path: null,
         engine_type: documentTemplate.engine_type

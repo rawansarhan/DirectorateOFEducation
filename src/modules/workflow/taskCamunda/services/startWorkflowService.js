@@ -93,7 +93,7 @@ async function startWorkflow ({
     let result = null
 
     if (firstTask) {
-      const autoPayload = buildAutoCompleteAuthPayload(
+      const autoPayload = await buildAutoCompleteAuthPayload(
         submissionPayload || transaction.data || {}
       )
 

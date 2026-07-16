@@ -3,8 +3,9 @@
 /**
  * document_instance — نسخة قالب مرتبطة بمعاملة
  *
- * USER_TASK:  data_json = values من templates[], generated_pdf_path = null
- * SERVICE_TASK (GENERATE_PDF): generated_pdf_path = مسار PDF المولّد
+ * يُنشأ فقط عند نجاح GENERATE_PDF:
+ *   data_json = values من templates في transaction.data
+ *   generated_pdf_path = مسار PDF المولّد
  *
  * document_template_id → document_templates.id
  */

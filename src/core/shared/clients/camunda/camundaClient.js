@@ -19,6 +19,95 @@ async function callCamunda (action, fn) {
     rethrowAxiosAsWorkflowError(err, action)
   }
 }
+
+/**
+ * يجمع USER_TASK و SERVICE_TASK بترتيب سير العمل في BPMN
+ * (مشي على sequenceFlow من startEvent)، وليس تجميع كل userTask ثم serviceTask.
+ */
+function collectTasksInBpmnFlowOrder (bpmnProcess = {}) {
+  const TASK_TAGS = {
+    'bpmn:userTask': 'USER_TASK',
+    'bpmn:serviceTask': 'SERVICE_TASK'
+  }
+
+  const tasksById = new Map()
+
+  for (const [tag, type] of Object.entries(TASK_TAGS)) {
+    for (const element of bpmnProcess[tag] || []) {
+      const id = element.$?.id
+
+      if (!id) {
+        continue
+      }
+
+      tasksById.set(id, {
+        taskDefinitionKey: id,
+        name: element.$?.name || '',
+        type
+      })
+    }
+  }
+
+  const outgoing = new Map()
+
+  for (const flow of bpmnProcess['bpmn:sequenceFlow'] || []) {
+    const sourceRef = flow.$?.sourceRef
+    const targetRef = flow.$?.targetRef
+
+    if (!sourceRef || !targetRef) {
+      continue
+    }
+
+    if (!outgoing.has(sourceRef)) {
+      outgoing.set(sourceRef, [])
+    }
+
+    outgoing.get(sourceRef).push(targetRef)
+  }
+
+  const startIds = (bpmnProcess['bpmn:startEvent'] || [])
+    .map(element => element.$?.id)
+    .filter(Boolean)
+
+  const ordered = []
+  const visited = new Set()
+  const added = new Set()
+
+  function walk (nodeId) {
+    if (!nodeId || visited.has(nodeId)) {
+      return
+    }
+
+    visited.add(nodeId)
+
+    const task = tasksById.get(nodeId)
+
+    if (task && !added.has(nodeId)) {
+      ordered.push(task)
+      added.add(nodeId)
+    }
+
+    for (const nextId of outgoing.get(nodeId) || []) {
+      walk(nextId)
+    }
+  }
+
+  if (startIds.length) {
+    for (const startId of startIds) {
+      walk(startId)
+    }
+  }
+
+  for (const [id, task] of tasksById) {
+    if (!added.has(id)) {
+      ordered.push(task)
+      added.add(id)
+    }
+  }
+
+  return ordered
+}
+
 class CamundaClient {
   async deployProcess (filePath) {
     const form = new FormData()
@@ -73,27 +162,8 @@ class CamundaClient {
 
     const parsed = await xml2js.parseStringPromise(res.data.bpmn20Xml)
     const bpmnProcess = parsed['bpmn:definitions']['bpmn:process'][0]
-    const userTasks = bpmnProcess['bpmn:userTask'] || []
-    const serviceTasks = bpmnProcess['bpmn:serviceTask'] || []
-    const tasks = []
 
-    for (const t of userTasks) {
-      tasks.push({
-        taskDefinitionKey: t.$.id,
-        name: t.$.name || '',
-        type: 'USER_TASK'
-      })
-    }
-
-    for (const t of serviceTasks) {
-      tasks.push({
-        taskDefinitionKey: t.$.id,
-        name: t.$.name || '',
-        type: 'SERVICE_TASK'
-      })
-    }
-
-    return tasks
+    return collectTasksInBpmnFlowOrder(bpmnProcess)
   }
 
   async startProcess (processKey, transactionId) {

@@ -23,6 +23,9 @@ const { retryWithBackoff } = require('../../../../core/utils/retryWithBackoff')
 const {
   registerTransactionFiles
 } = require('../../document/services/documentFileService')
+const {
+  registerTemplatesForTransaction
+} = require('../../document/services/documentInstanceService')
 const workflowClient = require('../../../../core/shared/clients/workflow/workflowClient')
 const { startWorkflow } = require('../../../workflow/taskCamunda/services/startWorkflowService')
 const db = require('../../../../entities')
@@ -585,6 +588,7 @@ async function submitTransaction (
       }
 
       let registeredFiles = []
+      let registeredTemplates = []
       const processCode = current.code
       let storedData = null
 
@@ -608,10 +612,19 @@ async function submitTransaction (
           })
         }
 
+        if (Array.isArray(normalized.templates) && normalized.templates.length) {
+          registeredTemplates = await registerTemplatesForTransaction({
+            transactionId: current.id,
+            templates: normalized.templates,
+            dbTransaction
+          })
+        }
+
         storedData = buildStoredSubmissionData(
           {
             ...normalized,
-            files: registeredFiles
+            files: registeredFiles,
+            templates: registeredTemplates
           },
           {
             stageName: stage.name,

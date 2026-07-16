@@ -1359,6 +1359,12 @@ router.post(
 
  *
 
+ *       **عند الرفض (`decision = reject`):** `note` إلزامي — يُرسل إشعار لـ `transaction.user_id`:
+
+ *       «لقد تم رفض معاملتك (اسم المعاملة) بسبب (note)» — Firebase للمواطن (CITIZEN)، WebSocket للموظف.
+
+ *
+
  *       **`idempotency_key`:** يُولَّد من السيرفر — لا ترسله (يُعاد في `data.idempotency_key`)
 
  *

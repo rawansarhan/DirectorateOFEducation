@@ -2,19 +2,14 @@
 
 /**
  * =============================================================================
- * documentInstanceService — ربط templates بالمعاملة (USER_TASK)
+ * documentInstanceService — ربط قيم القوالب بالمعاملة (USER_TASK)
  * =============================================================================
  *
- * عند complete / submit-documents/complete مع:
+ * عند complete / submit مع:
  *   templates: [{ id: 1, values: { employee: "روان", job: "..." } }]
  *
- * 1) ينشئ صفاً في document_instance:
- *      - transaction_id, document_template_id (= id)
- *      - data_json = values
- *      - generated_pdf_path = null  ← يُملأ لاحقاً من GENERATE_PDF
- *
- * 2) يُخزَّن في transaction.data[stageCode].templates:
- *      { id, document_instance_id, values }
+ * يحفظ القيم فقط في transaction.data[stage].templates — بدون إنشاء document_instance.
+ * صف document_instance يُنشأ لاحقاً فقط عند نجاح GENERATE_PDF.
  *
  * APIs: POST /workflow/tasks/{id}/complete
  *       POST /workflow/tasks/{id}/submit-documents/complete
@@ -49,49 +44,22 @@ async function registerTemplateForTransaction ({
     )
   }
 
+  // لا نُنشئ document_instance هنا — فقط إن وُجدت نسخة ناجحة مسبقاً نربط معرّفها
   const existing = await documentInstanceRepository.findByTransactionAndTemplate(
     transactionId,
     numericTemplateId
   )
 
-  // تحديث values إذا أُعيد إرسال نفس القالب — نحافظ على PDF إن وُجد
-  if (existing) {
-    await documentInstanceRepository.updateInstance(
-      existing,
-      {
-        data_json: values,
-        generated_pdf_path: existing.generated_pdf_path,
-        status: existing.generated_pdf_path ? existing.status : 'generated'
-      },
-      { transaction: dbTransaction }
-    )
+  const existingId =
+    existing?.generated_pdf_path
+      ? existing.id
+      : null
 
   return {
     id: numericTemplateId,
     id_template: numericTemplateId,
-    document_instance_id: existing.id,
-    id_document_instance: existing.id,
-    values,
-    value: values
-  }
-  }
-
-  const instance = await documentInstanceRepository.create(
-    {
-      transaction_id: transactionId,
-      document_template_id: numericTemplateId,
-      data_json: values,
-      generated_pdf_path: null,
-      status: 'generated'
-    },
-    { transaction: dbTransaction }
-  )
-
-  return {
-    id: numericTemplateId,
-    id_template: numericTemplateId,
-    document_instance_id: instance.id,
-    id_document_instance: instance.id,
+    document_instance_id: existingId,
+    id_document_instance: existingId,
     values,
     value: values
   }

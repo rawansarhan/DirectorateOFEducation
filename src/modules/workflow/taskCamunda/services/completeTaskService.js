@@ -88,7 +88,7 @@ const ROOT_SUBMISSION_DATA_KEYS = [
 function shouldPersistAuthSubmissionAtRoot ({ isAutoComplete, stage }) {
   return Boolean(isAutoComplete && stage?.auth_type === 'AUTH')
 }
-
+//احذ البيانات الاساسية للمعاملة
 function buildRootSubmissionSnapshot (transactionData = {}) {
   const snapshot = {}
 
@@ -100,28 +100,25 @@ function buildRootSubmissionSnapshot (transactionData = {}) {
 
   return snapshot
 }
-
-function buildAutoCompleteAuthPayload (transactionData = {}) {
+// هذه الدالة ل
+async function buildAutoCompleteAuthPayload (transactionData = {}) {
   const snapshot = buildRootSubmissionSnapshot(transactionData)
+  const {
+    rebuildTemplateItemsForResubmission
+  } = require('../../validators/templateSubmissionValidator')
 
   return {
     form_id: snapshot.form_id,
     form_name: snapshot.form_name,
     widgets: Array.isArray(snapshot.widgets) ? snapshot.widgets : [],
-    templates: (snapshot.templates || [])
-      .map(item => ({
-        id: item.id_template ?? item.id ?? null,
-        value: item.value ?? {}
-      }))
-      .filter(item => item.id != null),
+    templates: await rebuildTemplateItemsForResubmission(snapshot.templates || []),
     note: snapshot.note ?? '',
     decision: snapshot.decision ?? 'submit'
   }
 }
 
 /**
- * Structured step logger for the complete-task workflow.
- * Keeps logs grep-friendly: [CompleteTask] STEP | key=value ...
+هذه الدالة للتسجيل خطوة بخطوة بشكل منظم 
  */
 function logStep (step, meta = {}) {
   const details = Object.entries(meta)
@@ -133,8 +130,7 @@ function logStep (step, meta = {}) {
 }
 
 /**
- * Runs workflow actions (email, PDF, notification, etc.) for the current stage.
- * Each action is resolved through ActionStrategyFactory and executed sequentially.
+
  */
 async function executeActions (actions, context) {
   logStep('ACTIONS_START', {
@@ -645,7 +641,8 @@ async function completeTaskCore ({
     stage?.auth_type === 'AUTH' &&
     !Array.isArray(payload?.widgets)
   ) {
-    const authPayload = buildAutoCompleteAuthPayload(transaction.data || {})
+  
+    const authPayload = await buildAutoCompleteAuthPayload(transaction.data || {})
 
     if (!authPayload.widgets.length) {
       const error = new Error(
@@ -680,6 +677,12 @@ async function completeTaskCore ({
     }
   }
 
+  if (isReject && !String(normalizedPayload.note ?? payload.note ?? '').trim()) {
+    const error = new Error('note مطلوب عند decision = reject')
+    error.code = 'VALIDATION_ERROR'
+    throw error
+  }
+
   let signingRequest = null
 
   // ------------------------------------------------------------------
@@ -702,12 +705,6 @@ async function completeTaskCore ({
       throw new Error(
         'decision is required when completing a task with digital signature'
       )
-    }
-
-    if (isReject && !String(payload.rejection_reason || '').trim()) {
-      const error = new Error('rejection_reason is required when decision is reject')
-      error.code = 'VALIDATION_ERROR'
-      throw error
     }
 
     signingRequest = {
@@ -776,16 +773,31 @@ async function completeTaskCore ({
   }
 
   if (Array.isArray(normalizedPayload.templates) && normalizedPayload.templates.length) {
-    logStep('TEMPLATES_REGISTER', { count: normalizedPayload.templates.length })
+    const skipTemplateRegistration =
+      isAutoComplete &&
+      stage?.auth_type === 'AUTH' &&
+      Array.isArray(transaction.data?.templates) &&
+      transaction.data.templates.some(
+        item => item?.id_document_instance != null || item?.document_instance_id != null
+      )
 
-    const registeredTemplates = await registerTemplatesForTransaction({
-      transactionId: transaction.id,
-      templates: normalizedPayload.templates
-    })
+    if (skipTemplateRegistration) {
+      logStep('TEMPLATES_REGISTER_SKIP', {
+        reason: 'auth_auto_complete_already_registered'
+      })
+      collectedTemplates.push(...transaction.data.templates)
+    } else {
+      logStep('TEMPLATES_REGISTER', { count: normalizedPayload.templates.length })
 
-    collectedTemplates.push(...registeredTemplates)
+      const registeredTemplates = await registerTemplatesForTransaction({
+        transactionId: transaction.id,
+        templates: normalizedPayload.templates
+      })
 
-    logStep('TEMPLATES_REGISTERED', { count: registeredTemplates.length })
+      collectedTemplates.push(...registeredTemplates)
+
+      logStep('TEMPLATES_REGISTERED', { count: registeredTemplates.length })
+    }
   }
 
   const stageSnapshot = buildStoredStageData(
@@ -808,7 +820,12 @@ async function completeTaskCore ({
   )
 
   if (isReject) {
-    stageSnapshot.rejection_reason = String(payload.rejection_reason).trim()
+    const rejectNote = String(
+      normalizedPayload.note ?? payload.note ?? ''
+    ).trim()
+    stageSnapshot.rejection_reason = String(
+      payload.rejection_reason || rejectNote
+    ).trim()
   }
 
   logStep('STAGE_SNAPSHOT_BUILT', {
@@ -1115,12 +1132,11 @@ async function completeTaskCore ({
       workflowStatus
     })
 
-    // Fire-and-forget Firebase push to the transaction owner (applicant).
     notifyTransactionOwnerOnReject({
       transaction,
       stage,
       note: stageSnapshot.note || '',
-      rejectionReason: stageSnapshot.rejection_reason || '',
+      processDefinitionId: processInstance.process_definition_id,
       processInstanceId: processInstance.id,
       sentByUserId: userId
     }).catch(() => {})

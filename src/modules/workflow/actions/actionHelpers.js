@@ -31,6 +31,11 @@ const sendNotificationPayloadSchema = Joi.object({
     'number.base': 'SEND_NOTIFICATION payload.role_id يجب أن يكون رقماً',
     'number.positive': 'SEND_NOTIFICATION payload.role_id يجب أن يكون رقماً موجباً'
   }),
+  // مُستلِم مباشر: user_id (مثال payload.to = 12) → WebSocket دائماً
+  to_user_id: Joi.number().integer().positive().allow(null).optional().messages({
+    'number.base': 'SEND_NOTIFICATION payload.to يجب أن يكون رقماً (user_id)',
+    'number.positive': 'SEND_NOTIFICATION payload.to يجب أن يكون رقماً موجباً (user_id)'
+  }),
   // يُحسب لاحقاً من (organization_id, department_id, role_id) في الخدمة
   to_organization_department_roles_id: Joi.number().integer().positive().allow(null).optional().messages({
     'number.base': 'SEND_NOTIFICATION payload.to_organization_department_roles_id يجب أن يكون رقماً',
@@ -50,12 +55,18 @@ const sendNotificationPayloadSchema = Joi.object({
       value.department_id != null ||
       value.role_id != null
 
+    const hasDirectUser = value.to_user_id != null
+
     const hasGroupKey =
       (typeof value.to_camunda_group_key === 'string' && value.to_camunda_group_key.trim() !== '') ||
       (typeof value.to_organization_department_roles_camunda_group_key === 'string' &&
         value.to_organization_department_roles_camunda_group_key.trim() !== '')
 
     const hasResolvedRoleId = value.to_organization_department_roles_id != null
+
+    if (hasDirectUser) {
+      return value
+    }
 
     // إذا بدأ بتحديد المُستلِم بالدور، لازم الثلاثة معاً
     if (hasRoleParts) {
@@ -78,7 +89,7 @@ const sendNotificationPayloadSchema = Joi.object({
   })
   .messages({
     'any.custom.noTarget':
-      'SEND_NOTIFICATION payload يحتاج إما (organization_id, department_id, role_id) أو to_camunda_group_key (مثل "AUTH")',
+      'SEND_NOTIFICATION payload يحتاج إما to (user_id) أو (organization_id, department_id, role_id) أو to_camunda_group_key (مثل "AUTH")',
     'any.custom.incompleteRole':
       'SEND_NOTIFICATION: عند تحديد المُستلِم بالدور يجب إرسال organization_id و department_id و role_id معاً'
   })
@@ -97,10 +108,15 @@ const generatePdfPayloadSchema = Joi.object({
 function normalizeActionPayload (action = {}) {
   const payload = action.payload || {}
 
-  const roleId =
+  const toUserId =
+    action.to_user_id ??
+    payload.to_user_id ??
     action.to ??
-    action.to_organization_department_roles_id ??
     payload.to ??
+    null
+
+  const roleId =
+    action.to_organization_department_roles_id ??
     payload.to_organization_department_roles_id ??
     null
 
@@ -116,7 +132,9 @@ function normalizeActionPayload (action = {}) {
     organization_id: action.organization_id ?? payload.organization_id ?? null,
     department_id: action.department_id ?? payload.department_id ?? null,
     role_id: action.role_id ?? payload.role_id ?? null,
+    to_user_id: toUserId,
     to_organization_department_roles_id: roleId,
+    to_camunda_group_key: camundaGroupKey,
     to_organization_department_roles_camunda_group_key: camundaGroupKey,
     title: action.title ?? payload.title ?? null,
     subject: action.subject ?? payload.subject ?? null,

@@ -39,10 +39,19 @@ async function updateInstance (instance, data, options = {}) {
   return instance.update(data, options)
 }
 
+async function destroyInstance (instance, options = {}) {
+  if (!instance) {
+    return
+  }
+
+  await instance.destroy(options)
+}
+
 module.exports = {
   create,
   findById,
   findByTransactionAndTemplate,
   findAllByTransactionId,
-  updateInstance
+  updateInstance,
+  destroyInstance
 }

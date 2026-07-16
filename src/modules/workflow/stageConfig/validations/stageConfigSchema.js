@@ -147,12 +147,18 @@ const stageActionSchema = Joi.object({
         'number.base': 'SEND_NOTIFICATION payload.role_id يجب أن يكون رقماً',
         'number.positive': 'SEND_NOTIFICATION payload.role_id يجب أن يكون رقماً موجباً'
       }),
+      // مُستلِم مباشر: user_id (payload.to) → WebSocket
+      to: Joi.number().integer().positive().optional().messages({
+        'number.base': 'SEND_NOTIFICATION payload.to يجب أن يكون رقماً (user_id)',
+        'number.positive': 'SEND_NOTIFICATION payload.to يجب أن يكون رقماً موجباً (user_id)'
+      }),
       // يُحسب لاحقاً من (organization_id, department_id, role_id) في الخدمة
       to_organization_department_roles_id: Joi.number().integer().positive().optional(),
       to_camunda_group_key: Joi.string().trim().max(64).optional(),
       to_organization_department_roles_camunda_group_key: Joi.string().trim().max(64).optional()
     })
       .or(
+        'to',
         'role_id',
         'to_organization_department_roles_id',
         'to_camunda_group_key',
@@ -161,7 +167,7 @@ const stageActionSchema = Joi.object({
       .and('organization_id', 'department_id', 'role_id')
       .messages({
         'object.missing':
-          'SEND_NOTIFICATION يحتاج إما (organization_id, department_id, role_id) أو to_camunda_group_key (مثل AUTH لصاحب المعاملة)',
+          'SEND_NOTIFICATION يحتاج إما to (user_id) أو (organization_id, department_id, role_id) أو to_camunda_group_key (مثل AUTH لصاحب المعاملة)',
         'object.and':
           'SEND_NOTIFICATION: عند تحديد المُستلِم بالدور يجب إرسال organization_id و department_id و role_id معاً'
       }),

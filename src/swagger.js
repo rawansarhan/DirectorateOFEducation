@@ -1772,7 +1772,7 @@ const swaggerOptions = {
           value: {
             success: false,
             status_code: 400,
-            message: 'rejection_reason مطلوب عند decision = reject',
+            message: 'note مطلوب عند decision = reject',
             error: 'VALIDATION_ERROR',
             data: null
           }
@@ -2910,8 +2910,14 @@ const swaggerOptions = {
                 },
                 rejection_reason: {
                   type: 'string',
+                  example: null,
+                  nullable: true,
+                  description: 'اختياري — سبب الرفض (يُفضَّل استخدام note)'
+                },
+                note: {
+                  type: 'string',
                   example: 'المستندات غير مكتملة',
-                  description: 'مطلوب عند decision = reject'
+                  description: 'مطلوب عند decision = reject — يُرسل كإشعار لصاحب المعاملة'
                 },
                 signature: {
                   $ref: '#/components/schemas/StageSubmissionSignature'
@@ -3620,8 +3626,7 @@ const swaggerOptions = {
             ],
             templates: [],
             decision: 'reject',
-            rejection_reason: 'المستندات غير مكتملة',
-            note: '',
+            note: 'المستندات غير مكتملة',
             signature: {
               challenge_id: '3ad67615-8c89-4a5e-a758-217e9d85b6e6',
               signature:

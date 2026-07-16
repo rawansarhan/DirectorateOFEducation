@@ -95,8 +95,9 @@ const { createStageConfig , getJsonProcess} = require('../controllers/stageConfi
  *                       - message (مطلوب): نص الإشعار
  *                       - title (اختياري): عنوان الإشعار
  *                       - type (اختياري): نوع الإشعار في جدول notifications
- *                       - to (مطلوب أحدها): organization_department_roles_id لإرسال لموظفي الدور
- *                       - to_camunda_group_key (مطلوب أحدها): AUTH لإرسال لصاحب المعاملة
+ *                       - to (مطلوب أحدها): user_id مباشر — WebSocket دائماً (مثال: 12)
+ *                       - to_camunda_group_key (مطلوب أحدها): AUTH لصاحب المعاملة — Firebase دائماً
+ *                       - أو (organization_id, department_id, role_id) لموظفي الدور — WebSocket
  *
  *                     assignments:
  *                       type: array

@@ -153,7 +153,72 @@ async function validateAndNormalizeTemplates (templates = []) {
   return normalized
 }
 
+  function emptyStoredWidgetValue (widget) {
+    if (widget?.widget_type === 'file_picker') {
+      return widget?.data?.allow_multiple === false ? '' : []
+    }
+
+    if (widget?.widget_type === 'check_list') {
+      return []
+    }
+
+    return ''
+  }
+
+/**
+ * يعيد بناء templates[] بالشكل المتوقع في الطلب ({ id, widgets[] })
+ * من الشكل المخزّن في transaction.data ({ id_template, value }).
+ * يُستخدم عند auto-complete لمرحلة AUTH بعد submit.
+ */
+async function rebuildTemplateItemsForResubmission (storedTemplates = []) {
+  const rebuilt = []
+
+  for (const item of storedTemplates || []) {
+    const templateId = Number(
+      item?.id_template ?? item?.id ?? item?.template_id
+    )
+
+    if (!Number.isInteger(templateId) || templateId <= 0) {
+      continue
+    }
+
+    const template = await documentTemplateRepository.findById(templateId)
+
+    if (!template || template.is_active !== true) {
+      throw createTemplateValidationError(
+        `قالب الوثيقة (id=${templateId}) غير موجود أو غير نشط`
+      )
+    }
+
+    const values = item.values ?? item.value ?? {}
+    const configWidgets = Array.isArray(template.config_json?.widgets)
+      ? template.config_json.widgets
+      : []
+
+    rebuilt.push({
+      id: templateId,
+      widgets: configWidgets.map(widget => {
+        const widgetId = widget?.data?.id
+        const hasStoredValue =
+          widgetId != null &&
+          Object.prototype.hasOwnProperty.call(values, widgetId)
+
+        return {
+          widget_type: widget.widget_type,
+          data: widget.data,
+          value: hasStoredValue
+            ? values[widgetId]
+            : emptyStoredWidgetValue(widget)
+        }
+      })
+    })
+  }
+
+  return rebuilt
+}
+
 module.exports = {
   validateAndNormalizeTemplates,
-  validateTemplateWidgetsAgainstConfig
+  validateTemplateWidgetsAgainstConfig,
+  rebuildTemplateItemsForResubmission
 }

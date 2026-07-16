@@ -77,7 +77,16 @@ function buildStrictFormPayloadSchema (options = {}) {
         'any.required': 'widgets[] مطلوب — أرسل [] أو config_json + value لكل widget',
         'array.base': 'widgets[] مطلوب'
       }),
-    note: Joi.string().max(10000).allow('', null).default('')
+    note: includeDecision
+      ? Joi.when('decision', {
+        is: Joi.valid('reject', 'rejected'),
+        then: Joi.string().trim().min(1).max(10000).required().messages({
+          'string.empty': 'note مطلوب عند decision = reject',
+          'any.required': 'note مطلوب عند decision = reject'
+        }),
+        otherwise: Joi.string().max(10000).allow('', null).default('')
+      })
+      : Joi.string().max(10000).allow('', null).default('')
   }
 
   if (includeTemplates) {
@@ -110,11 +119,7 @@ function buildStrictFormPayloadSchema (options = {}) {
   }
 
   if (options.allowRejectionReason) {
-    shape.rejection_reason = Joi.when('decision', {
-      is: Joi.valid('reject', 'rejected'),
-      then: Joi.string().trim().min(1).max(5000).required(),
-      otherwise: Joi.string().max(5000).allow('', null).optional()
-    })
+    shape.rejection_reason = Joi.string().max(5000).allow('', null).optional()
   }
 
   return Joi.object(shape).unknown(false)
