@@ -53,7 +53,8 @@ const LIST_INCLUDES = [
       'first_name',
       'father_name',
       'last_name',
-      'created_at'
+      'created_at',
+      'data'
     ],
     include: [
       {
@@ -171,6 +172,95 @@ async function getUserIdsForStageIds (stageIds = []) {
   })
 
   return [...new Set(userRoles.map(item => item.user_id))]
+}
+
+async function getUserIdsForOrgDeptRoleIds (orgDeptRoleIds = []) {
+  const roleIds = [
+    ...new Set(
+      orgDeptRoleIds
+        .map(Number)
+        .filter(id => Number.isInteger(id) && id > 0)
+    )
+  ]
+
+  if (!roleIds.length) {
+    return []
+  }
+
+  const userRoles = await db.UserRoleAssignment.findAll({
+    where: {
+      organization_department_roles_id: {
+        [Op.in]: roleIds
+      },
+      is_active: true
+    },
+    attributes: ['user_id'],
+    raw: true
+  })
+
+  return [...new Set(userRoles.map(item => item.user_id))]
+}
+
+async function getRunningInstancesForAssigneeRoute (roleIds = []) {
+  const normalizedRoleIds = [
+    ...new Set(
+      roleIds.map(Number).filter(id => Number.isInteger(id) && id > 0)
+    )
+  ]
+
+  if (!normalizedRoleIds.length) {
+    return []
+  }
+
+  const includes = buildRunningListIncludes().map(include => {
+    if (include.as !== 'transaction') {
+      return include
+    }
+
+    return {
+      ...include,
+      where: {
+        ...include.where,
+        data: {
+          [Op.contains]: { __assignee_route: {} }
+        }
+      }
+    }
+  })
+
+  const instances = await db.ProcessInstance.findAll({
+    where: {
+      status: 'running'
+    },
+    attributes: [
+      'id',
+      'process_definition_id',
+      'camunda_process_instance_id',
+      'current_stage_id',
+      'task_lock_user_id',
+      'task_lock_task_id',
+      'task_lock_expires_at',
+      'created_at'
+    ],
+    include: includes,
+    order: [
+      [
+        { model: db.ProcessDefinition, as: 'process_definition' },
+        'priority',
+        'DESC'
+      ],
+      ['created_at', 'ASC']
+    ],
+    limit: MAX_RUNNING_FETCH
+  })
+
+  return instances.filter(instance => {
+    const routeIds =
+      instance.transaction?.data?.__assignee_route
+        ?.organization_department_roles_ids || []
+
+    return routeIds.some(id => normalizedRoleIds.includes(Number(id)))
+  })
 }
 
 async function getRunningInstancesForProcessDefinitions ({
@@ -853,6 +943,8 @@ module.exports = {
   getUserRoleIds,
   getAccessibleStageContext,
   getUserIdsForStageIds,
+  getUserIdsForOrgDeptRoleIds,
+  getRunningInstancesForAssigneeRoute,
   getRunningInstancesForProcessDefinitions,
   getRunningInstancesForStages,
   getTerminalInstancesForStages,

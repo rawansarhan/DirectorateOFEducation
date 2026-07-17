@@ -9,7 +9,7 @@ const {
   sendNotificationSuccess,
   sendNotificationError
 } = require('../utils/notificationResponseHelper')
-const { parsePaginationQuery } = require('../../../../core/utils/pagination')
+const { parseCursorPaginationQuery } = require('../../../../core/utils/pagination')
 const { createHttpError, HTTP_STATUS } = require('../../../../core/middleware/httpStatusCodes')
 const { MESSAGES } = require('../utils/notificationErrors')
 
@@ -27,7 +27,7 @@ function parseNotificationId (rawId) {
 
 async function getMyNotificationsController (req, res) {
   try {
-    const { page, limit, offset } = parsePaginationQuery(req.query, {
+    const { limit, cursor, decodedCursor } = parseCursorPaginationQuery(req.query, {
       defaultLimit: 10,
       maxLimit: 100
     })
@@ -36,11 +36,10 @@ async function getMyNotificationsController (req, res) {
 
     const result = await getMyNotifications({
       userId: req.user.id,
-      page,
       limit,
-      offset,
-      unreadOnly,
-      type: req.query.type
+      cursor,
+      decodedCursor,
+      unreadOnly
     })
 
     return sendNotificationSuccess(res, result.data, result.message)

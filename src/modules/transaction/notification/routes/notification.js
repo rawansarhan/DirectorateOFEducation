@@ -16,7 +16,8 @@ const { authMiddleware } = require('../../../../core/middleware/authMiddleware')
  *   get:
  *     summary: List authenticated user's notifications
  *     description: |
- *       يعرض إشعارات المستخدم المسجّل (المستلم) مع pagination.
+ *       يعرض إشعارات المستخدم المسجّل (المستلم) مع **Cursor Pagination**.
+ *       استخدم `pagination.next_cursor` كـ `cursor` للصفحة التالية.
  *
  *       **نجاح:** `{ success, status_code, message, data }`
  *       **خطأ:** `{ success, status_code, message, error, data: null }`
@@ -25,11 +26,10 @@ const { authMiddleware } = require('../../../../core/middleware/authMiddleware')
  *       - bearerAuth: []
  *     parameters:
  *       - in: query
- *         name: page
+ *         name: cursor
  *         schema:
- *           type: integer
- *           minimum: 1
- *           default: 1
+ *           type: string
+ *         description: من `pagination.next_cursor` للصفحة التالية
  *       - in: query
  *         name: limit
  *         schema:
@@ -42,11 +42,6 @@ const { authMiddleware } = require('../../../../core/middleware/authMiddleware')
  *         schema:
  *           type: boolean
  *         description: عند true يُعرض فقط غير المقروء
- *       - in: query
- *         name: type
- *         schema:
- *           type: string
- *         description: فلترة حسب نوع الإشعار (مثل transaction_rejected)
  *     responses:
  *       200:
  *         description: تم جلب الإشعارات بنجاح
@@ -66,8 +61,41 @@ const { authMiddleware } = require('../../../../core/middleware/authMiddleware')
  *                             type: object
  *                         pagination:
  *                           type: object
+ *                           properties:
+ *                             limit:
+ *                               type: integer
+ *                               example: 10
+ *                             cursor:
+ *                               type: string
+ *                               nullable: true
+ *                             next_cursor:
+ *                               type: string
+ *                               nullable: true
+ *                             has_next:
+ *                               type: boolean
+ *                             has_prev:
+ *                               type: boolean
  *                         unread_count:
  *                           type: integer
+ *             example:
+ *               success: true
+ *               status_code: 200
+ *               message: تم جلب الإشعارات بنجاح
+ *               data:
+ *                 items:
+ *                   - id: 42
+ *                     title: رفض معاملة
+ *                     message: لقد تم رفض معاملتك بسبب نقص الوثائق
+ *                     type: transaction_rejected
+ *                     is_read: false
+ *                     created_at: '2026-07-17T10:00:00.000Z'
+ *                 pagination:
+ *                   limit: 10
+ *                   cursor: null
+ *                   next_cursor: eyJrIjoibm90aWYiLCJ0IjoiMjAyNi0wNy0xN1QxMDowMDowMC4wMDBaIiwiaWQiOjQyfQ
+ *                   has_next: true
+ *                   has_prev: false
+ *                 unread_count: 3
  *       400:
  *         content:
  *           application/json:

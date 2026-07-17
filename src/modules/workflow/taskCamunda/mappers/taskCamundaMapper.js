@@ -37,7 +37,8 @@ function toTaskDetails ({
   previousStagesData,
   activeStage = null,
   currentStageConfig = null,
-  processDefinition = null
+  processDefinition = null,
+  assignments = null
 }) {
   const resolvedStage = activeStage || processInstance.current_stage
   const resolvedConfig =
@@ -52,7 +53,8 @@ function toTaskDetails ({
     previousStagesData,
     activeStage: resolvedStage,
     currentStageConfig: resolvedConfig,
-    processDefinition
+    processDefinition,
+    assignments
   })
 }
 

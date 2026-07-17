@@ -28,6 +28,9 @@ const {
   TASK_DETAILS_CACHE_TTL_SECONDS,
   CURRENT_STAGE_CACHE_TTL_SECONDS
 } = require('../../../../core/config/env')
+const {
+  buildAssignmentsResponseFromConfig
+} = require('./taskAssignmentRoutingService')
 
 function createTaskDetailsError (code, message) {
   const error = new Error(message)
@@ -203,14 +206,18 @@ async function loadTaskDetailsContext ({ taskId, userId }) {
       : []
   )
 
+  const configJson = stageConfig?.config_json || {}
+  const assignments = buildAssignmentsResponseFromConfig(configJson, '')
+
   const details = toTaskDetails({
     task,
     processInstance,
     transaction,
     previousStagesData,
     activeStage,
-    currentStageConfig: stageConfig?.config_json || {},
-    processDefinition: processInstance.process_definition
+    currentStageConfig: configJson,
+    processDefinition: processInstance.process_definition,
+    assignments
   })
 
   const task_lock = buildTaskLockStatus(processInstance, task.id, userId)

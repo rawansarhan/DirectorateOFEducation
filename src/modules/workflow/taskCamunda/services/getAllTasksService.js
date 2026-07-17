@@ -31,6 +31,9 @@ const {
   normalizeProcessPriority,
   formatTransactionDate
 } = require('../utils/employeeTaskFormatters')
+const {
+  userMatchesAssigneeRoute
+} = require('./taskAssignmentRoutingService')
 
 const EMPLOYEE_STATUS_FILTERS = {
   ALL_ACTIVE: 'all_active',
@@ -189,6 +192,7 @@ async function syncCurrentStageIfNeeded (instance, activeStage) {
 async function matchInstancesToUserStages ({
   instances,
   stageIds,
+  roleIds = [],
   taskMap,
   completedStageCodesMap = new Map()
 }) {
@@ -203,7 +207,21 @@ async function matchInstancesToUserStages ({
 
     const activeStage = await resolveActiveStageForInstance(instance, activeTask)
 
-    if (!activeStage || !stageIds.includes(activeStage.id)) {
+    if (!activeStage) {
+      continue
+    }
+
+    const routeMatch = userMatchesAssigneeRoute(
+      roleIds,
+      instance.transaction?.data,
+      activeStage.code
+    )
+
+    if (routeMatch === false) {
+      continue
+    }
+
+    if (routeMatch !== true && !stageIds.includes(activeStage.id)) {
       continue
     }
 
@@ -233,11 +251,10 @@ async function loadEmployeeStageContext (userId) {
 
   const context = await employeeTaskRepository.getAccessibleStageContext(roleIds)
 
-  if (!context.stageIds.length) {
-    return null
+  return {
+    ...context,
+    roleIds
   }
-
-  return context
 }
 //هذه الدالة لتحقق من المهمة الحالية اذا كانت اكبر من المهمة السابقة 
 function isActivePairAfterCursor (pair, cursor) {
@@ -289,6 +306,7 @@ function buildUserStageCursor (row) {
 async function getRunningTasks ({
   userId,
   stageIds,
+  roleIds = [],
   processDefinitionIds,
   limit,
   employeeStatusFilter = EMPLOYEE_STATUS_FILTERS.ALL_ACTIVE,
@@ -297,10 +315,29 @@ async function getRunningTasks ({
   page = null,
   offset = null
 }) {
-  const instances =
-    await employeeTaskRepository.getRunningInstancesForProcessDefinitions({
-      processDefinitionIds
-    })
+  const instanceMap = new Map()
+
+  if (processDefinitionIds?.length) {
+    const byProcess =
+      await employeeTaskRepository.getRunningInstancesForProcessDefinitions({
+        processDefinitionIds
+      })
+
+    for (const instance of byProcess) {
+      instanceMap.set(instance.id, instance)
+    }
+  }
+
+  if (roleIds.length) {
+    const byRoute =
+      await employeeTaskRepository.getRunningInstancesForAssigneeRoute(roleIds)
+
+    for (const instance of byRoute) {
+      instanceMap.set(instance.id, instance)
+    }
+  }
+
+  const instances = [...instanceMap.values()]
 
   if (!instances.length) {
     return page != null
@@ -328,6 +365,7 @@ async function getRunningTasks ({
   const matchedPairs = await matchInstancesToUserStages({
     instances,
     stageIds,
+    roleIds,
     taskMap,
     completedStageCodesMap
   })
@@ -648,7 +686,7 @@ async function loadActiveEmployeeTasks ({
 }) {
   const context = await loadEmployeeStageContext(userId)
 
-  if (!context) {
+  if (!context || (!context.stageIds.length && !context.roleIds.length)) {
     return page != null
       ? emptyPaginatedResult({ page, limit })
       : emptyCursorPaginatedResult({ limit, cursor })
@@ -657,6 +695,7 @@ async function loadActiveEmployeeTasks ({
   return getRunningTasks({
     userId,
     stageIds: context.stageIds,
+    roleIds: context.roleIds,
     processDefinitionIds: context.processDefinitionIds,
     page,
     limit,

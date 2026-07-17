@@ -1,12 +1,16 @@
 'use strict'
 
 const orgDeptRolesClient = require('../../../../core/shared/clients/organization/orgDeptRolesClient')
+const orgDeptRoleRepository = require('../../../organization/repositories/orgDeptRoleRepository')
 
 const {
   createStageConfigSchema
 } = require('../validations/stageConfigValidations')
 
-const { validateStageConfigJson } = require('../validations/stageConfigSchema')
+const {
+  validateStageConfigJson,
+  ORG_DEP_ROLE_ASSIGNMENT_WIDGET_ID
+} = require('../validations/stageConfigSchema')
 
 const stageRepository = require('../../processDefinition/repositories/stageRepository')
 
@@ -28,6 +32,7 @@ const {
   getOrLoad,
   KEYS,
   invalidateStageConfig,
+  invalidateStageAssignments,
   invalidateProcessDefinitionDetails
 } = require('../../../../core/cache/apiCacheService')
 
@@ -56,8 +61,27 @@ function throwBusinessError (message, statusCode = HTTP_STATUS.BAD_REQUEST) {
   throw err
 }
 
-// 0 / '0' تعني "لا يوجد" عند البحث عن الدور (مؤسسة/قسم عامّ)
-const normalizeOrgId = (v) => (v === 0 || v === '0' ? null : v)
+// 0 / '0' / null تعني "لا يوجد" عند البحث عن الدور (مؤسسة/قسم عامّ)
+const normalizeOrgId = (v) => (v === 0 || v === '0' || v == null ? null : v)
+
+function hasDynamicOrgDepRoleDestination (configJson = {}) {
+  const widget = configJson?.assignments
+  return (
+    widget?.widget_type === 'dropdown' &&
+    widget?.data?.id === ORG_DEP_ROLE_ASSIGNMENT_WIDGET_ID
+  )
+}
+
+function isNullStageAssignment (assignment = {}) {
+  const organizationId = normalizeOrgId(assignment.organization_id)
+  const departmentId = normalizeOrgId(assignment.department_id)
+  const roleId =
+    assignment.role_id === 0 || assignment.role_id === '0' || assignment.role_id == null
+      ? null
+      : Number(assignment.role_id)
+
+  return organizationId == null && departmentId == null && roleId == null
+}
 
 async function assertFilePickerTypeDocsExist (configJson = {}) {
   for (const widget of configJson.widgets || []) {
@@ -85,6 +109,21 @@ async function assertFilePickerTypeDocsExist (configJson = {}) {
     if (typeDoc.is_active === false) {
       throwBusinessError(
         `الودجت "${widgetId}": نوع الوثيقة (type_doc_id=${typeDocId}) غير نشط`
+      )
+    }
+  }
+}
+
+async function assertAssignmentsOptionsExist (stageId, assignmentsWidget) {
+  const options = assignmentsWidget?.data?.options || []
+
+  for (const option of options) {
+    const key = String(option.key || '').trim()
+    const orgDeptRole = await orgDeptRoleRepository.findActiveByCamundaGroupKey(key)
+
+    if (!orgDeptRole) {
+      throwBusinessError(
+        `المرحلة ${stageId}: config_json.assignments — الخيار key="${key}" لا يطابق أي camunda_group_key نشط في organization_department_roles`
       )
     }
   }
@@ -241,15 +280,36 @@ async function createStageConfigService (data) {
 
     if (stage.type === 'USER_TASK') {
       const assignments = item.assignments || []
+      const dynamicDestination = hasDynamicOrgDepRoleDestination(item.config_json)
 
       if (!assignments.length) {
         throwBusinessError(
-          `المرحلة ${item.stage_id} (USER_TASK): يجب تحديد assignments (مؤسسة/قسم/دور)`
+          dynamicDestination
+            ? `المرحلة ${item.stage_id} (USER_TASK): عند وجود config_json.assignments أرسل assignments: [{ organization_id: null, department_id: null, role_id: null }]`
+            : `المرحلة ${item.stage_id} (USER_TASK): يجب تحديد assignments (مؤسسة/قسم/دور)`
+        )
+      }
+
+      if (dynamicDestination) {
+        const allNull = assignments.every(isNullStageAssignment)
+
+        if (!allNull) {
+          throwBusinessError(
+            `المرحلة ${item.stage_id}: عند وجود config_json.assignments (OrgDepRole) يجب أن تكون assignments كلها null — التوجيه للـ USER_TASK التالية يتم عبر POST /complete`
+          )
+        }
+      } else if (assignments.some(isNullStageAssignment)) {
+        throwBusinessError(
+          `المرحلة ${item.stage_id}: assignments بـ null مسموحة فقط مع config_json.assignments (OrgDepRole)`
         )
       }
     }
 
     await assertFilePickerTypeDocsExist(item.config_json)
+
+    if (item.config_json?.assignments?.data?.options?.length) {
+      await assertAssignmentsOptionsExist(item.stage_id, item.config_json.assignments)
+    }
 
     // =================================
     // CONFIG
@@ -266,39 +326,40 @@ async function createStageConfigService (data) {
 
     if (stage.type === 'USER_TASK') {
       const assignments = item.assignments || []
+      const dynamicDestination = hasDynamicOrgDepRoleDestination(item.config_json)
 
-      // =============================
-      // CALL ORGANIZATION SERVICE
-      // =============================
+      // توجيه ديناميكي عبر OrgDepRole في complete → لا تُحفظ stage_assignments
+      if (!dynamicDestination) {
+        for (const a of assignments) {
+          if (isNullStageAssignment(a)) {
+            continue
+          }
 
-for (const a of assignments) {
-  const orgDeptRole = await orgDeptRolesClient.findOrgDeptRole({
-    organization_id: normalizeOrgId(a.organization_id),
-    department_id: normalizeOrgId(a.department_id),
-    role_id: a.role_id
-  })
+          const orgDeptRole = await orgDeptRolesClient.findOrgDeptRole({
+            organization_id: normalizeOrgId(a.organization_id),
+            department_id: normalizeOrgId(a.department_id),
+            role_id: a.role_id
+          })
 
+          if (!orgDeptRole) {
+            throwBusinessError(
+              `لم يتم العثور على دور (role_id=${a.role_id}) للمؤسسة ${a.organization_id} والقسم ${a.department_id}`
+            )
+          }
 
-        if (!orgDeptRole) {
-          throwBusinessError(
-            `لم يتم العثور على دور (role_id=${a.role_id}) للمؤسسة ${a.organization_id} والقسم ${a.department_id}`
-          )
+          const existingKey = `${stage.id}_${orgDeptRole.id}`
+
+          if (existingSet.has(existingKey)) {
+            continue
+          }
+
+          assignmentsToCreate.push({
+            stage_id: stage.id,
+            organization_department_roles_id: orgDeptRole.id
+          })
+
+          existingSet.add(existingKey)
         }
-
-        const existingKey = `${stage.id}_${orgDeptRole.id}`
-
-        // skip duplicate
-        if (existingSet.has(existingKey)) {
-          continue
-        }
-
-        assignmentsToCreate.push({
-          stage_id: stage.id,
-
-          organization_department_roles_id: orgDeptRole.id
-        })
-
-        existingSet.add(existingKey)
       }
     }
 
@@ -337,6 +398,14 @@ for (const a of assignments) {
 
   if (assignmentsToCreate.length > 0) {
     await stageAssignmentRepository.bulkCreate(assignmentsToCreate)
+
+    const affectedStageIds = [
+      ...new Set(assignmentsToCreate.map(item => item.stage_id).filter(Boolean))
+    ]
+
+    for (const stageId of affectedStageIds) {
+      await invalidateStageAssignments(stageId)
+    }
 
     if (configsToCreate.length === 0) {
       const processIds = new Set(
@@ -393,18 +462,16 @@ async function loadAuthStageConfigPayload (numericProcessId) {
     )
   }
 
-  // let draft = null
-  // if (userId) {
-  //   draft = await transactionRepository.findDraftByCode(userId, process.code)
-  // }
-  // const config_json = draft?.data ?? stageConfig.config_json
-  // const data = { config_json }
-  // if (draft) {
-  //   data.transaction_id = draft.id
-  // }
+  const configJson = stageConfig.config_json || {}
+
+  // استمارة المواطن: لا تُعرض assignments (OrgDepRole) — اختيار الوجهة للموظف عند complete فقط
+  if (configJson.assignments) {
+    const { assignments, ...citizenConfig } = configJson
+    return { config_json: citizenConfig }
+  }
 
   return {
-    config_json: stageConfig.config_json
+    config_json: configJson
   }
 }
 

@@ -111,6 +111,22 @@ function decodeCursor (rawValue) {
       }
     }
 
+    if (kind === 'notif') {
+      if (
+        !createdAt ||
+        !Number.isFinite(id) ||
+        Number.isNaN(new Date(createdAt).getTime())
+      ) {
+        throw new Error('invalid notification cursor fields')
+      }
+
+      return {
+        k: 'notif',
+        t: new Date(createdAt).toISOString(),
+        id
+      }
+    }
+
     if (kind === 'stage') {
       if (
         !createdAt ||

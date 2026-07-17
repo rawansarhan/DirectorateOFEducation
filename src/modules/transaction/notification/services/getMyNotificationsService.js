@@ -3,8 +3,9 @@
 const notificationRepository = require('../repositories/notificationRepository')
 const { NotificationListItemDTO } = require('../dto/NotificationListItemDTO')
 const {
-  emptyPaginatedResult,
-  buildPaginationMeta
+  emptyCursorPaginatedResult,
+  buildCursorPaginationMeta,
+  encodeCursor
 } = require('../../../../core/utils/pagination')
 const { retryWithBackoff } = require('../../../../core/utils/retryWithBackoff')
 const { MESSAGES } = require('../utils/notificationErrors')
@@ -32,24 +33,38 @@ function parseUnreadFilter (rawValue) {
   )
 }
 
+function buildNotificationCursor (row) {
+  const createdAt = row.created_at
+    ? new Date(row.created_at).toISOString()
+    : null
+
+  if (!createdAt || !Number.isFinite(Number(row.id))) {
+    return null
+  }
+
+  return encodeCursor({
+    k: 'notif',
+    t: createdAt,
+    id: Number(row.id)
+  })
+}
+
 async function getMyNotifications ({
   userId,
-  page,
   limit,
-  offset,
-  unreadOnly = false,
-  type = null
+  cursor = null,
+  decodedCursor = null,
+  unreadOnly = false
 }) {
-  const [{ rows, count }, unreadCount] = await Promise.all([
+  const [{ rows, hasNext }, unreadCount] = await Promise.all([
     retryWithBackoff(
       () =>
-        notificationRepository.findAndCountByUserId(userId, {
+        notificationRepository.findByUserIdWithCursor(userId, {
           limit,
-          offset,
-          unreadOnly,
-          type
+          cursor: decodedCursor,
+          unreadOnly
         }),
-      { label: 'notification.findAndCountByUserId' }
+      { label: 'notification.findByUserIdWithCursor' }
     ),
     retryWithBackoff(
       () => notificationRepository.countUnreadByUserId(userId),
@@ -61,19 +76,26 @@ async function getMyNotifications ({
     return {
       message: MESSAGES.LIST_RETRIEVED,
       data: {
-        ...emptyPaginatedResult({ page, limit }),
+        ...emptyCursorPaginatedResult({ limit, cursor }),
         unread_count: unreadCount
       }
     }
   }
 
   const items = rows.map(row => new NotificationListItemDTO(row))
+  const lastItem = rows[rows.length - 1]
+  const nextCursor = hasNext ? buildNotificationCursor(lastItem) : null
 
   return {
     message: MESSAGES.LIST_RETRIEVED,
     data: {
       items,
-      pagination: buildPaginationMeta({ page, limit, total: count }),
+      pagination: buildCursorPaginationMeta({
+        limit,
+        cursor,
+        nextCursor,
+        hasNext
+      }),
       unread_count: unreadCount
     }
   }

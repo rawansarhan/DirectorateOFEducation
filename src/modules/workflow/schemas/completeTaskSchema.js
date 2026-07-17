@@ -9,6 +9,52 @@ const {
   buildStrictFormPayloadSchema,
   formatStrictFormJoiError
 } = require('../services/unifiedFormPayloadService')
+const {
+  ORG_DEP_ROLE_ASSIGNMENT_WIDGET_ID
+} = require('../stageConfig/validations/stageConfigSchema')
+
+/** نفس هيكل config_json.assignments + value إلزامي */
+const completeAssignmentsSchema = Joi.object({
+  widget_type: Joi.string().valid('dropdown').required().messages({
+    'any.only': 'assignments.widget_type يجب أن يكون dropdown',
+    'any.required': 'assignments.widget_type مطلوب'
+  }),
+  data: Joi.object({
+    id: Joi.string()
+      .valid(ORG_DEP_ROLE_ASSIGNMENT_WIDGET_ID)
+      .required()
+      .messages({
+        'any.only': `assignments.data.id يجب أن يكون ${ORG_DEP_ROLE_ASSIGNMENT_WIDGET_ID}`,
+        'any.required': 'assignments.data.id مطلوب'
+      }),
+    label: Joi.string().trim().min(1).max(255).required().messages({
+      'any.required': 'assignments.data.label مطلوب'
+    }),
+    is_required: Joi.boolean().default(true),
+    options: Joi.array()
+      .items(
+        Joi.object({
+          key: Joi.string().trim().min(1).max(64).required(),
+          value: Joi.string().trim().min(1).max(255).required()
+        }).unknown(false)
+      )
+      .min(1)
+      .required()
+      .messages({
+        'any.required': 'assignments.data.options مطلوبة',
+        'array.min': 'assignments.data.options يجب أن تحتوي خياراً واحداً على الأقل'
+      })
+  })
+    .unknown(false)
+    .required()
+    .messages({
+      'any.required': 'assignments.data مطلوب'
+    }),
+  value: Joi.string().trim().min(1).max(64).required().messages({
+    'any.required': 'assignments.value مطلوب',
+    'string.empty': 'assignments.value مطلوب'
+  })
+}).unknown(false)
 
 const completeTaskPayloadSchema = buildStrictFormPayloadSchema({
   includeTemplates: true,
@@ -19,7 +65,8 @@ const completeTaskPayloadSchema = buildStrictFormPayloadSchema({
 }).keys({
   decision: taskDecisionSchema.required().messages({
     'any.required': 'decision مطلوب — approve أو reject'
-  })
+  }),
+  assignments: completeAssignmentsSchema.optional()
 })
 
 function validateCompleteTaskPayload (payload = {}) {
@@ -63,6 +110,7 @@ function validateCompleteTaskPayload (payload = {}) {
 }
 
 module.exports = {
+  completeAssignmentsSchema,
   completeTaskPayloadSchema,
   validateCompleteTaskPayload
 }

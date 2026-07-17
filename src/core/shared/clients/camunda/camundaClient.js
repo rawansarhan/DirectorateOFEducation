@@ -342,6 +342,33 @@ class CamundaClient {
     )
   }
 
+  async getTaskIdentityLinks (taskId) {
+    const res = await callCamunda('جلب روابط هوية المهمة', () =>
+      camundaHttp.get(`${CAMUNDA_URL}/task/${taskId}/identity-links`)
+    )
+    return res.data || []
+  }
+
+  async addTaskIdentityLink (taskId, { type, groupId = null, userId = null } = {}) {
+    return callCamunda('إضافة مرشّح للمهمة', () =>
+      camundaHttp.post(`${CAMUNDA_URL}/task/${taskId}/identity-links`, {
+        type,
+        groupId: groupId || undefined,
+        userId: userId != null ? String(userId) : undefined
+      })
+    )
+  }
+
+  async deleteTaskIdentityLink (taskId, { type, groupId = null, userId = null } = {}) {
+    return callCamunda('حذف مرشّح من المهمة', () =>
+      camundaHttp.post(`${CAMUNDA_URL}/task/${taskId}/identity-links/delete`, {
+        type,
+        groupId: groupId || undefined,
+        userId: userId != null ? String(userId) : undefined
+      })
+    )
+  }
+
   inferVariableType (value) {
     if (typeof value === 'boolean') return 'Boolean'
     if (typeof value === 'number') {

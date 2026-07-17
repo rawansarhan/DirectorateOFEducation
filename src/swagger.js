@@ -3112,12 +3112,47 @@ const swaggerOptions = {
                 },
                 signature: {
                   $ref: '#/components/schemas/StageSubmissionSignature'
+                },
+                assignments: {
+                  type: 'object',
+                  description:
+                    'مطلوب إذا المرحلة تحتوي config_json.assignments — نفس الهيكل الكامل من stageConfig + value. value = options[].key = camunda_group_key.',
+                  required: ['widget_type', 'data', 'value'],
+                  properties: {
+                    widget_type: { type: 'string', enum: ['dropdown'], example: 'dropdown' },
+                    data: {
+                      type: 'object',
+                      required: ['id', 'label', 'options'],
+                      properties: {
+                        id: { type: 'string', example: 'OrgDepRole' },
+                        label: { type: 'string', example: 'تعيين الوجهة التالية للمسار' },
+                        is_required: { type: 'boolean', example: true },
+                        options: {
+                          type: 'array',
+                          items: {
+                            type: 'object',
+                            required: ['key', 'value'],
+                            properties: {
+                              key: { type: 'string', example: 'ROLE__ORG1__DEPT2' },
+                              value: { type: 'string', example: 'تقنية المعلومات' }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    value: {
+                      type: 'string',
+                      example: 'ROLE__ORG1__DEPT2',
+                      description: 'يجب أن يطابق options[].key و OrgDepRole.camunda_group_key'
+                    }
+                  }
                 }
               },
               description:
                 'POST /workflow/tasks/{taskId}/complete — config_json + value. ' +
                 'مسار Camunda gateway من radio_group (is_gateway) داخل widgets — لا variables. ' +
-                'idempotency_key يُولَّد من السيرفر ولا يُرسل في الطلب.'
+                'idempotency_key يُولَّد من السيرفر ولا يُرسل في الطلب. ' +
+                'assignments اختياري/إلزامي حسب config_json.assignments لاختيار الوجهة التالية.',
             }
           ],
           example: {
@@ -3146,6 +3181,19 @@ const swaggerOptions = {
               challenge_id: '3ad67615-8c89-4a5e-a758-217e9d85b6e6',
               signature:
                 'Bj7trXvyM9jfruXKttly27VY1xsVuqtKgcjfLf7fZrohjBGX0MwIFtYRMQ3nP5WHtbx0EFadm9rXy/RQqVw2Dg=='
+            },
+            assignments: {
+              widget_type: 'dropdown',
+              data: {
+                id: 'OrgDepRole',
+                label: 'تعيين الوجهة التالية للمسار',
+                is_required: true,
+                options: [
+                  { key: 'ROLE__ORG1__DEPT2', value: 'تقنية المعلومات' },
+                  { key: 'ROLE__ORG1__DEPT3', value: 'التربية' }
+                ]
+              },
+              value: 'ROLE__ORG1__DEPT2'
             }
           }
         },
@@ -3628,6 +3676,38 @@ const swaggerOptions = {
                         config: { type: 'object', description: 'stage_config.config_json للمرحلة الحالية' }
                       }
                     },
+                    assignments: {
+                      type: 'object',
+                      nullable: true,
+                      description:
+                        'نفس هيكل config_json.assignments من stageConfig + value. null إذا المرحلة لا تحتوي assignments. يظهر بعد currentStage في GET/pickup.',
+                      properties: {
+                        widget_type: { type: 'string', example: 'dropdown' },
+                        data: {
+                          type: 'object',
+                          properties: {
+                            id: { type: 'string', example: 'OrgDepRole' },
+                            label: { type: 'string', example: 'تعيين الوجهة التالية للمسار' },
+                            is_required: { type: 'boolean', example: true },
+                            options: {
+                              type: 'array',
+                              items: {
+                                type: 'object',
+                                properties: {
+                                  key: { type: 'string', example: 'ROLE__ORG1__DEPT2' },
+                                  value: { type: 'string', example: 'تقنية المعلومات' }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        value: {
+                          type: 'string',
+                          example: '',
+                          description: 'فارغ في GET/pickup حتى يختار الموظف؛ عند complete يُرسل المفتاح المختار'
+                        }
+                      }
+                    },
                     task_lock: {
                       type: 'object',
                       description: 'حالة قفل الاستلام — GET عرض فقط؛ POST pickup لإنشاء القفل',
@@ -3702,8 +3782,33 @@ const swaggerOptions = {
                 config: {
                   form_id: 'leave_process_review',
                   form_name: 'التشيك على المعلومات المدخلة',
-                  widgets: []
+                  widgets: [],
+                  assignments: {
+                    widget_type: 'dropdown',
+                    data: {
+                      id: 'OrgDepRole',
+                      label: 'تعيين الوجهة التالية للمسار',
+                      is_required: true,
+                      options: [
+                        { key: 'ROLE__ORG1__DEPT2', value: 'تقنية المعلومات' },
+                        { key: 'ROLE__ORG1__DEPT3', value: 'التربية' }
+                      ]
+                    }
+                  }
                 }
+              },
+              assignments: {
+                widget_type: 'dropdown',
+                data: {
+                  id: 'OrgDepRole',
+                  label: 'تعيين الوجهة التالية للمسار',
+                  is_required: true,
+                  options: [
+                    { key: 'ROLE__ORG1__DEPT2', value: 'تقنية المعلومات' },
+                    { key: 'ROLE__ORG1__DEPT3', value: 'التربية' }
+                  ]
+                },
+                value: ''
               },
               task_lock: {
                 is_locked: false,
@@ -3790,7 +3895,7 @@ const swaggerOptions = {
           },
           example: {
             pin: '123456',
-            decision: 'reject'
+            decision: 'approve'
           }
         },
 
@@ -4399,7 +4504,7 @@ const swaggerOptions = {
         },
 
         LeaveProcessReviewComplete: {
-          summary: 'POST /tasks/{taskId}/complete — مراجعة (leave_process_review)',
+          summary: 'POST /tasks/{taskId}/complete — مراجعة مع اختيار الوجهة التالية (assignments كامل)',
           value: {
             form_id: 'leave_process_review',
             form_name: 'التشيك على المعلومات المدخلة',
@@ -4426,6 +4531,74 @@ const swaggerOptions = {
               challenge_id: '3ad67615-8c89-4a5e-a758-217e9d85b6e6',
               signature:
                 'Bj7trXvyM9jfruXKttly27VY1xsVuqtKgcjfLf7fZrohjBGX0MwIFtYRMQ3nP5WHtbx0EFadm9rXy/RQqVw2Dg=='
+            },
+            assignments: {
+              widget_type: 'dropdown',
+              data: {
+                id: 'OrgDepRole',
+                label: 'تعيين الوجهة التالية للمسار',
+                is_required: true,
+                options: [
+                  { key: 'ROLE__ORG1__DEPT2', value: 'تقنية المعلومات' },
+                  { key: 'ROLE__ORG1__DEPT3', value: 'التربية' }
+                ]
+              },
+              value: 'ROLE__ORG1__DEPT2'
+            }
+          }
+        },
+
+        CompleteTaskWithDestination: {
+          summary: 'POST /tasks/{taskId}/complete — مثال كامل مع assignments (نفس شكل stageConfig + value)',
+          value: {
+            form_id: 'leave_process_review',
+            form_name: 'التشيك على المعلومات المدخلة',
+            widgets: [
+              {
+                widget_type: 'radio_group',
+                data: {
+                  id: 'decision',
+                  label: 'قرار الطلب',
+                  is_required: true,
+                  is_gateway: true,
+                  options: [
+                    { key: 'الطلب مرفوض', value: 'الطلب مرفوض' },
+                    { key: 'الطلب مقبول', value: 'الطلب مقبول' }
+                  ]
+                },
+                value: 'الطلب مقبول'
+              },
+              {
+                widget_type: 'text_field',
+                data: {
+                  id: 'review_note',
+                  label: 'ملاحظة المراجعة',
+                  is_required: false,
+                  input_type: 'text'
+                },
+                value: 'المستندات مكتملة'
+              }
+            ],
+            templates: [],
+            decision: 'approve',
+            note: '',
+            signature: {
+              challenge_id: '3ad67615-8c89-4a5e-a758-217e9d85b6e6',
+              signature:
+                'Bj7trXvyM9jfruXKttly27VY1xsVuqtKgcjfLf7fZrohjBGX0MwIFtYRMQ3nP5WHtbx0EFadm9rXy/RQqVw2Dg=='
+            },
+            assignments: {
+              widget_type: 'dropdown',
+              data: {
+                id: 'OrgDepRole',
+                label: 'تعيين الوجهة التالية للمسار',
+                is_required: true,
+                options: [
+                  { key: 'ROLE__ORG1__DEPT2', value: 'تقنية المعلومات' },
+                  { key: 'ROLE__ORG1__DEPT3', value: 'التربية' }
+                ]
+              },
+              value: 'ROLE__ORG1__DEPT3'
             }
           }
         },

@@ -44,6 +44,21 @@ async function findByRoleOrgDept(roleId, organizationId, departmentId, options =
   })
 }
 
+async function findActiveByCamundaGroupKey (camundaGroupKey, options = {}) {
+  if (!camundaGroupKey) {
+    return null
+  }
+
+  return OrgDeptRole.findOne({
+    where: {
+      camunda_group_key: String(camundaGroupKey).trim(),
+      is_active: true
+    },
+    include: fullIncludes,
+    ...options
+  })
+}
+
 async function findAll() {
   return OrgDeptRole.findAll({
     order: [['id', 'ASC']],
@@ -123,6 +138,7 @@ module.exports = {
   findByIdWithRelations,
   findByIdWithRole,
   findByRoleOrgDept,
+  findActiveByCamundaGroupKey,
   findAll,
   findActiveByDepartmentIdWithRole,
   findDescendantSubtreeByRootIds,

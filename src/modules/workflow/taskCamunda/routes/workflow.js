@@ -1359,6 +1359,18 @@ router.post(
 
  *
 
+ *       **`assignments` (حسب المرحلة):** إذا `config_json.assignments` موجود —
+
+ *       أرسل الهيكل كاملاً كما في stageConfig + `value` المختار (key = camunda_group_key).
+
+ *       مثال: انظر `CompleteTaskWithDestination` / `LeaveProcessReviewComplete` في Swagger examples.
+
+ *
+
+ *       إن لم يوجد في الإعداد → التوجيه عبر `stage_assignments` للمرحلة التالية.
+
+ *
+
  *       **عند الرفض (`decision = reject`):** `note` إلزامي — يُرسل إشعار لـ `transaction.user_id`:
 
  *       «لقد تم رفض معاملتك (اسم المعاملة) بسبب (note)» — Firebase للمواطن (CITIZEN)، WebSocket للموظف.
@@ -1406,6 +1418,10 @@ router.post(
  *             $ref: '#/components/schemas/CompleteTaskPayload'
 
  *           examples:
+
+ *             review_with_destination:
+
+ *               $ref: '#/components/examples/CompleteTaskWithDestination'
 
  *             review:
 

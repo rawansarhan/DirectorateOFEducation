@@ -66,8 +66,16 @@ const {
 const {
   notifyTransactionOwnerOnReject
 } = require('../../../transaction/notification/services/transactionRejectNotificationService')
+const {
+  scheduleNotifyTechnicalOfficersIfNoAssigneeStaff
+} = require('../../../transaction/notification/services/missingAssigneeStaffNotificationService')
 const { enrichCamundaTaskNotFoundError } = require('../../../../core/utils/errorMessageHelper')
 const { formatTransactionDate } = require('../utils/employeeTaskFormatters')
+const {
+  resolveDestinationOverrideFromComplete,
+  routeNextUserTaskAssignments,
+  buildAssignmentsResponseFromConfig
+} = require('./taskAssignmentRoutingService')
 
 const LOG_PREFIX = '[CompleteTask]'
 
@@ -685,6 +693,24 @@ async function completeTaskCore ({
     throw error
   }
 
+  // توجيه الوجهة التالية عبر config_json.assignments (OrgDepRole dropdown)
+  let overrideTarget = null
+
+  if (!isReject) {
+    overrideTarget = await resolveDestinationOverrideFromComplete({
+      payload,
+      configJson: stageConfig?.config_json || null,
+      isReject
+    })
+
+    if (overrideTarget) {
+      logStep('PHASE_6_RESOLVE_DESTINATION', {
+        camundaGroupKey: overrideTarget.camunda_group_key,
+        orgDeptRoleId: overrideTarget.organization_department_roles_id
+      })
+    }
+  }
+
   let signingRequest = null
 
   // ------------------------------------------------------------------
@@ -832,6 +858,19 @@ async function completeTaskCore ({
     stageSnapshot.rejection_reason = String(
       payload.rejection_reason || rejectNote
     ).trim()
+  }
+
+  if (overrideTarget) {
+    stageSnapshot.assignments = buildAssignmentsResponseFromConfig(
+      stageConfig?.config_json || null,
+      overrideTarget.selected_key
+    )
+    stageSnapshot.next_destination = {
+      camunda_group_key: overrideTarget.camunda_group_key,
+      organization_department_roles_id:
+        overrideTarget.organization_department_roles_id,
+      label: overrideTarget.selected_label
+    }
   }
 
   logStep('STAGE_SNAPSHOT_BUILT', {
@@ -1173,10 +1212,52 @@ async function completeTaskCore ({
 
       nextStageId = nextStage?.id || null
 
+      const routingResult = await routeNextUserTaskAssignments({
+        nextTask,
+        nextStage,
+        transactionData,
+        overrideTarget
+      })
+
+      await withDbTransaction(sequelize, dbTransaction, async (dbTx) => {
+        const updatedTransaction = await transactionRepository.updateDataOptimistic(
+          transaction.id,
+          transactionData,
+          currentVersion,
+          dbTx
+        )
+        currentVersion = updatedTransaction.version
+      })
+
+      if (routingResult.assignments?.length) {
+        const routedUserIds = await employeeTaskRepository.getUserIdsForOrgDeptRoleIds(
+          routingResult.assignments.map(item => item.organization_department_roles_id)
+        )
+
+        for (const routedUserId of routedUserIds) {
+          invalidateEmployeeTasksForUser(routedUserId).catch(() => {})
+        }
+
+        if (routingResult.routed) {
+          scheduleNotifyTechnicalOfficersIfNoAssigneeStaff({
+            targets: routingResult.assignments,
+            nextStage,
+            transaction,
+            processInstance,
+            processDefinitionId: processInstance.process_definition_id,
+            sentByUserId: userId
+          })
+        }
+      }
+
       logStep('APPROVE_ADVANCED', {
         nextTaskId: nextTask.id,
         nextStageCode: nextStage?.code || '',
-        workflowStatus: 'running'
+        nextStageType: nextStage?.type || '',
+        workflowStatus: 'running',
+        routedOverride: Boolean(overrideTarget),
+        routedPending: Boolean(routingResult.pending),
+        routedAssignmentCount: routingResult.assignments?.length || 0
       })
     } else {
       logStep('APPROVE_WORKFLOW_FINISHING', { transactionId: transaction.id })

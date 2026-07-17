@@ -1,5 +1,6 @@
 'use strict'
 
+const { Op } = require('sequelize')
 const { Notification, User } = require('../../../../entities')
 
 class NotificationRepository {
@@ -25,7 +26,7 @@ class NotificationRepository {
 
     return Notification.findAndCountAll({
       where,
-      order: [['created_at', 'DESC']],
+      order: [['created_at', 'DESC'], ['id', 'DESC']],
       limit,
       offset,
       include: [{
@@ -35,6 +36,53 @@ class NotificationRepository {
         required: false
       }]
     })
+  }
+
+  async findByUserIdWithCursor (userId, {
+    limit = 10,
+    cursor = null,
+    unreadOnly = false
+  } = {}) {
+    const where = { user_id: userId }
+
+    if (unreadOnly) {
+      where.read_at = null
+    }
+
+    if (cursor?.t && Number.isFinite(Number(cursor.id))) {
+      const cursorAt = new Date(cursor.t)
+      const cursorId = Number(cursor.id)
+
+      where[Op.and] = [
+        ...(where[Op.and] || []),
+        {
+          [Op.or]: [
+            { created_at: { [Op.lt]: cursorAt } },
+            {
+              created_at: cursorAt,
+              id: { [Op.lt]: cursorId }
+            }
+          ]
+        }
+      ]
+    }
+
+    const rows = await Notification.findAll({
+      where,
+      order: [['created_at', 'DESC'], ['id', 'DESC']],
+      limit: limit + 1,
+      include: [{
+        model: User,
+        as: 'sender',
+        attributes: ['id', 'userName'],
+        required: false
+      }]
+    })
+
+    const hasNext = rows.length > limit
+    const pageRows = hasNext ? rows.slice(0, limit) : rows
+
+    return { rows: pageRows, hasNext }
   }
 
   async countUnreadByUserId (userId) {

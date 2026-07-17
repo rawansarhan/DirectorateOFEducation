@@ -4,11 +4,16 @@ const camundaClient = require('../../../../core/shared/clients/camunda/camundaCl
 const processInstanceRepository = require('../repositories/processInstanceRepository')
 const employeeTaskRepository = require('../repositories/employeeTaskRepository')
 const stageRepository = require('../../processDefinition/repositories/stageRepository')
+const transactionRepository =
+  require('../../../transaction/transaction/repositories/transactionRepository')
 const {
   invalidateEmployeeTasksForUser,
   invalidateEmployeeTaskStats
 } = require('../../../../core/cache/apiCacheService')
 const { formatTransactionDate } = require('../utils/employeeTaskFormatters')
+const {
+  userMatchesAssigneeRoute
+} = require('./taskAssignmentRoutingService')
 
 function clearLockFieldsOnInstance (instance) {
   instance.task_lock_user_id = null
@@ -86,7 +91,8 @@ function buildTaskLockStatus (processInstance, taskId, userId) {
 async function userCanAccessTaskStage ({
   userId,
   processDefinitionId,
-  taskDefinitionKey
+  taskDefinitionKey,
+  transactionId = null
 }) {
   if (!userId || !processDefinitionId || !taskDefinitionKey) {
     return false
@@ -98,15 +104,36 @@ async function userCanAccessTaskStage ({
     return false
   }
 
-  const { stageIds } =
-    await employeeTaskRepository.getAccessibleStageContext(roleIds)
-
   const stage = await stageRepository.findByCodeAndProcess(
     processDefinitionId,
     taskDefinitionKey
   )
 
-  return Boolean(stage && stageIds.includes(stage.id))
+  if (!stage) {
+    return false
+  }
+
+  if (transactionId) {
+    const businessTransaction = await transactionRepository.findById(transactionId)
+    const routeMatch = userMatchesAssigneeRoute(
+      roleIds,
+      businessTransaction?.data,
+      stage.code
+    )
+
+    if (routeMatch === true) {
+      return true
+    }
+
+    if (routeMatch === false) {
+      return false
+    }
+  }
+
+  const { stageIds } =
+    await employeeTaskRepository.getAccessibleStageContext(roleIds)
+
+  return stageIds.includes(stage.id)
 }
 
 async function clearLockIfHolderLostStageAccess ({
@@ -130,7 +157,8 @@ async function clearLockIfHolderLostStageAccess ({
   const holderStillAllowed = await userCanAccessTaskStage({
     userId: instance.task_lock_user_id,
     processDefinitionId: instance.process_definition_id,
-    taskDefinitionKey
+    taskDefinitionKey,
+    transactionId: instance.transaction_id
   })
 
   if (!holderStillAllowed) {

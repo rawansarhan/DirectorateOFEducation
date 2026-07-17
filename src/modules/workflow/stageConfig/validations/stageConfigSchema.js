@@ -175,12 +175,35 @@ const stageActionSchema = Joi.object({
   }).default({})
 }).unknown(true)
 
+const ORG_DEP_ROLE_ASSIGNMENT_WIDGET_ID = 'OrgDepRole'
+
+/** dropdown في config_json لاختيار الوجهة التالية (key = camunda_group_key) */
+const orgDepRoleAssignmentsSchema = Joi.object({
+  widget_type: Joi.string().valid('dropdown').required().messages({
+    'any.only': 'config_json.assignments.widget_type يجب أن يكون dropdown'
+  }),
+  data: Joi.object({
+    id: Joi.string()
+      .valid(ORG_DEP_ROLE_ASSIGNMENT_WIDGET_ID)
+      .required()
+      .messages({
+        'any.only': `config_json.assignments.data.id يجب أن يكون ${ORG_DEP_ROLE_ASSIGNMENT_WIDGET_ID}`
+      }),
+    label: widgetLabelSchema,
+    is_required: Joi.boolean().default(true),
+    options: Joi.array().items(widgetOptionSchema).min(1).required()
+  })
+    .unknown(false)
+    .required()
+}).unknown(false)
+
 const stageConfigJsonSchema = Joi.object({
   form_id: Joi.string().trim().min(1).max(128).required(),
   form_name: Joi.string().trim().min(1).max(255).required(),
   widgets: Joi.array().items(widgetSchema).default([]),
   template: Joi.array().items(templateItemSchema).default([]),
   actions: Joi.array().items(stageActionSchema).optional(),
+  assignments: orgDepRoleAssignmentsSchema.optional(),
   // مُتجاهَل في التشغيل: التوقيع USB إلزامي دائماً لـ USER_TASK (لا يُسمح بالمرور بدون توقيع)
   requires_digital_signature: Joi.boolean().optional().default(true)
 }).unknown(false)
@@ -310,6 +333,20 @@ function validateStageConfigJson (value) {
     }
   }
 
+  if (validated.assignments?.data?.options) {
+    if (!validateUniqueOptionKeys(validated.assignments.data.options)) {
+      return {
+        error: {
+          details: [{
+            message:
+              'مفاتيح الخيارات (key) يجب أن تكون فريدة في config_json.assignments'
+          }]
+        },
+        value: null
+      }
+    }
+  }
+
   return { error: null, value: validated }
 }
 
@@ -417,7 +454,9 @@ module.exports = {
   DOCUMENT_TEMPLATE_WIDGET_TYPES,
   TEXT_FIELD_INPUT_TYPES,
   STAGE_ACTION_NAMES,
+  ORG_DEP_ROLE_ASSIGNMENT_WIDGET_ID,
   stageActionSchema,
+  orgDepRoleAssignmentsSchema,
   stageConfigJsonSchema,
   documentFormConfigJsonSchema,
   documentTemplateFormConfigJsonSchema,

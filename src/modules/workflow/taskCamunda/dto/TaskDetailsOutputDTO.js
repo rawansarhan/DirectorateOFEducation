@@ -13,7 +13,8 @@ class TaskDetailsOutputDTO {
     previousStagesData,
     activeStage = null,
     currentStageConfig,
-    processDefinition = null
+    processDefinition = null,
+    assignments = null
   }) {
     const processDef = processDefinition || processInstance?.process_definition
     const user = transaction?.user
@@ -44,6 +45,9 @@ class TaskDetailsOutputDTO {
       name: currentStage?.name ?? null,
       config: currentStageConfig || {}
     }
+
+    // نفس هيكل config_json.assignments + value (null إن لم تُعرَّف في المرحلة)
+    this.assignments = assignments ?? null
   }
 }
 
