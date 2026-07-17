@@ -15,6 +15,8 @@ const {
   invalidateEmployeesByDepartments,
   invalidateRolesByDepartment
 } = require('../../../core/cache/apiCacheService')
+const { API_CACHE_TTL_SECONDS } = require('../../../core/config/env')
+const { retryWithBackoff } = require('../../../core/utils/retryWithBackoff')
 
 async function invalidateDepartmentStructureCaches ({
   organizationId,
@@ -274,8 +276,14 @@ async function getLeafDepartmentsByOrganizationService(organizationId) {
 
   return getOrLoad(
     KEYS.departmentLeaves(orgId),
-    () => loadLeafDepartmentsByOrganization(orgId),
-    { label: `Department leaves GET org:${orgId}` }
+    () =>
+      retryWithBackoff(() => loadLeafDepartmentsByOrganization(orgId), {
+        label: `department:leaves:${orgId}`
+      }),
+    {
+      label: `Department GET /api/department/by-organization/${orgId}/leaves`,
+      ttlSeconds: API_CACHE_TTL_SECONDS
+    }
   )
 }
 

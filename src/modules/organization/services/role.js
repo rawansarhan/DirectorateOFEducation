@@ -19,6 +19,8 @@ const {
   invalidateEmployeesByDepartments,
   invalidateDepartmentOverview
 } = require('../../../core/cache/apiCacheService')
+const { API_CACHE_TTL_SECONDS } = require('../../../core/config/env')
+const { retryWithBackoff } = require('../../../core/utils/retryWithBackoff')
 
 async function invalidateDepartmentRoleCaches (departmentId, { includeOverview = true } = {}) {
   if (departmentId == null) {
@@ -329,6 +331,7 @@ async function loadRolesByDepartment (deptId) {
     .filter(r => r.role)
     .map(r => ({
       id: r.role.id,
+      organization_department_roles_id: r.id,
       name: r.role.name,
       code: r.role.code
     }))
@@ -352,8 +355,14 @@ async function getRolesByDepartmentService(departmentId) {
 
   return getOrLoad(
     KEYS.rolesByDepartment(deptId),
-    () => loadRolesByDepartment(deptId),
-    { label: `Role GET /api/role/by-department/${deptId}` }
+    () =>
+      retryWithBackoff(() => loadRolesByDepartment(deptId), {
+        label: `role:by-dept:${deptId}`
+      }),
+    {
+      label: `Role GET /api/role/by-department/${deptId}`,
+      ttlSeconds: API_CACHE_TTL_SECONDS
+    }
   )
 }
 

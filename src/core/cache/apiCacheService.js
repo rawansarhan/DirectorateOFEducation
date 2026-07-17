@@ -29,6 +29,9 @@ const KEYS = {
     const cursorKey = cursor ? encodeURIComponent(cursor) : 'start'
     return `employees:by-depts:${userId}:${deptKey}:c${cursorKey}:l${limit}`
   },
+  employeesByOrgDeptRole: (orgDeptRoleId) => `employees:by-odr:${orgDeptRoleId}`,
+  employeesByOrgRoleDept: (organizationId, roleId, departmentId) =>
+    `employees:by-odr:org${organizationId}:role${roleId}:dept${departmentId}`,
   finalDocumentGenerateResponse: (transactionId) =>
     `final-document:generate:tx:${transactionId}`,
   textFields: () => 'text-fields:all',
@@ -400,6 +403,22 @@ async function invalidateDepartmentOverview (departmentId = null) {
 async function invalidateEmployeesByDepartments () {
   const count = await deleteKeysByPattern('employees:by-depts:*')
   console.log(`${LOG_PREFIX} invalidate employees by departments (${count} key(s))`)
+  await invalidateEmployeesByOrgDeptRole()
+}
+
+async function invalidateEmployeesByOrgDeptRole (orgDeptRoleId = null) {
+  if (orgDeptRoleId != null) {
+    await deleteKey(KEYS.employeesByOrgDeptRole(orgDeptRoleId))
+    console.log(
+      `${LOG_PREFIX} invalidate employees by org-dept-role — odr ${orgDeptRoleId}`
+    )
+    return
+  }
+
+  const count = await deleteKeysByPattern('employees:by-odr:*')
+  console.log(
+    `${LOG_PREFIX} invalidate all employees by org-dept-role (${count} key(s))`
+  )
 }
 
 async function invalidateWidgetListCache ({ module, cacheKey }) {
@@ -700,6 +719,7 @@ module.exports = {
   invalidateDocumentTemplates,
   invalidateDepartmentOverview,
   invalidateEmployeesByDepartments,
+  invalidateEmployeesByOrgDeptRole,
   invalidateTextFields,
   invalidateTextDropdowns,
   invalidateRadioGroups,

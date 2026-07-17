@@ -8,7 +8,15 @@ const orgDeptRoleRepository = require('../repositories/orgDeptRoleRepository')
 const userRoleAssignmentRepository =
   require('../../auth/repositories/userRoleAssignmentRepository')
 const userKeyRepository = require('../../auth/repositories/userKeyRepository')
-const { invalidateUserAccessibleDepartments, invalidateEmployeesByDepartments, invalidateDepartmentOverview } = require('../../../core/cache/apiCacheService')
+const {
+  invalidateUserAccessibleDepartments,
+  invalidateEmployeesByDepartments,
+  invalidateDepartmentOverview,
+  getOrLoad,
+  KEYS
+} = require('../../../core/cache/apiCacheService')
+const { API_CACHE_TTL_SECONDS } = require('../../../core/config/env')
+const { retryWithBackoff } = require('../../../core/utils/retryWithBackoff')
 
 const {
   hashPin,
@@ -25,7 +33,8 @@ const {
 
 const {
   validateUpdateEmployee,
-  validateListEmployeesQuery
+  validateListEmployeesQuery,
+  validateUsersByOrgRoleDeptQuery
 } = require('../validations/employeeValidation')
 
 // أداة موحّدة لرمي خطأ مع statusCode (نفس نمط بقية الخدمات)
@@ -126,6 +135,107 @@ async function getEmployeeByIdService (id) {
   }
 
   return shapeEmployee(employee)
+}
+
+function shapeUserByOrgDeptRoleAssignment (assignment) {
+  const plain =
+    assignment && typeof assignment.get === 'function'
+      ? assignment.get({ plain: true })
+      : assignment
+
+  const user = plain?.user || null
+
+  return {
+    assignment_id: plain.id,
+    organization_department_roles_id: plain.organization_department_roles_id,
+    priority: plain.priority,
+    is_active: plain.is_active,
+    user: user
+      ? {
+          id: user.id,
+          userName: user.userName,
+          email: user.email,
+          phone_number: user.phone_number,
+          first_name: user.first_name,
+          last_name: user.last_name,
+          father_name: user.father_name,
+          mother_name: user.mother_name,
+          national_id: user.national_id,
+          is_active: user.is_active,
+          created_at: user.created_at,
+          updated_at: user.updated_at
+        }
+      : null,
+    created_at: plain.created_at,
+    updated_at: plain.updated_at
+  }
+}
+
+// ================= GET USERS BY organization + role + department =================
+async function loadUsersByOrgRoleDept ({
+  organizationId,
+  roleId,
+  departmentId
+}) {
+  const orgDeptRole = await orgDeptRoleRepository.findByRoleOrgDept(
+    roleId,
+    organizationId,
+    departmentId
+  )
+
+  if (!orgDeptRole) {
+    throw fail('لا يوجد دور لدائرة ضمن هذه المنظمة', 404)
+  }
+
+  const assignments = await employeeRepository.findUsersByOrgDeptRoleId(
+    orgDeptRole.id,
+    { activeOnly: true }
+  )
+
+  return {
+    organization_id: organizationId,
+    role_id: roleId,
+    department_id: departmentId,
+    organization_department_roles_id: orgDeptRole.id,
+    total: assignments.length,
+    items: assignments.map(shapeUserByOrgDeptRoleAssignment)
+  }
+}
+
+async function getUsersByOrgRoleDeptService (query = {}) {
+  const { error, value } = validateUsersByOrgRoleDeptQuery(query)
+
+  if (error) {
+    throw fail(error.details.map(d => d.message).join(' | '), 400)
+  }
+
+  const {
+    organization_id: organizationId,
+    role_id: roleId,
+    department_id: departmentId
+  } = value
+
+  return getOrLoad(
+    KEYS.employeesByOrgRoleDept(organizationId, roleId, departmentId),
+    () =>
+      retryWithBackoff(
+        () =>
+          loadUsersByOrgRoleDept({
+            organizationId,
+            roleId,
+            departmentId
+          }),
+        {
+          label: `employees:by-odr:org${organizationId}:role${roleId}:dept${departmentId}`
+        }
+      ),
+    {
+      label:
+        `Employee GET /api/employees/by-org-dept-role` +
+        `?organization_id=${organizationId}&role_id=${roleId}&department_id=${departmentId}`,
+      ttlSeconds: API_CACHE_TTL_SECONDS
+    }
+  )
 }
 
 // ================= UPDATE =================
@@ -298,5 +408,6 @@ async function updateEmployeeService (data, id) {
 module.exports = {
   getAllEmployeesService,
   getEmployeeByIdService,
+  getUsersByOrgRoleDeptService,
   updateEmployeeService
 }

@@ -1003,8 +1003,12 @@ const swaggerOptions = {
 
         DepartmentLeavesEnvelope: {
           type: 'object',
+          description:
+            'استجابة GET /api/department/by-organization/{organizationId}/leaves — يدعم Caching + Retry limit',
+          required: ['success', 'status_code', 'message', 'data'],
           properties: {
             success: { type: 'boolean', example: true },
+            status_code: { type: 'integer', example: 200 },
             message: {
               type: 'string',
               example: 'تم جلب البيانات بنجاح'
@@ -1013,6 +1017,21 @@ const swaggerOptions = {
               type: 'array',
               items: { $ref: '#/components/schemas/DepartmentLeaf' }
             }
+          },
+          example: {
+            success: true,
+            status_code: 200,
+            message: 'تم جلب البيانات بنجاح',
+            data: [
+              {
+                id: 3,
+                name: 'قسم المحاسبة\\شعبة التدقيق'
+              },
+              {
+                id: 8,
+                name: 'قسم الموارد البشرية\\شعبة التوظيف'
+              }
+            ]
           }
         },
 
@@ -1311,6 +1330,145 @@ const swaggerOptions = {
           }
         },
 
+        EmployeesByOrgDeptRoleUser: {
+          type: 'object',
+          properties: {
+            id: { type: 'integer', example: 22 },
+            userName: { type: 'string', example: 'ahmad.h' },
+            email: { type: 'string', example: 'ahmad@example.com' },
+            phone_number: { type: 'string', example: '0912345678' },
+            first_name: { type: 'string', example: 'أحمد' },
+            last_name: { type: 'string', example: 'الحسن' },
+            father_name: { type: 'string', example: 'محمد' },
+            mother_name: { type: 'string', example: 'فاطمة' },
+            national_id: { type: 'string', example: '01234567890' },
+            is_active: { type: 'boolean', example: true },
+            created_at: {
+              type: 'string',
+              format: 'date-time',
+              example: '2026-01-10T08:00:00.000Z'
+            },
+            updated_at: {
+              type: 'string',
+              format: 'date-time',
+              example: '2026-06-01T12:30:00.000Z'
+            }
+          }
+        },
+
+        EmployeesByOrgDeptRoleItem: {
+          type: 'object',
+          properties: {
+            assignment_id: { type: 'integer', example: 101 },
+            organization_department_roles_id: { type: 'integer', example: 12 },
+            priority: { type: 'integer', example: 1 },
+            is_active: { type: 'boolean', example: true },
+            user: { $ref: '#/components/schemas/EmployeesByOrgDeptRoleUser' },
+            created_at: {
+              type: 'string',
+              format: 'date-time',
+              example: '2026-02-01T09:00:00.000Z'
+            },
+            updated_at: {
+              type: 'string',
+              format: 'date-time',
+              example: '2026-02-01T09:00:00.000Z'
+            }
+          }
+        },
+
+        EmployeesByOrgDeptRoleEnvelope: {
+          type: 'object',
+          description:
+            'استجابة GET /api/employees/by-org-dept-role?organization_id&role_id&department_id — يدعم Caching + Retry limit',
+          required: ['success', 'status_code', 'message', 'data'],
+          properties: {
+            success: { type: 'boolean', example: true },
+            status_code: { type: 'integer', example: 200 },
+            message: {
+              type: 'string',
+              example: 'تم جلب المستخدمين حسب دور المؤسسة/القسم بنجاح'
+            },
+            data: {
+              type: 'object',
+              properties: {
+                organization_id: { type: 'integer', example: 1 },
+                role_id: { type: 'integer', example: 4 },
+                department_id: { type: 'integer', example: 7 },
+                organization_department_roles_id: {
+                  type: 'integer',
+                  example: 12
+                },
+                total: { type: 'integer', example: 2 },
+                items: {
+                  type: 'array',
+                  items: {
+                    $ref: '#/components/schemas/EmployeesByOrgDeptRoleItem'
+                  }
+                }
+              }
+            }
+          },
+          example: {
+            success: true,
+            status_code: 200,
+            message: 'تم جلب المستخدمين حسب دور المؤسسة/القسم بنجاح',
+            data: {
+              organization_id: 1,
+              role_id: 4,
+              department_id: 7,
+              organization_department_roles_id: 12,
+              total: 2,
+              items: [
+                {
+                  assignment_id: 101,
+                  organization_department_roles_id: 12,
+                  priority: 1,
+                  is_active: true,
+                  user: {
+                    id: 22,
+                    userName: 'ahmad.h',
+                    email: 'ahmad@example.com',
+                    phone_number: '0912345678',
+                    first_name: 'أحمد',
+                    last_name: 'الحسن',
+                    father_name: 'محمد',
+                    mother_name: 'فاطمة',
+                    national_id: '01234567890',
+                    is_active: true,
+                    created_at: '2026-01-10T08:00:00.000Z',
+                    updated_at: '2026-06-01T12:30:00.000Z'
+                  },
+                  created_at: '2026-02-01T09:00:00.000Z',
+                  updated_at: '2026-02-01T09:00:00.000Z'
+                },
+                {
+                  assignment_id: 102,
+                  organization_department_roles_id: 12,
+                  priority: 2,
+                  is_active: true,
+                  user: {
+                    id: 23,
+                    userName: 'sara.y',
+                    email: 'sara@example.com',
+                    phone_number: '0987654321',
+                    first_name: 'سارة',
+                    last_name: 'يعقوب',
+                    father_name: 'خالد',
+                    mother_name: 'لينا',
+                    national_id: '09876543210',
+                    is_active: true,
+                    created_at: '2026-01-15T10:00:00.000Z',
+                    updated_at: '2026-05-20T11:00:00.000Z'
+                  },
+                  created_at: '2026-02-05T10:00:00.000Z',
+                  updated_at: '2026-02-05T10:00:00.000Z'
+                }
+              ]
+            }
+          }
+        },
+
         ProcessDefinitionStatsItem: {
           type: 'object',
           properties: {
@@ -1563,7 +1721,17 @@ const swaggerOptions = {
         RoleByDepartmentItem: {
           type: 'object',
           properties: {
-            id: { type: 'integer', example: 2 },
+            id: {
+              type: 'integer',
+              example: 2,
+              description: 'معرّف الدور (roles.id)'
+            },
+            organization_department_roles_id: {
+              type: 'integer',
+              example: 12,
+              description:
+                'معرّف OrgDepRole — مع organization_id و role_id و department_id لـ GET /api/employees/by-org-dept-role'
+            },
             name: { type: 'string', example: 'مدير المحاسبة' },
             code: { type: 'string', example: 'ACCOUNTING_MANAGER' }
           }
@@ -1571,8 +1739,12 @@ const swaggerOptions = {
 
         RolesByDepartmentEnvelope: {
           type: 'object',
+          description:
+            'استجابة GET /api/role/by-department/{departmentId} — يدعم Caching + Retry limit',
+          required: ['success', 'status_code', 'message', 'data'],
           properties: {
             success: { type: 'boolean', example: true },
+            status_code: { type: 'integer', example: 200 },
             message: {
               type: 'string',
               example: 'تم جلب البيانات بنجاح'
@@ -1581,6 +1753,25 @@ const swaggerOptions = {
               type: 'array',
               items: { $ref: '#/components/schemas/RoleByDepartmentItem' }
             }
+          },
+          example: {
+            success: true,
+            status_code: 200,
+            message: 'تم جلب البيانات بنجاح',
+            data: [
+              {
+                id: 2,
+                organization_department_roles_id: 12,
+                name: 'مدير المحاسبة',
+                code: 'ACCOUNTING_MANAGER'
+              },
+              {
+                id: 4,
+                organization_department_roles_id: 15,
+                name: 'موظف معاملات',
+                code: 'TRANSACTION_CLERK'
+              }
+            ]
           }
         },
 

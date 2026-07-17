@@ -4,6 +4,7 @@ const ApiResponder = require('../../../core/utils/apiResponder')
 const {
   getAllEmployeesService,
   getEmployeeByIdService,
+  getUsersByOrgRoleDeptService,
   updateEmployeeService
 } = require('../services/employee')
 
@@ -61,6 +62,23 @@ const getEmployeesByDepartments = asyncHandler(async (req, res) => {
   }
 })
 
+// ================= GET USERS BY organization + role + department =================
+const getUsersByOrgRoleDept = asyncHandler(async (req, res) => {
+  try {
+    const result = await getUsersByOrgRoleDeptService(req.query)
+    return ApiResponder.okResponse(
+      res,
+      result,
+      'تم جلب المستخدمين حسب دور المؤسسة/القسم بنجاح'
+    )
+  } catch (err) {
+    return ApiResponder.error(res, {
+      message: err.message,
+      statusCode: err.statusCode || 400
+    })
+  }
+})
+
 // ================= UPDATE =================
 const updateEmployee = asyncHandler(async (req, res) => {
   try {
@@ -75,5 +93,6 @@ module.exports = {
   getAllEmployees,
   getEmployeeById,
   getEmployeesByDepartments,
+  getUsersByOrgRoleDept,
   updateEmployee
 }

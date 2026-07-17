@@ -142,7 +142,26 @@ function validateListEmployeesQuery (query) {
   return schema.validate(query, { abortEarly: false, allowUnknown: false })
 }
 
+function validateUsersByOrgRoleDeptQuery (query) {
+  const idField = (label) =>
+    Joi.number().integer().min(1).required().messages({
+      'number.base': `${label} يجب أن يكون رقماً`,
+      'number.integer': `${label} يجب أن يكون عدداً صحيحاً`,
+      'number.min': `${label} يجب أن يكون 1 على الأقل`,
+      'any.required': `${label} مطلوب`
+    })
+
+  const schema = Joi.object({
+    organization_id: idField('organization_id'),
+    role_id: idField('role_id'),
+    department_id: idField('department_id')
+  }).messages({ 'object.unknown': 'الحقل {#label} غير مسموح به' })
+
+  return schema.validate(query, { abortEarly: false, allowUnknown: false, convert: true })
+}
+
 module.exports = {
   validateUpdateEmployee,
-  validateListEmployeesQuery
+  validateListEmployeesQuery,
+  validateUsersByOrgRoleDeptQuery
 }

@@ -194,7 +194,15 @@ router.get(
  * /api/department/by-organization/{organizationId}/leaves:
  *   get:
  *     summary: جلب آخر هرمية للأقسام التابعة لمؤسسة
- *     description: يعيد فقط الأقسام التي لا يوجد لها أبناء، مع اسم كامل يمثل المسار من الجذر (مثل "قسم المحاسبة\شعبة التدقيق")
+ *     description: |
+ *       يعيد فقط الأقسام التي لا يوجد لها أبناء، مع اسم كامل يمثل المسار من الجذر
+ *       (مثل `قسم المحاسبة\شعبة التدقيق`).
+ *
+ *       **هذا الـ API يدعم Caching + Retry limit:**
+ *       - **Caching:** Redis key = `department:leaves:{organizationId}` — TTL = `API_CACHE_TTL_SECONDS`
+ *       - **Retry limit:** `retryWithBackoff` — عدد المحاولات = `RETRY_MAX_ATTEMPTS`
+ *
+ *       **شكل الاستجابة:** `{ success, status_code, message, data }`
  *     tags: [Department]
  *     security:
  *       - bearerAuth: []
@@ -204,13 +212,36 @@ router.get(
  *         required: true
  *         schema:
  *           type: integer
+ *           minimum: 1
+ *         example: 1
  *     responses:
  *       200:
- *         description: leaves
+ *         description: آخر هرمية للأقسام
  *         content:
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/DepartmentLeavesEnvelope'
+ *             example:
+ *               success: true
+ *               status_code: 200
+ *               message: تم جلب البيانات بنجاح
+ *               data:
+ *                 - id: 3
+ *                   name: قسم المحاسبة\شعبة التدقيق
+ *                 - id: 8
+ *                   name: قسم الموارد البشرية\شعبة التوظيف
+ *       400:
+ *         description: معرّف المؤسسة غير صالح
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ApiErrorResponse'
+ *       404:
+ *         description: المؤسسة غير موجودة
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ApiErrorResponse'
  */
 router.get(
   '/by-organization/:organizationId/leaves',

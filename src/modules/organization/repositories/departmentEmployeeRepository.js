@@ -114,7 +114,7 @@ async function countCompletedStagesByUsersAndOdrs ({
     return new Map()
   }
 
-  // يجب ربط المرحلة عبر process_definition_id لنفس process_instance —
+   // يجب ربط المرحلة عبر process_definition_id لنفس process_instance —
   // الربط بـ stage_code وحده يضاعف العد عند تكرار نفس الكود عبر عمليات متعددة.
   const rows = await db.sequelize.query(
     `

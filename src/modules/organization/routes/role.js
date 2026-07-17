@@ -141,7 +141,16 @@ router.get(
  * /api/role/by-department/{departmentId}:
  *   get:
  *     summary: جلب الأدوار المتاحة لقسم محدد
- *     description: يعيد كل الأدوار المرتبطة بالقسم (للـ leaf department)، تستخدم عند تسجيل موظف بعد اختيار القسم
+ *     description: |
+ *       يعيد كل الأدوار المرتبطة بالقسم (للـ leaf department)، تُستخدم عند تسجيل موظف بعد اختيار القسم.
+ *       الحقول `organization_id` (من سياق المؤسسة) و `role_id` و `department_id`
+ *       تُمرَّر لـ `GET /api/employees/by-org-dept-role`.
+ *
+ *       **هذا الـ API يدعم Caching + Retry limit:**
+ *       - **Caching:** Redis key = `role:by-dept:{departmentId}` — TTL = `API_CACHE_TTL_SECONDS`
+ *       - **Retry limit:** `retryWithBackoff` — عدد المحاولات = `RETRY_MAX_ATTEMPTS`
+ *
+ *       **شكل الاستجابة:** `{ success, status_code, message, data }`
  *     tags: [Role]
  *     security:
  *       - bearerAuth: []
@@ -151,13 +160,40 @@ router.get(
  *         required: true
  *         schema:
  *           type: integer
+ *           minimum: 1
+ *         example: 3
  *     responses:
  *       200:
- *         description: roles
+ *         description: أدوار القسم
  *         content:
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/RolesByDepartmentEnvelope'
+ *             example:
+ *               success: true
+ *               status_code: 200
+ *               message: تم جلب البيانات بنجاح
+ *               data:
+ *                 - id: 2
+ *                   organization_department_roles_id: 12
+ *                   name: مدير المحاسبة
+ *                   code: ACCOUNTING_MANAGER
+ *                 - id: 4
+ *                   organization_department_roles_id: 15
+ *                   name: موظف معاملات
+ *                   code: TRANSACTION_CLERK
+ *       400:
+ *         description: معرّف القسم غير صالح
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ApiErrorResponse'
+ *       404:
+ *         description: القسم غير موجود
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ApiErrorResponse'
  */
 router.get(
   '/by-department/:departmentId',

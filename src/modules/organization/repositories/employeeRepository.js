@@ -99,6 +99,42 @@ async function findEmployeeById (id) {
   })
 }
 
+// كل المستخدمين المعيّنين على نفس organization_department_roles_id
+async function findUsersByOrgDeptRoleId (orgDeptRoleId, { activeOnly = true } = {}) {
+  const where = {
+    organization_department_roles_id: orgDeptRoleId
+  }
+
+  if (activeOnly) {
+    where.is_active = true
+  }
+
+  return UserRoleAssignment.findAll({
+    where,
+    attributes: [
+      'id',
+      'user_id',
+      'organization_department_roles_id',
+      'priority',
+      'is_active',
+      'created_at',
+      'updated_at'
+    ],
+    include: [
+      {
+        model: User,
+        as: 'user',
+        required: true,
+        attributes: PUBLIC_USER_ATTRIBUTES
+      }
+    ],
+    order: [
+      ['priority', 'ASC'],
+      ['id', 'ASC']
+    ]
+  })
+}
+
 // نسخة خام (instance) للتعديل — بكل الحقول كي نتمكّن من user.update().
 async function findRawById (id, options = {}) {
   return User.findByPk(id, options)
@@ -147,6 +183,7 @@ module.exports = {
   PUBLIC_USER_ATTRIBUTES,
   findAllEmployees,
   findEmployeeById,
+  findUsersByOrgDeptRoleId,
   findRawById,
   findByEmailExcludingId,
   findByUserNameExcludingId,
