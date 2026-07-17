@@ -6,7 +6,8 @@ class UserTransactionListItemDTO {
     processDefinitionName,
     stageName,
     progressPercent,
-    priority
+    priority,
+    isComplaint
   }) {
     this.transaction_id = transaction.id
     this.id_process = transaction.id_process ?? null
@@ -14,6 +15,7 @@ class UserTransactionListItemDTO {
     this.stage_name = stageName ?? null
     this.progress_percent = progressPercent ?? 0
     this.priority = priority ?? 0
+    this.is_complaint = Boolean(isComplaint)
     this.status = transaction.status
     this.created_at = transaction.created_at
     this.updated_at = transaction.updated_at

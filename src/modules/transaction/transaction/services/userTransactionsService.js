@@ -63,10 +63,11 @@ async function resolveProcessNamesForDrafts (transactions = []) {
         { label: `process.findByCode:${code}` }
       )
 
-      if (process?.name) {
+      if (process) {
         nameMap.set(code, {
-          name: process.name,
-          priority: process.priority ?? 0
+          name: process.name || null,
+          priority: process.priority ?? 0,
+          is_complaint: Boolean(process.is_complaint)
         })
       }
     })
@@ -98,6 +99,11 @@ function mapTransactionRow ({
     draftMeta?.priority ??
     0
 
+  const isComplaint =
+    processDefinition?.is_complaint ??
+    draftMeta?.is_complaint ??
+    false
+
   const processDefinitionId = processInstance?.process_definition_id
   const totalStages = processDefinitionId
     ? stageCountMap.get(processDefinitionId) || 0
@@ -120,7 +126,8 @@ function mapTransactionRow ({
     processDefinitionName,
     stageName,
     progressPercent,
-    priority
+    priority,
+    isComplaint
   })
 }
 

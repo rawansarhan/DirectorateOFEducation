@@ -149,7 +149,7 @@ async function findAndCountByUserId ({
           {
             model: db.ProcessDefinition,
             as: 'process_definition',
-            attributes: ['id', 'name', 'priority', 'code']
+            attributes: ['id', 'name', 'priority', 'code', 'is_complaint']
           },
           {
             model: db.Stage,

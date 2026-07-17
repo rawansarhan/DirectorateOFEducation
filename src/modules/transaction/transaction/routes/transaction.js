@@ -478,7 +478,8 @@ router.get(
  *   get:
  *     summary: List authenticated user's transactions
  *     description: |
- *       يعرض كل معاملات المستخدم المسجّل مع اسم العملية، المرحلة الحالية، ونسبة الإنجاز.
+ *       يعرض كل معاملات المستخدم المسجّل مع اسم العملية، المرحلة الحالية، ونسبة الإنجاز،
+ *       وحقل `is_complaint` لمعرفة إن كانت المعاملة شكوى أم لا.
  *
  *       **نجاح:** `{ success, status_code, message, data }`
  *       **خطأ:** `{ success, status_code, message, error, data: null }`

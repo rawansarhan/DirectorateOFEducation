@@ -2308,13 +2308,38 @@ const swaggerOptions = {
             stage_name: { type: 'string', nullable: true, example: 'مراجعة الدائرة' },
             progress_percent: { type: 'integer', minimum: 0, maximum: 100, example: 40 },
             priority: { type: 'integer', example: 1 },
+            is_complaint: {
+              type: 'boolean',
+              example: true,
+              description: 'true إذا كانت معاملة العملية شكوى'
+            },
             status: {
               type: 'string',
               enum: ['draft', 'submitted', 'in_progress', 'completed', 'rejected'],
               example: 'in_progress'
             },
-            created_at: { type: 'string', format: 'date-time' },
-            updated_at: { type: 'string', format: 'date-time' }
+            created_at: {
+              type: 'string',
+              format: 'date-time',
+              example: '2026-05-01T10:00:00.000Z'
+            },
+            updated_at: {
+              type: 'string',
+              format: 'date-time',
+              example: '2026-05-20T14:30:00.000Z'
+            }
+          },
+          example: {
+            transaction_id: 42,
+            id_process: 'TX-2026-00042',
+            process_definition_name: 'طلب شهادة ميلاد',
+            stage_name: 'مراجعة الدائرة',
+            progress_percent: 40,
+            priority: 1,
+            is_complaint: true,
+            status: 'in_progress',
+            created_at: '2026-05-01T10:00:00.000Z',
+            updated_at: '2026-05-20T14:30:00.000Z'
           }
         },
 
@@ -2396,6 +2421,7 @@ const swaggerOptions = {
                   stage_name: 'مراجعة الدائرة',
                   progress_percent: 40,
                   priority: 1,
+                  is_complaint: true,
                   status: 'in_progress',
                   created_at: '2026-05-01T10:00:00.000Z',
                   updated_at: '2026-05-20T14:30:00.000Z'
