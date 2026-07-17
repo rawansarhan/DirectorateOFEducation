@@ -30,13 +30,13 @@ class GeneratePdfStrategy {
       throw new Error('GENERATE_PDF: transaction غير موجود في السياق')
     }
 
-    const documentTemplate = await documentTemplateRepository.findOneActiveById(
+    const documentTemplate = await documentTemplateRepository.findById(
       templateId
     )
 
     if (!documentTemplate) {
       throw new Error(
-        `قالب الوثيقة (template_id=${templateId}) غير موجود أو غير نشط`
+        `قالب الوثيقة (template_id=${templateId}) غير موجود`
       )
     }
 

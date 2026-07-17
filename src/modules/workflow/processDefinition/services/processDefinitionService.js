@@ -413,47 +413,63 @@ async function getProcessDetailsWithValidation (processId) {
 //=====================================================================================
 //====================== review Process (APPROVE , REJECT) ============================
 
-async function reviewProcess(
+async function reviewProcess (
   processId,
   decision
 ) {
-
-  // validate decision
-
   const decisionMap = {
     APPROVE: 'APPROVED',
     REJECT: 'REJECTED'
   }
 
-  const approvalStatus =
-    decisionMap[decision]
+  const approvalStatus = decisionMap[decision]
 
   if (!approvalStatus) {
     throw new Error('قرار غير صالح')
   }
 
-  // get process
-
-  const process =
-    await processRepository.findById(
-      processId
-    )
+  const process = await processRepository.findById(processId)
 
   if (!process) {
     throw new Error('العملية غير موجودة')
   }
 
-  const updatePayload = {
-    approval_status: approvalStatus
+  // رفض → حذف قسري لـ process_definition (CASCADE للمراحل والإعدادات)
+  if (decision === 'REJECT') {
+    const deploymentId = process.camunda_deployment_id
+
+    if (deploymentId) {
+      try {
+        await camundaClient.deleteDeployment(deploymentId, { cascade: true })
+      } catch (error) {
+        console.warn(
+          `${LOG_PREFIX} review REJECT — فشل حذف نشر Camunda deployment=${deploymentId}: ${error.message}`
+        )
+      }
+    }
+
+    await processRepository.forceDeleteById(processId)
+
+    console.log(
+      `${LOG_PREFIX} review process id=${processId} decision=REJECT — force-deleted — invalidating caches...`
+    )
+    await invalidateAllProcessLists()
+    await invalidateProcessDefinitionsWithType()
+    await invalidateProcessDefinitionDetails(processId)
+
+    return {
+      message: 'تم رفض العملية وحذفها نهائياً',
+      deleted: true,
+      process_definition_id: Number(processId)
+    }
   }
 
-  if (decision === 'APPROVE') {
-    updatePayload.is_active = isProcessActiveBySchedule(
+  const updatePayload = {
+    approval_status: approvalStatus,
+    is_active: isProcessActiveBySchedule(
       process.start_date,
       process.end_date
     )
-  } else {
-    updatePayload.is_active = false
   }
 
   await processRepository.update(processId, updatePayload)
@@ -466,10 +482,9 @@ async function reviewProcess(
   await invalidateProcessDefinitionDetails(processId)
 
   return {
-    message:
-      decision === 'APPROVE'
-        ? 'تمت الموافقة على العملية'
-        : 'تم رفض العملية'
+    message: 'تمت الموافقة على العملية',
+    deleted: false,
+    process_definition_id: Number(processId)
   }
 }
 

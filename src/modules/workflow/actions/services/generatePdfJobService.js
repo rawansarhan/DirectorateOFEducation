@@ -138,13 +138,13 @@ async function executeGeneratePdfJob ({
     }
   }
 
-  const documentTemplate = await documentTemplateRepository.findOneActiveById(
+  const documentTemplate = await documentTemplateRepository.findById(
     numericTemplateId
   )
 
   if (!documentTemplate) {
     throw new Error(
-      `قالب الوثيقة (template_id=${numericTemplateId}) غير موجود أو غير نشط`
+      `قالب الوثيقة (template_id=${numericTemplateId}) غير موجود`
     )
   }
 

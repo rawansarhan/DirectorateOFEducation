@@ -133,9 +133,9 @@ async function validateAndNormalizeTemplates (templates = []) {
 
     const template = await documentTemplateRepository.findById(templateId)
 
-    if (!template || template.is_active !== true) {
+    if (!template) {
       throw createTemplateValidationError(
-        `قالب الوثيقة (id=${templateId}) غير موجود أو غير نشط`
+        `قالب الوثيقة (id=${templateId}) غير موجود`
       )
     }
 
@@ -184,9 +184,9 @@ async function rebuildTemplateItemsForResubmission (storedTemplates = []) {
 
     const template = await documentTemplateRepository.findById(templateId)
 
-    if (!template || template.is_active !== true) {
+    if (!template) {
       throw createTemplateValidationError(
-        `قالب الوثيقة (id=${templateId}) غير موجود أو غير نشط`
+        `قالب الوثيقة (id=${templateId}) غير موجود`
       )
     }
 

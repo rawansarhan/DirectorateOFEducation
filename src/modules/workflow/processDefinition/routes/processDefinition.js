@@ -571,6 +571,10 @@ router.get(
  * /api/process_definitions/{id}/review:
  *   post:
  *     summary: Approve or reject a process => (المسؤول التقني)
+ *     description: |
+ *       - `APPROVE`: يعتمد العملية ويضبط `is_active` حسب جدول التواريخ.
+ *       - `REJECT`: يحذف العملية نهائياً (force delete) من `process_definitions`
+ *         مع CASCADE للمراحل/الإعدادات، ويحاول حذف نشر Camunda إن وُجد.
  *     tags: [Process Definition]
  *     security:
  *       - bearerAuth: []
@@ -606,9 +610,43 @@ router.get(
  *                 success:
  *                   type: boolean
  *                   example: true
+ *                 status_code:
+ *                   type: integer
+ *                   example: 200
  *                 message:
  *                   type: string
- *                   example: تمت الموافقة على العملية
+ *                   example: تم تنفيذ المراجعة بنجاح
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     message:
+ *                       type: string
+ *                       example: تم رفض العملية وحذفها نهائياً
+ *                     deleted:
+ *                       type: boolean
+ *                       example: true
+ *                     process_definition_id:
+ *                       type: integer
+ *                       example: 1
+ *             examples:
+ *               approve:
+ *                 value:
+ *                   success: true
+ *                   status_code: 200
+ *                   message: تم تنفيذ المراجعة بنجاح
+ *                   data:
+ *                     message: تمت الموافقة على العملية
+ *                     deleted: false
+ *                     process_definition_id: 1
+ *               reject:
+ *                 value:
+ *                   success: true
+ *                   status_code: 200
+ *                   message: تم تنفيذ المراجعة بنجاح
+ *                   data:
+ *                     message: تم رفض العملية وحذفها نهائياً
+ *                     deleted: true
+ *                     process_definition_id: 1
  *       400:
  *         description: قرار غير صالح أو العملية غير مكتملة
  *       404:

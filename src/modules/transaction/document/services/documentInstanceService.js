@@ -38,9 +38,9 @@ async function registerTemplateForTransaction ({
 
   const template = await documentTemplateRepository.findById(numericTemplateId)
 
-  if (!template || template.is_active !== true) {
+  if (!template) {
     throw createDocumentInstanceError(
-      `قالب الوثيقة (id=${numericTemplateId}) غير موجود أو غير نشط`
+      `قالب الوثيقة (id=${numericTemplateId}) غير موجود`
     )
   }
 

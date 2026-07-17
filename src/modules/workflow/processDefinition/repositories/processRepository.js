@@ -343,5 +343,13 @@ class ProcessRepository {
       where: { id }
     })
   }
+
+  async forceDeleteById (id, options = {}) {
+    return ProcessDefinition.destroy({
+      where: { id },
+      force: true,
+      ...options
+    })
+  }
 }
 module.exports = new ProcessRepository()

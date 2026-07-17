@@ -328,6 +328,20 @@ class CamundaClient {
     })
   }
 
+  async deleteDeployment (deploymentId, { cascade = true } = {}) {
+    if (!deploymentId) {
+      return null
+    }
+
+    return callCamunda('حذف نشر العملية', () =>
+      camundaHttp.delete(`${CAMUNDA_URL}/deployment/${deploymentId}`, {
+        params: {
+          cascade: Boolean(cascade)
+        }
+      })
+    )
+  }
+
   inferVariableType (value) {
     if (typeof value === 'boolean') return 'Boolean'
     if (typeof value === 'number') {
