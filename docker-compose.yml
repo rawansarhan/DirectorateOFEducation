@@ -28,6 +28,14 @@ services:
       CLOUDINARY_API_KEY: 911345844397137
       CLOUDINARY_API_SECRET: onVqqSzLNGGoK4msrcMMwJuuyHI
 
+      # مجلد الملفات داخل الحاوية (يُثبَّت عبر volume أدناه)
+      UPLOADS_DIR: /app/uploads
+
+    volumes:
+      # مهم: بدون هذا، كل إعادة بناء/نشر للحاوية تمسح الملفات المرفوعة
+      # بينما مساراتها تبقى في PostgreSQL → "ملف القالب غير موجود على القرص"
+      - uploads_data:/app/uploads
+
     depends_on:
       db:
         condition: service_healthy
@@ -42,8 +50,14 @@ services:
       POSTGRES_DB: Net_App
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: "5426229"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
       timeout: 5s
       retries: 5
+
+volumes:
+  uploads_data:
+  postgres_data:

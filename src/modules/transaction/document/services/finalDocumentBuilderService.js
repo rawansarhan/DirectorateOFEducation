@@ -33,7 +33,8 @@ const documentFinalTransactionRepository =
 const { createTransactionError } = require('../../transaction/utils/transactionErrors')
 const {
   normalizeStoredFilePath,
-  toPublicFileUrl
+  toPublicFileUrl,
+  isSyntheticSignatureDocumentPath
 } = require('../../../../core/utils/filePath')
 const { API_PUBLIC_URL, FINAL_DOCUMENT_CACHE_TTL_SECONDS } = require('../../../../core/config/env')
 const {
@@ -496,6 +497,10 @@ async function generateMergedFinalDocument (
 
   // الترتيب: ملفات file_picker المرفوعة أولاً، ثم ملفات GENERATE_PDF
   for (const row of uploadedRows) {
+    if (isSyntheticSignatureDocumentPath(row.file_path)) {
+      continue
+    }
+
     const before = mergedPdf.getPageCount()
     await appendFile({
       mergedPdf,

@@ -19,7 +19,8 @@ const {
 const { createTransactionError } = require('../../transaction/utils/transactionErrors')
 const {
   normalizeStoredFilePath,
-  resolveAbsoluteUploadPath
+  resolveAbsoluteUploadPath,
+  isSyntheticSignatureDocumentPath
 } = require('../../../../core/utils/filePath')
 
 const COMPLETED_STATUS = 'completed'
@@ -72,16 +73,18 @@ function summarizeOutboxEvents (events = []) {
 }
 
 function summarizeUploadedFiles (rows = []) {
-  return rows.map(row => {
-    const normalized = normalizeStoredFilePath(row.file_path)
+  return rows
+    .filter(row => !isSyntheticSignatureDocumentPath(row.file_path))
+    .map(row => {
+      const normalized = normalizeStoredFilePath(row.file_path)
 
-    return {
-      id: row.id,
-      file_path: normalized,
-      file_on_disk: fileExistsOnDisk(normalized),
-      type_doc_id: row.type_doc_id
-    }
-  })
+      return {
+        id: row.id,
+        file_path: normalized,
+        file_on_disk: fileExistsOnDisk(normalized),
+        type_doc_id: row.type_doc_id
+      }
+    })
 }
 
 async function assessFinalDocumentReadiness (

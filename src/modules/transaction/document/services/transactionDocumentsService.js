@@ -18,7 +18,8 @@ const documentSignatureRepository =
   require('../../../workflow/taskCamunda/repositories/documentSignatureRepository')
 const {
   normalizeStoredFilePath,
-  toPublicFileUrl
+  toPublicFileUrl,
+  isSyntheticSignatureDocumentPath
 } = require('../../../../core/utils/filePath')
 const { API_PUBLIC_URL } = require('../../../../core/config/env')
 const {
@@ -42,16 +43,26 @@ function mapGeneratedDocument (instance) {
 }
 
 function mapUploadedFile (row) {
+  if (isSyntheticSignatureDocumentPath(row.file_path)) {
+    return null
+  }
+
   const storedPath = normalizeStoredFilePath(row.file_path)
+
+  if (!storedPath) {
+    return null
+  }
 
   return {
     document_id: row.id,
     file_path: storedPath,
     file_url: toPublicFileUrl(row.file_path),
-    type_doc_id: row.type_doc_id,
+    type_doc_id: row.type_doc_id ?? null,
     type_doc: row.type_doc
       ? { id: row.type_doc.id, name: row.type_doc.name }
       : null,
+    type_doc_name: row.type_doc?.name ?? null,
+    signatures_count: Array.isArray(row.signatures) ? row.signatures.length : 0,
     uploaded_at: row.created_at ?? null
   }
 }
@@ -139,7 +150,7 @@ async function getTransactionDocuments (transactionId, { userId = null } = {}) {
     transaction_id: transaction.id,
     status: transaction.status,
     generated_documents: generatedInstances.map(mapGeneratedDocument),
-    uploaded_files: uploadedRows.map(mapUploadedFile),
+    uploaded_files: uploadedRows.map(mapUploadedFile).filter(Boolean),
     final_qr: buildFinalQr({ transaction, generatedInstances })
   }
 }

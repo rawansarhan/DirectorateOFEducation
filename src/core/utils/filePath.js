@@ -54,8 +54,22 @@ function getApiBaseUrl () {
   )
 }
 
+/**
+ * مسار اصطناعي لسجل توقيع USB في document_signature — ليس ملفًا على القرص.
+ * يُنشأ في persistVerifiedSignature بصيغة transaction://{txId}/stage/{stageId}
+ */
+function isSyntheticSignatureDocumentPath (filePath) {
+  const value = String(filePath || '').trim()
+  return value.startsWith('transaction://')
+}
+
 function normalizeStoredFilePath (filePath) {
   if (!filePath || typeof filePath !== 'string') {
+    return null
+  }
+
+  // لا تُحوَّل مسارات التوقيع الاصطناعي إلى /uploads/<basename> بالخطأ
+  if (isSyntheticSignatureDocumentPath(filePath)) {
     return null
   }
 
@@ -213,6 +227,7 @@ module.exports = {
   ensureUploadsRoot,
   resolveAbsoluteUploadPath,
   getApiBaseUrl,
+  isSyntheticSignatureDocumentPath,
   normalizeStoredFilePath,
   toPublicFileUrl,
   buildStoredFileEntry,
