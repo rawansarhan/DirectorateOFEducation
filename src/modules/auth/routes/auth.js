@@ -8,6 +8,8 @@ const {
   registerCitizenUser,
   verifyRegisterOtpUser,
   loginUser,
+  loginTechnicalOfficerUser,
+  loginEmployeeUser,
   verifyLoginOtpUser,
   registerDeviceTokenUser,
   employeeVerifyPinUser,
@@ -113,7 +115,11 @@ router.post('/verify-otp/register', authBruteForceLimiter, verifyRegisterOtpUser
  * /api/auth/login:
  *   post:
  *     tags: [Auth]
- *     summary: تسجيل الدخول (الخطوة 1 — يرسل OTP)
+ *     summary: تسجيل الدخول — مواطن (الخطوة 1 — يرسل OTP)
+ *     description: |
+ *       بوابة المواطن فقط — كل تعيينات OrgDepRole الفعّالة يجب أن يكون
+ *       `role.code = CITIZEN` (يُرفض أي دور آخر).
+ *       نفس منطق وريسبونس تسجيل الدخول (خطوة OTP).
  *     security: []
  *     requestBody:
  *       required: true
@@ -128,8 +134,72 @@ router.post('/verify-otp/register', authBruteForceLimiter, verifyRegisterOtpUser
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/OtpSendResponse'
+ *       403:
+ *         description: الحساب ليس مواطناً فقط (CITIZEN)
  */
 router.post('/login', authBruteForceLimiter, loginUser)
+
+/**
+ * @swagger
+ * /api/auth/login/technical-officer:
+ *   post:
+ *     tags: [Auth]
+ *     summary: تسجيل الدخول — مسؤول تقني (الخطوة 1 — يرسل OTP)
+ *     description: |
+ *       بوابة المسؤول التقني فقط — كل تعيينات OrgDepRole الفعّالة يجب أن يكون
+ *       `role.code = TECHNICAL_OFFICER` (يُرفض أي دور آخر).
+ *       نفس منطق وريسبونس `POST /api/auth/login`.
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/LoginRequest'
+ *     responses:
+ *       200:
+ *         description: تم إرسال OTP
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/OtpSendResponse'
+ *       403:
+ *         description: الحساب ليس مسؤولاً تقنياً فقط (TECHNICAL_OFFICER)
+ */
+router.post(
+  '/login/technical-officer',
+  authBruteForceLimiter,
+  loginTechnicalOfficerUser
+)
+
+/**
+ * @swagger
+ * /api/auth/login/employee:
+ *   post:
+ *     tags: [Auth]
+ *     summary: تسجيل الدخول — موظف (الخطوة 1 — يرسل OTP)
+ *     description: |
+ *       بوابة الموظفين — يمنع `CITIZEN` و `TECHNICAL_OFFICER`، ويسمح بأي دور آخر
+ *       (مثل EMPLOYEE، DEPARTMENT_DIRECTOR، …).
+ *       نفس منطق وريسبونس `POST /api/auth/login`.
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/LoginRequest'
+ *     responses:
+ *       200:
+ *         description: تم إرسال OTP
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/OtpSendResponse'
+ *       403:
+ *         description: الحساب مواطن أو مسؤول تقني — غير مسموح من هذه البوابة
+ */
+router.post('/login/employee', authBruteForceLimiter, loginEmployeeUser)
 
 /**
  * @swagger

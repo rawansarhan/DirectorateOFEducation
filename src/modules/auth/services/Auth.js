@@ -464,9 +464,77 @@ async function registerCitizen (userData) {
 //     token
 //   }
 // }
+const LOGIN_AUDIENCE = {
+  CITIZEN: 'CITIZEN',
+  TECHNICAL_OFFICER: 'TECHNICAL_OFFICER',
+  EMPLOYEE: 'EMPLOYEE'
+}
+
+const ROLE_CODE = {
+  CITIZEN: 'CITIZEN',
+  TECHNICAL_OFFICER: 'TECHNICAL_OFFICER'
+}
+
+function createLoginAudienceError (message) {
+  const err = new Error(message)
+  err.statusCode = 403
+  return err
+}
+
+/**
+ * CITIZEN: كل OrgDepRole الفعّالة يجب أن تكون CITIZEN فقط
+ * TECHNICAL_OFFICER: كل OrgDepRole الفعّالة يجب أن تكون TECHNICAL_OFFICER فقط
+ * EMPLOYEE: يمنع CITIZEN و TECHNICAL_OFFICER — يسمح بأي دور آخر
+ */
+function assertLoginAudience (roleCodes = [], audience) {
+  const codes = [...new Set(roleCodes.filter(Boolean))]
+
+  if (audience === LOGIN_AUDIENCE.CITIZEN) {
+    if (!codes.length || codes.some(code => code !== ROLE_CODE.CITIZEN)) {
+      throw createLoginAudienceError(
+        'هذا الحساب غير مسموح له بتسجيل الدخول من بوابة المواطن'
+      )
+    }
+    return
+  }
+
+  if (audience === LOGIN_AUDIENCE.TECHNICAL_OFFICER) {
+    if (
+      !codes.length ||
+      codes.some(code => code !== ROLE_CODE.TECHNICAL_OFFICER)
+    ) {
+      throw createLoginAudienceError(
+        'هذا الحساب غير مسموح له بتسجيل الدخول من بوابة المسؤول التقني'
+      )
+    }
+    return
+  }
+
+  if (audience === LOGIN_AUDIENCE.EMPLOYEE) {
+    if (!codes.length) {
+      throw createLoginAudienceError(
+        'هذا الحساب غير مسموح له بتسجيل الدخول من بوابة الموظفين'
+      )
+    }
+
+    if (
+      codes.some(
+        code =>
+          code === ROLE_CODE.CITIZEN ||
+          code === ROLE_CODE.TECHNICAL_OFFICER
+      )
+    ) {
+      throw createLoginAudienceError(
+        'هذا الحساب غير مسموح له بتسجيل الدخول من بوابة الموظفين'
+      )
+    }
+  }
+}
+
 async function login (
   userData,
-  clientMeta = {}
+  clientMeta = {},
+  { audience = LOGIN_AUDIENCE.CITIZEN } = {}
 ) {
   const { error } = validateLogin(userData)
 
@@ -512,6 +580,13 @@ async function login (
     )
   }
 
+  const roleCodes =
+    await userRoleAssignmentRepository.findActiveRoleCodesByUserId(
+      user.id
+    )
+
+  assertLoginAudience(roleCodes, audience)
+
   if (!user.phone_number) {
     throw new Error(
       'لا يوجد رقم هاتف مرتبط بهذا الحساب. يرجى التواصل مع الدعم الفني'
@@ -538,6 +613,24 @@ async function login (
     message:
       `تم إرسال رمز التحقق على رقم الموبايل. أدخله خلال ${OTP_TTL_MINUTES} دقائق.`,
   }
+}
+
+async function loginCitizen (userData, clientMeta = {}) {
+  return login(userData, clientMeta, {
+    audience: LOGIN_AUDIENCE.CITIZEN
+  })
+}
+
+async function loginTechnicalOfficer (userData, clientMeta = {}) {
+  return login(userData, clientMeta, {
+    audience: LOGIN_AUDIENCE.TECHNICAL_OFFICER
+  })
+}
+
+async function loginEmployee (userData, clientMeta = {}) {
+  return login(userData, clientMeta, {
+    audience: LOGIN_AUDIENCE.EMPLOYEE
+  })
 }
 
 // ================== VERIFY REGISTER OTP ==================
@@ -812,6 +905,10 @@ module.exports = {
   registerCitizen,
   verifyRegisterOtp,
   login,
+  loginCitizen,
+  loginTechnicalOfficer,
+  loginEmployee,
+  LOGIN_AUDIENCE,
   verifyLoginOtp,
   registerDeviceToken,
   resendOtp,

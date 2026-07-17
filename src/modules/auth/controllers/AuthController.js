@@ -4,7 +4,9 @@ const {
   registerEmployee,
   registerCitizen,
   verifyRegisterOtp,
-  login,
+  loginCitizen,
+  loginTechnicalOfficer,
+  loginEmployee,
   verifyLoginOtp,
   registerDeviceToken,
   resendOtp,
@@ -79,7 +81,25 @@ const verifyRegisterOtpUser = async (req, res) => {
 
 const loginUser = async (req, res) => {
   try {
-    const result = await login(req.body, getClientMeta(req))
+    const result = await loginCitizen(req.body, getClientMeta(req))
+    return ApiResponder.okResponse(res, result, 'تم تسجيل الدخول بنجاح')
+  } catch (err) {
+    return handleControllerError(res, err, 401)
+  }
+}
+
+const loginTechnicalOfficerUser = async (req, res) => {
+  try {
+    const result = await loginTechnicalOfficer(req.body, getClientMeta(req))
+    return ApiResponder.okResponse(res, result, 'تم تسجيل الدخول بنجاح')
+  } catch (err) {
+    return handleControllerError(res, err, 401)
+  }
+}
+
+const loginEmployeeUser = async (req, res) => {
+  try {
+    const result = await loginEmployee(req.body, getClientMeta(req))
     return ApiResponder.okResponse(res, result, 'تم تسجيل الدخول بنجاح')
   } catch (err) {
     return handleControllerError(res, err, 401)
@@ -294,6 +314,8 @@ module.exports = {
   registerCitizenUser,
   verifyRegisterOtpUser,
   loginUser,
+  loginTechnicalOfficerUser,
+  loginEmployeeUser,
   verifyLoginOtpUser,
   registerDeviceTokenUser,
   setupPinUser,

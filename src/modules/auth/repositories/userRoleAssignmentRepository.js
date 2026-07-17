@@ -54,9 +54,22 @@ class UserRoleAssignmentRepository {
       include: [{
         model: OrgDeptRole,
         as: 'org_department_role',
-        attributes: ['id', 'camunda_group_key']
+        attributes: ['id', 'camunda_group_key', 'role_id'],
+        include: [{
+          model: Role,
+          as: 'role',
+          attributes: ['id', 'name', 'code']
+        }]
       }]
     })
+  }
+
+  async findActiveRoleCodesByUserId (userId) {
+    const assignments = await this.findActiveWithOrgDeptRole(userId)
+
+    return assignments
+      .map(item => item.org_department_role?.role?.code)
+      .filter(Boolean)
   }
 
   // تعطيل كل تعيينات الأدوار الفعّالة لمستخدم (يُستخدم عند إعادة التعيين)
