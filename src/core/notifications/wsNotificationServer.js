@@ -17,8 +17,8 @@
  *     بقية الـ backend، مع إشعار تجريبي دوري اختياري للتأكد من العرض.
  *
  * الاستخدام:
- *   - ضمن السيرفر (الإنتاج):  require('./notifications/wsNotificationServer').attach(httpServer)
- *   - تشغيل مستقل (تطوير):     node src/notifications/wsNotificationServer.js
+ *   - ضمن السيرفر (الإنتاج):  require('./core/notifications/wsNotificationServer').attach(httpServer)
+ *   - تشغيل مستقل (تطوير):     node src/core/notifications/wsNotificationServer.js
  */
 
 const http = require('http')
@@ -226,7 +226,7 @@ function start () {
   }
 }
 
-// تشغيل مباشر:  node src/notifications/wsNotificationServer.js
+// تشغيل مباشر:  node src/core/notifications/wsNotificationServer.js
 if (require.main === module) {
   require('dotenv').config()
   start()

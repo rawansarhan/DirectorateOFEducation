@@ -5,7 +5,7 @@ const http = require('http');
 const app = require('./app');
 const sequelize = require('../src/core/config/database');
 const { attach: attachNotificationsWs } =
-  require('./notifications/wsNotificationServer');
+  require('./core/notifications/wsNotificationServer');
 const PORT = process.env.PORT || 4000;
 
 // 🔥 الأفضل تشغّل الـ jobs بعد ما تتأكد السيرفر شغال أو DB جاهز
