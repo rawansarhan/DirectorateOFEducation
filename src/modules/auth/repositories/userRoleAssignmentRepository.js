@@ -1,6 +1,6 @@
 'use strict'
 
-const { UserRoleAssignment, OrgDeptRole, Role, Department } = require('../../../entities')
+const { UserRoleAssignment, OrgDeptRole, Role, Department, Organization } = require('../../../entities')
 
 class UserRoleAssignmentRepository {
   async create (data, options = {}) {
@@ -17,7 +17,7 @@ class UserRoleAssignmentRepository {
     })
   }
 
-  // تعيينات الأدوار الفعّالة مع تفاصيل الدور والقسم (اسم + id)
+  // تعيينات الأدوار الفعّالة مع تفاصيل الدور والقسم والمنظمة (اسم + id)
   async findActiveRolesDetailedByUserId (userId) {
     return UserRoleAssignment.findAll({
       where: {
@@ -28,7 +28,7 @@ class UserRoleAssignmentRepository {
       include: [{
         model: OrgDeptRole,
         as: 'org_department_role',
-        attributes: ['id', 'role_id', 'department_id'],
+        attributes: ['id', 'role_id', 'department_id', 'organization_id'],
         include: [
           {
             model: Role,
@@ -38,6 +38,11 @@ class UserRoleAssignmentRepository {
           {
             model: Department,
             as: 'department',
+            attributes: ['id', 'name']
+          },
+          {
+            model: Organization,
+            as: 'organization',
             attributes: ['id', 'name']
           }
         ]

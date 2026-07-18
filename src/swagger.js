@@ -479,18 +479,34 @@ const swaggerOptions = {
           type: 'object',
           properties: {
             success: { type: 'boolean', example: true },
+            status_code: { type: 'integer', example: 200 },
+            message: { type: 'string', example: 'تم تأكيد رمز الدخول بنجاح' },
             data: {
               type: 'object',
               properties: {
+                user: { $ref: '#/components/schemas/User' },
+                roles: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      organization_department_roles_id: { type: 'integer', example: 3 },
+                      role_id: { type: 'integer', example: 4 },
+                      role_name: { type: 'string', example: 'مدير مكتب المدير' },
+                      department_id: { type: 'integer', example: 12 },
+                      department_name: { type: 'string', example: 'دائرة مكتب المدير' },
+                      organization_id: { type: 'integer', example: 1 },
+                      organization_name: { type: 'string', example: 'مديرية التربية' }
+                    }
+                  }
+                },
                 token: {
                   type: 'string',
                   example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6...'
                 },
-                user: { $ref: '#/components/schemas/User' },
-                roles: {
-                  type: 'array',
-                  items: { type: 'integer' },
-                  example: [1, 2]
+                refreshToken: {
+                  type: 'string',
+                  example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6...'
                 }
               }
             }

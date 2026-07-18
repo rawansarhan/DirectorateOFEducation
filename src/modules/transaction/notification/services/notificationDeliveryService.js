@@ -1,6 +1,6 @@
 'use strict'
 
-const { sendToUser } = require('../../../../notifications/wsNotificationServer')
+const { sendToUser } = require('../../../../core/notifications/wsNotificationServer')
 const notificationRepository = require('../repositories/notificationRepository')
 const { userHasRoleCode } = require('../repositories/notificationRecipientRepository')
 const { sendAndPersistNotification } = require('./notificationService')

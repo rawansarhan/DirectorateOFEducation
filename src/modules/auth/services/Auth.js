@@ -802,13 +802,16 @@ async function verifyLoginOtp (
       const odr = item.org_department_role
       const role = odr?.role
       const department = odr?.department
+      const organization = odr?.organization
 
       return {
         organization_department_roles_id: item.organization_department_roles_id,
         role_id: role?.id ?? null,
         role_name: role?.name ?? null,
         department_id: department?.id ?? null,
-        department_name: department?.name ?? null
+        department_name: department?.name ?? null,
+        organization_id: organization?.id ?? odr?.organization_id ?? null,
+        organization_name: organization?.name ?? null
       }
     }),
     token: accessToken,

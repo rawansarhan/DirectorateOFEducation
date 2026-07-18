@@ -198,7 +198,7 @@ router.get(
 router.get(
   '/by-department/:departmentId',
   authMiddleware,
-  authorize('ROLE_VIEW'),
+  // authorize('ROLE_VIEW'),
   getRolesByDepartment
 )
 

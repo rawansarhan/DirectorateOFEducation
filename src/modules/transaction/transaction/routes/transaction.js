@@ -1026,6 +1026,7 @@ router.get(
  *                     - id_template: 1
  *                       id_document_instance: 55
  *                       generated_pdf_path: /uploads/final/tx-42-template.pdf
+ *                       generated_pdf_url: http://localhost:4000/uploads/final/tx-42-template.pdf
  *                       value:
  *                         student_name: روان
  *                         father_name: أحمد
