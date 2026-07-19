@@ -31,7 +31,11 @@ function wantsHtmlResponse (req) {
   return format !== 'json'
 }
 
-function buildPublicVerifyResult (result, transaction = null) {
+/**
+ * نتيجة عامة للمسح — بدون تفاصيل تقنية أو موقّعين.
+ * عند النجاح يُضاف details_code لاستخدامه في API التفاصيل.
+ */
+function buildPublicVerifyResult (result, transaction = null, detailsMeta = null) {
   const valid = Boolean(result?.valid)
 
   const payload = {
@@ -52,6 +56,12 @@ function buildPublicVerifyResult (result, transaction = null) {
     }
   }
 
+  if (valid && detailsMeta?.details_code) {
+    payload.details_code = detailsMeta.details_code
+    payload.details_code_expires_in_seconds =
+      detailsMeta.expires_in_seconds ?? null
+  }
+
   return payload
 }
 
@@ -70,6 +80,26 @@ function renderDocumentVerifyHtml (payload) {
   const statusIcon = valid ? '✓' : '✕'
   const identity = payload?.identity || {}
   const verifiedAt = formatVerifiedAt(payload?.verified_at)
+  const detailsCode = payload?.details_code || null
+  const expiresIn = payload?.details_code_expires_in_seconds
+
+  const detailsCodeHtml =
+    valid && detailsCode
+      ? `
+    <div class="section">
+      <h2 class="section-title">رمز التفاصيل</h2>
+      <p class="code-hint">
+        للاطلاع على تفاصيل المعاملة (الموقّعون، السجل، الوثيقة النهائية)
+        استخدم هذا الرمز في واجهة التفاصيل أو API التفاصيل.
+      </p>
+      <div class="code-box">${escapeHtml(detailsCode)}</div>
+      ${
+        expiresIn
+          ? `<div class="code-meta">صالح لمدة ${escapeHtml(String(Math.round(expiresIn / 60)))} دقيقة تقريباً</div>`
+          : ''
+      }
+    </div>`
+      : ''
 
   return `<!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -179,6 +209,31 @@ function renderDocumentVerifyHtml (payload) {
       text-align: left;
       word-break: break-word;
     }
+    .code-hint {
+      margin: 0 0 12px;
+      font-size: 0.85rem;
+      color: #64748b;
+      line-height: 1.7;
+      text-align: center;
+    }
+    .code-box {
+      padding: 14px 12px;
+      border-radius: 10px;
+      background: #0f172a;
+      color: #f8fafc;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 0.72rem;
+      line-height: 1.5;
+      word-break: break-all;
+      text-align: center;
+      direction: ltr;
+    }
+    .code-meta {
+      margin-top: 10px;
+      text-align: center;
+      font-size: 0.8rem;
+      color: #64748b;
+    }
     .footer {
       padding: 0 24px 24px;
       text-align: center;
@@ -225,13 +280,14 @@ function renderDocumentVerifyHtml (payload) {
         تأكد أن الأسماء والرقم الوطني أعلاه يطابقان ما هو مطبوع في الوثيقة التي بحوزتك.
       </div>
     </div>
+    ${detailsCodeHtml}
     `
         : ''
     }
 
     <div class="footer">
       ${verifiedAt ? `تاريخ التحقق: ${escapeHtml(verifiedAt)}` : ''}
-      <div>هذه الصفحة للتحقق العام فقط — لا تعرض تفاصيل تقنية عن سلسلة التواقيع.</div>
+      <div>هذه الصفحة للتحقق العام فقط — التفاصيل عبر رمز التفاصيل وواجهة مخصصة.</div>
     </div>
   </div>
 </body>

@@ -17,11 +17,15 @@ const {
 } = require('../utils/transactionResponse')
 const {
   mapErrorToArabic,
-  httpStatusForError
+  httpStatusForError,
+  createTransactionError
 } = require('../utils/transactionErrors')
 const { hasUpsertFormPayload } = require('../validations/draftFormValidation')
 const { getClientMeta } = require('../../../../core/security/securityConfig')
 const { parsePaginationQuery } = require('../../../../core/utils/pagination')
+const {
+  decryptAes256GcmJsonPayload
+} = require('../../../../core/crypto/aesPayloadCrypto')
 
 function handleTransactionError (res, err) {
   const statusCode = httpStatusForError(err)
@@ -220,6 +224,40 @@ async function submitTransactionController (req, res) {
   }
 }
 
+async function submitEncryptedTransactionController (req, res) {
+  try {
+    const clientMeta = getClientMeta(req)
+
+    let decryptedBody
+
+    try {
+      decryptedBody = decryptAes256GcmJsonPayload(req.body || {})
+    } catch (cryptoErr) {
+      throw createTransactionError(
+        cryptoErr.code || 'DECRYPTION_FAILED',
+        cryptoErr.message
+      )
+    }
+
+    const result = await submitTransactionByProcess(
+      req.params.processId,
+      decryptedBody,
+      {
+        userId: req.user.id,
+        idempotencyKey: clientMeta.idempotencyKey || null,
+        clientMeta
+      }
+    )
+
+    return successResponse(res, {
+      message: MESSAGES.TRANSACTION_SUBMITTED,
+      data: result
+    })
+  } catch (err) {
+    return handleTransactionError(res, err)
+  }
+}
+
 module.exports = {
   createDraftController,
   updateDraftController,
@@ -230,5 +268,6 @@ module.exports = {
   getMyTransactionCountsController,
   getTransactionController,
   getFirstStageContentController,
-  submitTransactionController
+  submitTransactionController,
+  submitEncryptedTransactionController
 }

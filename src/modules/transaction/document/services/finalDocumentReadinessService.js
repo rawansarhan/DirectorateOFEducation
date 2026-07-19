@@ -113,10 +113,6 @@ async function assessFinalDocumentReadiness (
     throw createTransactionError('TRANSACTION_NOT_FOUND')
   }
 
-  if (userId && transaction.user_id !== userId) {
-    throw createTransactionError('UNAUTHORIZED')
-  }
-
   const [instances, uploadedRows, signatureLinks, outboxEvents] = await Promise.all([
     documentInstanceRepository.findAllByTransactionId(numericTransactionId),
     documentSignatureRepository.findAllWithSignaturesByTransactionId(

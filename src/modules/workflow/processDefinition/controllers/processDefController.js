@@ -15,6 +15,7 @@ const {
   getUnapprovedOrInactiveProcesses,
   getProcessesWithMissingStageConfig,
   getProcessesByTypeForAdmin,
+  getComplaintProcessesForAdmin,
   getProcessDetailsWithValidation,
   reviewProcess,
   getProcessByIdService
@@ -135,6 +136,17 @@ const getProcessesByTypeForAdminController = asyncHandler(async (req, res) => {
     return ApiResponder.badRequestResponse(res, err.message)
   }
 })
+
+const getComplaintProcessesForAdminController = asyncHandler(async (req, res) => {
+  try {
+    const { page, limit, offset } = parsePaginationQuery(req.query)
+    const result = await getComplaintProcessesForAdmin({ page, limit, offset })
+
+    return ApiResponder.okResponse(res, result.data, result.message)
+  } catch (err) {
+    return ApiResponder.badRequestResponse(res, err.message)
+  }
+})
 // =========================================
 // GET PROCESS DETAILS + VALIDATION
 // =========================================
@@ -198,6 +210,7 @@ module.exports = {
   getUnapprovedOrInactiveProcessesController,
   getProcessesWithMissingStageConfigController,
   getProcessesByTypeForAdminController,
+  getComplaintProcessesForAdminController,
   getProcessDetails,
   reviewProcessController,
   processById,

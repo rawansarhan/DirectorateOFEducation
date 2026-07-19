@@ -14,6 +14,13 @@ const {
 } = require('../views/documentVerifyPublicView')
 const transactionRepository =
   require('../../transaction/repositories/transactionRepository')
+const {
+  buildDocumentQrScanBundle
+} = require('../services/documentQrScanBundleService')
+const {
+  issueDocumentDetailsCode,
+  resolveDocumentDetailsCode
+} = require('../services/documentDetailsCodeService')
 
 async function getIntegrityChainController (req, res) {
   try {
@@ -75,6 +82,7 @@ async function verifyIntegrityChainController (req, res) {
 /**
  * تحقق عام من رمز QR المضمّن في وثيقة PDF (مسح بدون مصادقة).
  * يقرأ المعطيات من query: tx, g (genesis), doc, s (signature).
+ * الشاشة العامة بسيطة؛ التفاصيل عبر details_code + /document/details.
  */
 async function verifyDocumentController (req, res) {
   const asHtml = wantsHtmlResponse(req)
@@ -93,7 +101,12 @@ async function verifyDocumentController (req, res) {
       ? await transactionRepository.findById(result.transaction_id)
       : null
 
-    const publicResult = buildPublicVerifyResult(result, transaction)
+    const detailsMeta =
+      result.valid && transaction
+        ? issueDocumentDetailsCode(transaction.id)
+        : null
+
+    const publicResult = buildPublicVerifyResult(result, transaction, detailsMeta)
 
     if (asHtml) {
       return res
@@ -125,8 +138,35 @@ async function verifyDocumentController (req, res) {
   }
 }
 
+/**
+ * جلب تفاصيل المعاملة بعد المسح باستخدام details_code من /api/verify/document.
+ */
+async function getDocumentVerifyDetailsController (req, res) {
+  try {
+    const code = req.query.code || req.body?.code || req.body?.details_code
+    const { transactionId } = resolveDocumentDetailsCode(code)
+    const transaction = await transactionRepository.findById(transactionId)
+
+    if (!transaction) {
+      return ApiResponder.errorResponse(res, 'المعاملة غير موجودة', 404)
+    }
+
+    const bundle = await buildDocumentQrScanBundle(transaction)
+
+    return ApiResponder.okResponse(
+      res,
+      bundle,
+      'تم جلب تفاصيل التحقق من الوثيقة بنجاح'
+    )
+  } catch (error) {
+    const statusCode = error.message === 'Transaction not found' ? 404 : 400
+    return ApiResponder.errorResponse(res, error.message, statusCode)
+  }
+}
+
 module.exports = {
   getIntegrityChainController,
   verifyIntegrityChainController,
-  verifyDocumentController
+  verifyDocumentController,
+  getDocumentVerifyDetailsController
 }

@@ -12,7 +12,8 @@ const {
   getMyTransactionCountsController,
   getTransactionController,
   getFirstStageContentController,
-  submitTransactionController
+  submitTransactionController,
+  submitEncryptedTransactionController
 } = require('../controllers/transactionController')
 
 const {
@@ -215,6 +216,76 @@ router.post(
   authMiddleware,
   submitTransactionLimiter,
   submitTransactionController
+)
+
+/**
+ * @swagger
+ * /api/transaction/submit/process/{processId}/encrypted:
+ *   post:
+ *     summary: تقديم مشفّر (AES-256-GCM) بمعرّف العملية — مواطن فقط
+ *     description: |
+ *       نفس منطق `POST /api/transaction/submit/process/{processId}` بعد فك تشفير الجسم.
+ *
+ *       **Body مشفّر:**
+ *       ```json
+ *       { "iv": "<base64>", "ciphertext": "<base64>", "tag": "<base64>" }
+ *       ```
+ *
+ *       بعد الفك يجب أن يكون النص JSON مطابقاً لـ `SubmitTransactionByProcessPayload`
+ *       (form_id, widgets, templates, الهوية، …).
+ *
+ *       **الخوارزمية:** AES-256-GCM — المفتاح المشترك `SUBMIT_AES_KEY_BASE64` في `.env`.
+ *       **للمواطن فقط** — بدون signature.
+ *     tags: [Transaction]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: processId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *         description: معرّف العملية (process id)
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [iv, ciphertext, tag]
+ *             properties:
+ *               iv:
+ *                 type: string
+ *                 description: IV عشوائي 12 بايت بصيغة base64
+ *                 example: AbCdEfGhIjKlMnOp
+ *               ciphertext:
+ *                 type: string
+ *                 description: النص المشفّر (JSON التقديم) بصيغة base64
+ *               tag:
+ *                 type: string
+ *                 description: GCM auth tag بصيغة base64
+ *     responses:
+ *       200:
+ *         description: تم تقديم المعاملة بنجاح
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SubmitTransactionResponse'
+ *       400:
+ *         description: فشل فك التشفير أو تحقق التقديم
+ *       403:
+ *         description: المسار للمواطن فقط
+ *       404:
+ *         description: العملية غير موجودة
+ *       503:
+ *         description: مفتاح SUBMIT_AES_KEY_BASE64 غير مضبوط على السيرفر
+ */
+router.post(
+  '/submit/process/:processId/encrypted',
+  authMiddleware,
+  submitTransactionLimiter,
+  submitEncryptedTransactionController
 )
 
 /**
@@ -541,9 +612,8 @@ router.get(
  *
  *       ملاحظة: لا يتضمّن هذا الرد أي بيانات QR / سلسلة نزاهة.
  *
- *       **Auth:** Bearer — مالك المعاملة (المواطن) فقط
+ *       **Auth:** Bearer (تسجيل دخول فقط — بدون تقييد مالك/دور داخل المنطق)
  *       **الحالة:** completed فقط
- *       **للموظف:** GET /api/workflow/transactions/{transactionId}/certificate
  *     tags: [Certificate & Integrity Chain]
  *     security:
  *       - bearerAuth: []
@@ -573,8 +643,6 @@ router.get(
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/ApiErrorResponse'
- *       403:
- *         description: لا تملك صلاحية الوصول
  *       404:
  *         description: المعاملة غير موجودة
  */
@@ -670,7 +738,8 @@ router.get(
  *
  *       يُحفظ ويُسجَّل كـ final_document (يستبدل النسخة السابقة إن وُجدت) ويُحسب content_hash.
  *
- *       **Auth:** Bearer — مالك المعاملة | **الحالة:** completed فقط
+ *       **Auth:** Bearer (تسجيل دخول فقط — بدون تقييد مالك داخل المنطق)
+ *       **الحالة:** completed فقط
  *     tags: [Certificate & Integrity Chain]
  *     security:
  *       - bearerAuth: []
@@ -693,8 +762,6 @@ router.get(
  *         description: تم توليد الوثيقة النهائية المدمجة بنجاح
  *       400:
  *         description: لا توجد وثائق للدمج أو الحالة ليست completed
- *       403:
- *         description: لا تملك صلاحية الوصول
  *       404:
  *         description: المعاملة غير موجودة
  */

@@ -217,13 +217,21 @@ async function getRunningInstancesForAssigneeRoute (roleIds = []) {
       return include
     }
 
+    // transactions.data = JSON (ليس JSONB) — Op.contains يولّد @> ويحتاج jsonb على الطرفين
     return {
       ...include,
       where: {
-        ...include.where,
-        data: {
-          [Op.contains]: { __assignee_route: {} }
-        }
+        [Op.and]: [
+          include.where || {},
+          db.sequelize.where(
+            db.sequelize.cast(
+              db.sequelize.col('transaction.data'),
+              'jsonb'
+            ),
+            '@>',
+            db.sequelize.literal(`'{"__assignee_route":{}}'::jsonb`)
+          )
+        ]
       }
     }
   })

@@ -207,6 +207,23 @@ class ProcessRepository {
     )
   }
 
+  async findComplaintProcessesForAdmin () {
+    return ProcessDefinition.findAll({
+      where: { is_complaint: true },
+      attributes: [
+        'id',
+        'name',
+        'code',
+        'priority',
+        'status',
+        'approval_status',
+        'is_active',
+        'is_complaint'
+      ],
+      order: [['priority', 'ASC'], ['id', 'ASC']]
+    })
+  }
+
   async findAuthComplaintProcesses (roleIds) {
     return ProcessDefinition.findAll(
       this._buildAuthProcessesQuery({ isComplaint: true, roleIds })
