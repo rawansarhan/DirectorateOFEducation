@@ -10,8 +10,8 @@ const processInstanceRepository = require('../repositories/processInstanceReposi
 const processRepository = require('../../processDefinition/repositories/processRepository')
 const stageRepository = require('../../processDefinition/repositories/stageRepository')
 const stageConfigRepository = require('../../stageConfig/repositories/stageConfigRepository')
-const userRepository = require('../../../auth/repositories/userRepository')
-const userKeyRepository = require('../../../auth/repositories/userKeyRepository')
+const userRepository = require('../../../auth/shared/repositories/userRepository')
+const userKeyRepository = require('../../../auth/shared/repositories/userKeyRepository')
 const { validateSigningChallengePayload } = require('../../schemas/signingChallengeSchema')
 const transactionSigningChallengeRepository =
   require('../repositories/transactionSigningChallengeRepository')
@@ -30,7 +30,7 @@ const {
   verifyPin,
   getTransactionSignExpiresAt,
   TX_SIGN_TTL_MS
-} = require('../../../auth/services/cryptoAuthService')
+} = require('../../../auth/shared/services/cryptoAuthService')
 const { assertTaskLockHolder } = require('./taskLockService')
 const {
   toSigningChallenge,

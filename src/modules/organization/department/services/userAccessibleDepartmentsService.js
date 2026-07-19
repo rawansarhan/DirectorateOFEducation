@@ -5,7 +5,8 @@ const { Op } = require('sequelize')
 const { Department } = require('../../../../entities')
 const orgDeptRoleRepository = require('../../role/repositories/orgDeptRoleRepository')
 const userRoleAssignmentRepository =
-  require('../../../auth/repositories/userRoleAssignmentRepository')
+  require('../../../auth/shared/repositories/userRoleAssignmentRepository')
+const { toAccessibleScopeDTO } = require('../mappers/departmentMapper')
 const {
   KEYS,
   getOrLoad
@@ -34,12 +35,12 @@ async function loadAccessibleScopeFromDb (rootOdrIds) {
   )]
 
   if (!departmentIds.length) {
-    return {
+    return toAccessibleScopeDTO({
       root_org_dept_role_ids: rootOdrIds,
       org_dept_role_ids: orgDeptRoleIds,
       department_ids: [],
       departments: []
-    }
+    })
   }
 
   const departments = await Department.findAll({
@@ -51,18 +52,12 @@ async function loadAccessibleScopeFromDb (rootOdrIds) {
     order: [['name', 'ASC']]
   })
 
-  return {
+  return toAccessibleScopeDTO({
     root_org_dept_role_ids: rootOdrIds,
     org_dept_role_ids: orgDeptRoleIds,
     department_ids: departmentIds,
-    departments: departments.map(dept => ({
-      id: dept.id,
-      name: dept.name,
-      organization_id: dept.organization_id,
-      parent_id: dept.parent_id,
-      is_active: dept.is_active
-    }))
-  }
+    departments
+  })
 }
 
 async function getUserAccessibleDepartments (userId, options = {}) {
@@ -83,12 +78,12 @@ async function getUserAccessibleDepartments (userId, options = {}) {
       )
 
       if (!rootOdrIds.length) {
-        return {
+        return toAccessibleScopeDTO({
           root_org_dept_role_ids: [],
           org_dept_role_ids: [],
           department_ids: [],
           departments: []
-        }
+        })
       }
 
       return loadAccessibleScopeFromDb(rootOdrIds)

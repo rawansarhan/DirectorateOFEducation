@@ -345,7 +345,7 @@ router.get(
 router.get(
   '/:id',
   authMiddleware,
-  authorize('EMPLOYEE_VIEW'),
+  // authorize('EMPLOYEE_VIEW'),
   getEmployeeById
 )
 

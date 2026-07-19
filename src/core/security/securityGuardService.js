@@ -1,7 +1,7 @@
 'use strict'
 
-const auditLogRepository = require('../../modules/auth/repositories/auditLogRepository')
-const userRepository = require('../../modules/auth/repositories/userRepository')
+const auditLogRepository = require('../../modules/auth/shared/repositories/auditLogRepository')
+const userRepository = require('../../modules/auth/shared/repositories/userRepository')
 const {
   MAX_FAILED_ATTEMPTS,
   LOCK_DURATION_MS

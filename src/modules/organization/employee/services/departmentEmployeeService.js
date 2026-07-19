@@ -2,7 +2,7 @@
 
 const departmentEmployeeRepository = require('../repositories/departmentEmployeeRepository')
 const employeeTaskRepository = require('../../../workflow/taskCamunda/repositories/employeeTaskRepository')
-const { resolveWorkloadStatus } = require('../utils/workloadStatus')
+const { toDepartmentEmployeeDTO } = require('../mappers/employeeMapper')
 const {
   encodeCursor,
   buildCursorPaginationMeta,
@@ -101,42 +101,6 @@ function computeWorkloadPercent ({
   }
 }
 
-function shapeDepartmentEmployee ({
-  assignment,
-  completedCount,
-  workload
-}) {
-  const user = assignment.user
-  const odr = assignment.org_department_role
-  const workloadStatus = resolveWorkloadStatus(workload.workload_percent)
-
-  return {
-    assignment_id: assignment.id,
-    employee_id: user.id,
-    first_name: user.first_name,
-    last_name: user.last_name,
-    father_name: user.father_name,
-    mother_name: user.mother_name,
-    national_id: user.national_id,
-    organization_department_roles_id: odr.id,
-    department: odr.department
-      ? { id: odr.department.id, name: odr.department.name }
-      : null,
-    role: odr.role
-      ? { id: odr.role.id, name: odr.role.name, code: odr.role.code }
-      : null,
-    tasks: {
-      in_progress: workload.in_progress,
-      pending_pickup: workload.pending_pickup,
-      active_total: workload.active_total,
-      completed: completedCount
-    },
-    workload_percent: workload.workload_percent,
-    status: workloadStatus.status,
-    status_label: workloadStatus.status_label
-  }
-}
-
 async function loadDepartmentEmployees ({
   userId,
   departmentIds,
@@ -212,7 +176,7 @@ async function loadDepartmentEmployees ({
         `${assignment.organization_department_roles_id}:${assignment.user_id}`
       ) || 0
 
-    return shapeDepartmentEmployee({
+    return toDepartmentEmployeeDTO({
       assignment,
       completedCount,
       workload

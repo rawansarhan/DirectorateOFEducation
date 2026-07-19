@@ -3,31 +3,42 @@
 const { ValidateCreateLocation } = require('../validations/locationValidation')
 const locationRepository = require('../repositories/locationRepository')
 const {
+  toCreateInput,
+  toCreatePayload,
+  toDTO,
+  toDTOList
+} = require('../mappers/locationMapper')
+const {
   getOrLoad,
   KEYS,
   invalidateLocations
 } = require('../../../../core/cache/apiCacheService')
 
+function formatValidationError (error) {
+  return error.details.map(d => d.message).join(' | ')
+}
+
 // ================= CREATE =================
-async function createLocationService(data) {
-  const { error } = ValidateCreateLocation(data)
+async function createLocationService (data) {
+  const { error, value } = ValidateCreateLocation(data)
 
   if (error) {
-    const msg = error.details.map(d => d.message).join(' | ')
-    const err = new Error(msg)
+    const err = new Error(formatValidationError(error))
     err.statusCode = 400
     throw err
   }
 
-  const typeLocation = await locationRepository.findTypeLocationById(data.typeLocation_id)
+  const input = toCreateInput(value)
+
+  const typeLocation = await locationRepository.findTypeLocationById(input.typeLocation_id)
   if (!typeLocation) {
     const err = new Error('نوع الموقع غير موجود')
     err.statusCode = 404
     throw err
   }
 
-  if (data.parent_id) {
-    const parent = await locationRepository.findById(data.parent_id)
+  if (input.parent_id) {
+    const parent = await locationRepository.findById(input.parent_id)
     if (!parent) {
       const err = new Error('الموقع الأب غير موجود')
       err.statusCode = 404
@@ -35,22 +46,19 @@ async function createLocationService(data) {
     }
   }
 
-  const created = await locationRepository.create({
-    name: data.name,
-    typeLocation_id: data.typeLocation_id,
-    parent_id: data.parent_id ?? null
-  })
+  const created = await locationRepository.create(toCreatePayload(input))
 
   await invalidateLocations()
 
-  return locationRepository.findByIdWithRelations(created.id)
+  const withRelations = await locationRepository.findByIdWithRelations(created.id)
+  return toDTO(withRelations)
 }
 
 // ================= GET ALL =================
-async function getAllLocationsService() {
+async function getAllLocationsService () {
   return getOrLoad(
     KEYS.locations(),
-    () => locationRepository.findAll(),
+    async () => toDTOList(await locationRepository.findAll()),
     { label: 'Location GET /api/location' }
   )
 }

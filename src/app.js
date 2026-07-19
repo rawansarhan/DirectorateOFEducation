@@ -26,15 +26,19 @@ setupSwagger(app)
 //==========================================================================
 //========================== auth services =================================
 
-const authRoutes = require('./modules/auth/routes/auth')
-const pinRoutes = require('./modules/auth/routes/pin')
+const registerRoutes = require('./modules/auth/register/routes/register')
+const sessionRoutes = require('./modules/auth/session/routes/session')
+const pinRoutes = require('./modules/auth/pin/routes/pin')
+const challengeRoutes = require('./modules/auth/challenge/routes/challenge')
 app.use('/api/auth', pinRoutes)
-app.use('/api/auth', authRoutes)
+app.use('/api/auth', registerRoutes)
+app.use('/api/auth', sessionRoutes)
+app.use('/api/auth', challengeRoutes)
 
 
 //auth client:
 const authClientRoutes =
-  require('./modules/auth/routes/internal/authClient')
+  require('./modules/auth/shared/routes/internal/authClient')
 
 app.use(
   '/internal/users',

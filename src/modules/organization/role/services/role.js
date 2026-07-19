@@ -12,6 +12,14 @@ const departmentRepository = require('../../department/repositories/departmentRe
 const roleRepository = require('../repositories/roleRepository')
 const orgDeptRoleRepository = require('../repositories/orgDeptRoleRepository')
 const {
+  toCreateInput,
+  toUpdateInput,
+  toUpdatePayload,
+  toDTO,
+  toDTOList,
+  toByDepartmentDTOList
+} = require('../mappers/roleMapper')
+const {
   getOrLoad,
   KEYS,
   invalidateAllUserAccessibleDepartments,
@@ -21,6 +29,10 @@ const {
 } = require('../../../../core/cache/apiCacheService')
 const { API_CACHE_TTL_SECONDS } = require('../../../../core/config/env')
 const { retryWithBackoff } = require('../../../../core/utils/retryWithBackoff')
+
+function formatValidationError (error) {
+  return error.details.map(d => d.message).join(' | ')
+}
 
 async function invalidateDepartmentRoleCaches (departmentId, { includeOverview = true } = {}) {
   if (departmentId == null) {
@@ -35,29 +47,30 @@ async function invalidateDepartmentRoleCaches (departmentId, { includeOverview =
   }
 }
 
-function buildCamundaGroupKey(roleCode, organizationId, departmentId) {
+function buildCamundaGroupKey (roleCode, organizationId, departmentId) {
   return `${roleCode}__ORG${organizationId}__DEPT${departmentId}`
 }
 
 // ================= CREATE =================
-async function createRoleService(data) {
-  const { error } = ValidateCreateRole(data)
+async function createRoleService (data) {
+  const { error, value } = ValidateCreateRole(data)
 
   if (error) {
-    const msg = error.details.map(d => d.message).join(' | ')
-    const err = new Error(msg)
+    const err = new Error(formatValidationError(error))
     err.statusCode = 400
     throw err
   }
 
-  const organization = await organizationRepository.findById(data.organization_id)
+  const input = toCreateInput(value)
+
+  const organization = await organizationRepository.findById(input.organization_id)
   if (!organization) {
     const err = new Error('المؤسسة غير موجودة')
     err.statusCode = 404
     throw err
   }
 
-  const department = await departmentRepository.findById(data.department_id)
+  const department = await departmentRepository.findById(input.department_id)
   if (!department) {
     const err = new Error('القسم غير موجود')
     err.statusCode = 404
@@ -70,8 +83,8 @@ async function createRoleService(data) {
     throw err
   }
 
-  if (data.parent_id) {
-    const parent = await orgDeptRoleRepository.findById(data.parent_id)
+  if (input.parent_id) {
+    const parent = await orgDeptRoleRepository.findById(input.parent_id)
     if (!parent) {
       const err = new Error('الدور الأب غير موجود')
       err.statusCode = 404
@@ -80,13 +93,13 @@ async function createRoleService(data) {
   }
 
   const result = await sequelize.transaction(async (t) => {
-    let role = await roleRepository.findByCode(data.code, { transaction: t })
+    let role = await roleRepository.findByCode(input.code, { transaction: t })
 
     if (!role) {
       role = await roleRepository.create(
         {
-          name: data.name,
-          code: data.code
+          name: input.name,
+          code: input.code
         },
         { transaction: t }
       )
@@ -94,8 +107,8 @@ async function createRoleService(data) {
 
     const duplicate = await orgDeptRoleRepository.findByRoleOrgDept(
       role.id,
-      data.organization_id,
-      data.department_id,
+      input.organization_id,
+      input.department_id,
       { transaction: t }
     )
 
@@ -108,14 +121,14 @@ async function createRoleService(data) {
     const orgDeptRole = await orgDeptRoleRepository.create(
       {
         role_id: role.id,
-        organization_id: data.organization_id,
-        department_id: data.department_id,
-        parent_id: data.parent_id ?? null,
+        organization_id: input.organization_id,
+        department_id: input.department_id,
+        parent_id: input.parent_id ?? null,
         is_active: true,
         camunda_group_key: buildCamundaGroupKey(
           role.code,
-          data.organization_id,
-          data.department_id
+          input.organization_id,
+          input.department_id
         )
       },
       { transaction: t }
@@ -125,13 +138,14 @@ async function createRoleService(data) {
   })
 
   await invalidateAllUserAccessibleDepartments()
-  await invalidateDepartmentRoleCaches(data.department_id)
+  await invalidateDepartmentRoleCaches(input.department_id)
 
-  return orgDeptRoleRepository.findByIdWithRelations(result.orgDeptRole.id)
+  const created = await orgDeptRoleRepository.findByIdWithRelations(result.orgDeptRole.id)
+  return toDTO(created)
 }
 
 // ================= UPDATE =================
-async function updateRoleService(data, id) {
+async function updateRoleService (data, id) {
   const orgDeptRoleId = parseInt(id, 10)
 
   if (!Number.isInteger(orgDeptRoleId) || orgDeptRoleId < 1) {
@@ -140,11 +154,10 @@ async function updateRoleService(data, id) {
     throw err
   }
 
-  const { error } = ValidateUpdateRole(data)
+  const { error, value } = ValidateUpdateRole(data)
 
   if (error) {
-    const msg = error.details.map(d => d.message).join(' | ')
-    const err = new Error(msg)
+    const err = new Error(formatValidationError(error))
     err.statusCode = 400
     throw err
   }
@@ -157,11 +170,13 @@ async function updateRoleService(data, id) {
     throw err
   }
 
-  const newOrgId = data.organization_id ?? orgDeptRole.organization_id
-  const newDeptId = data.department_id ?? orgDeptRole.department_id
+  const input = toUpdateInput(value)
+  const previousDepartmentId = orgDeptRole.department_id
+  const newOrgId = input.organization_id ?? orgDeptRole.organization_id
+  const newDeptId = input.department_id ?? orgDeptRole.department_id
 
-  if (data.organization_id !== undefined) {
-    const organization = await organizationRepository.findById(data.organization_id)
+  if (input.organization_id !== undefined) {
+    const organization = await organizationRepository.findById(input.organization_id)
     if (!organization) {
       const err = new Error('المؤسسة غير موجودة')
       err.statusCode = 404
@@ -169,8 +184,8 @@ async function updateRoleService(data, id) {
     }
   }
 
-  if (data.department_id !== undefined) {
-    const department = await departmentRepository.findById(data.department_id)
+  if (input.department_id !== undefined) {
+    const department = await departmentRepository.findById(input.department_id)
     if (!department) {
       const err = new Error('القسم غير موجود')
       err.statusCode = 404
@@ -178,7 +193,7 @@ async function updateRoleService(data, id) {
     }
   }
 
-  if (data.organization_id !== undefined || data.department_id !== undefined) {
+  if (input.organization_id !== undefined || input.department_id !== undefined) {
     const dept = await departmentRepository.findById(newDeptId)
     if (dept && dept.organization_id !== newOrgId) {
       const err = new Error('القسم لا ينتمي إلى المؤسسة المحددة')
@@ -187,14 +202,14 @@ async function updateRoleService(data, id) {
     }
   }
 
-  if (data.parent_id !== undefined && data.parent_id !== null) {
-    if (data.parent_id === orgDeptRoleId) {
+  if (input.parent_id !== undefined && input.parent_id !== null) {
+    if (input.parent_id === orgDeptRoleId) {
       const err = new Error('لا يمكن أن يكون السجل أب لنفسه')
       err.statusCode = 400
       throw err
     }
 
-    const parent = await orgDeptRoleRepository.findById(data.parent_id)
+    const parent = await orgDeptRoleRepository.findById(input.parent_id)
     if (!parent) {
       const err = new Error('الدور الأب غير موجود')
       err.statusCode = 404
@@ -202,7 +217,7 @@ async function updateRoleService(data, id) {
     }
   }
 
-  if (data.organization_id !== undefined || data.department_id !== undefined) {
+  if (input.organization_id !== undefined || input.department_id !== undefined) {
     const duplicate = await orgDeptRoleRepository.findByRoleOrgDept(
       orgDeptRole.role_id,
       newOrgId,
@@ -216,12 +231,9 @@ async function updateRoleService(data, id) {
     }
   }
 
-  const payload = {}
-  if (data.organization_id !== undefined) payload.organization_id = data.organization_id
-  if (data.department_id !== undefined) payload.department_id = data.department_id
-  if (data.parent_id !== undefined) payload.parent_id = data.parent_id
+  const payload = toUpdatePayload(input)
 
-  if (data.organization_id !== undefined || data.department_id !== undefined) {
+  if (input.organization_id !== undefined || input.department_id !== undefined) {
     payload.camunda_group_key = buildCamundaGroupKey(
       orgDeptRole.role.code,
       newOrgId,
@@ -232,17 +244,18 @@ async function updateRoleService(data, id) {
   await orgDeptRoleRepository.updateInstance(orgDeptRole, payload)
 
   await invalidateAllUserAccessibleDepartments()
-  await invalidateDepartmentRoleCaches(orgDeptRole.department_id)
+  await invalidateDepartmentRoleCaches(previousDepartmentId)
 
-  if (data.department_id !== undefined && data.department_id !== orgDeptRole.department_id) {
-    await invalidateDepartmentRoleCaches(data.department_id)
+  if (input.department_id !== undefined && input.department_id !== previousDepartmentId) {
+    await invalidateDepartmentRoleCaches(input.department_id)
   }
 
-  return orgDeptRoleRepository.findByIdWithRelations(orgDeptRoleId)
+  const updated = await orgDeptRoleRepository.findByIdWithRelations(orgDeptRoleId)
+  return toDTO(updated)
 }
 
 // ================= TOGGLE STATUS =================
-async function toggleRoleStatusService(id) {
+async function toggleRoleStatusService (id) {
   const orgDeptRoleId = parseInt(id, 10)
 
   if (!Number.isInteger(orgDeptRoleId) || orgDeptRoleId < 1) {
@@ -259,16 +272,19 @@ async function toggleRoleStatusService(id) {
     throw err
   }
 
-  await orgDeptRoleRepository.updateInstance(orgDeptRole, { is_active: !orgDeptRole.is_active })
+  await orgDeptRoleRepository.updateInstance(orgDeptRole, {
+    is_active: !orgDeptRole.is_active
+  })
 
   await invalidateAllUserAccessibleDepartments()
   await invalidateDepartmentRoleCaches(orgDeptRole.department_id)
 
-  return orgDeptRoleRepository.findByIdWithRelations(orgDeptRoleId)
+  const updated = await orgDeptRoleRepository.findByIdWithRelations(orgDeptRoleId)
+  return toDTO(updated)
 }
 
 // ================= DELETE =================
-async function deleteRoleService(id) {
+async function deleteRoleService (id) {
   const orgDeptRoleId = parseInt(id, 10)
 
   if (!Number.isInteger(orgDeptRoleId) || orgDeptRoleId < 1) {
@@ -296,12 +312,13 @@ async function deleteRoleService(id) {
 }
 
 // ================= GET ALL =================
-async function getAllRolesService() {
-  return orgDeptRoleRepository.findAll()
+async function getAllRolesService () {
+  const rows = await orgDeptRoleRepository.findAll()
+  return toDTOList(rows)
 }
 
 // ================= GET BY ID =================
-async function getRoleByIdService(id) {
+async function getRoleByIdService (id) {
   const orgDeptRoleId = parseInt(id, 10)
 
   if (!Number.isInteger(orgDeptRoleId) || orgDeptRoleId < 1) {
@@ -310,7 +327,10 @@ async function getRoleByIdService(id) {
     throw err
   }
 
-  const orgDeptRole = await orgDeptRoleRepository.findByIdWithRelations(orgDeptRoleId, { includeChildren: true })
+  const orgDeptRole = await orgDeptRoleRepository.findByIdWithRelations(
+    orgDeptRoleId,
+    { includeChildren: true }
+  )
 
   if (!orgDeptRole) {
     const err = new Error('السجل غير موجود')
@@ -318,26 +338,26 @@ async function getRoleByIdService(id) {
     throw err
   }
 
-  return orgDeptRole
+  return toDTO(orgDeptRole)
 }
 
 // ================= GET ROLES BY DEPARTMENT =================
-// يعيد كل الأدوار المرتبطة بقسم محدد (للـ leaf department)
-// ليستخدمها المستخدم عند تسجيل موظف جديد بعد اختيار القسم
 async function loadRolesByDepartment (deptId) {
   const rows = await orgDeptRoleRepository.findActiveByDepartmentIdWithRole(deptId)
 
-  return rows
-    .filter(r => r.role)
-    .map(r => ({
-      id: r.role.id,
-      organization_department_roles_id: r.id,
-      name: r.role.name,
-      code: r.role.code
-    }))
+  return toByDepartmentDTOList(
+    rows
+      .filter(r => r.role)
+      .map(r => ({
+        id: r.role.id,
+        organization_department_roles_id: r.id,
+        name: r.role.name,
+        code: r.role.code
+      }))
+  )
 }
 
-async function getRolesByDepartmentService(departmentId) {
+async function getRolesByDepartmentService (departmentId) {
   const deptId = parseInt(departmentId, 10)
 
   if (!Number.isInteger(deptId) || deptId < 1) {

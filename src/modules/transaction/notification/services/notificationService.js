@@ -1,7 +1,7 @@
 'use strict'
 
 const { UserDeviceToken } = require('../../../../entities')
-const { sendPushNotification } = require('../../../auth/services/pushNotificationService')
+const { sendPushNotification } = require('../../../auth/shared/services/pushNotificationService')
 const notificationRepository = require('../repositories/notificationRepository')
 
 function resolveDeliveryStatus ({ sent = 0, failed = 0, skipped = false }) {

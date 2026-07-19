@@ -7,20 +7,33 @@ const {
 
 const organizationRepository = require('../repositories/organizationRepository')
 const locationRepository = require('../../location/repositories/locationRepository')
+const {
+  toCreateInput,
+  toUpdateInput,
+  toCreatePayload,
+  toUpdatePayload,
+  toDTO,
+  toDTOList
+} = require('../mappers/organizationMapper')
+
+function formatValidationError (error) {
+  return error.details.map(d => d.message).join(' | ')
+}
 
 // ================= CREATE =================
-async function createOrganizationService(data) {
-  const { error } = ValidateCreateOrganization(data)
+async function createOrganizationService (data) {
+  const { error, value } = ValidateCreateOrganization(data)
 
   if (error) {
-    const msg = error.details.map(d => d.message).join(' | ')
-    const err = new Error(msg)
+    const err = new Error(formatValidationError(error))
     err.statusCode = 400
     throw err
   }
 
-  if (data.parent_id) {
-    const parent = await organizationRepository.findById(data.parent_id)
+  const input = toCreateInput(value)
+
+  if (input.parent_id) {
+    const parent = await organizationRepository.findById(input.parent_id)
     if (!parent) {
       const err = new Error('المؤسسة الأب غير موجودة')
       err.statusCode = 404
@@ -28,8 +41,8 @@ async function createOrganizationService(data) {
     }
   }
 
-  if (data.location_id) {
-    const location = await locationRepository.findById(data.location_id)
+  if (input.location_id) {
+    const location = await locationRepository.findById(input.location_id)
     if (!location) {
       const err = new Error('الموقع غير موجود')
       err.statusCode = 404
@@ -37,17 +50,13 @@ async function createOrganizationService(data) {
     }
   }
 
-  const organization = await organizationRepository.create({
-    name: data.name,
-    parent_id: data.parent_id ?? null,
-    location_id: data.location_id ?? null
-  })
+  const organization = await organizationRepository.create(toCreatePayload(input))
 
-  return organization
+  return toDTO(organization)
 }
 
 // ================= UPDATE =================
-async function updateOrganizationService(data, id) {
+async function updateOrganizationService (data, id) {
   const organizationId = parseInt(id, 10)
 
   if (!Number.isInteger(organizationId) || organizationId < 1) {
@@ -56,11 +65,10 @@ async function updateOrganizationService(data, id) {
     throw err
   }
 
-  const { error } = ValidateUpdateOrganization(data)
+  const { error, value } = ValidateUpdateOrganization(data)
 
   if (error) {
-    const msg = error.details.map(d => d.message).join(' | ')
-    const err = new Error(msg)
+    const err = new Error(formatValidationError(error))
     err.statusCode = 400
     throw err
   }
@@ -73,14 +81,16 @@ async function updateOrganizationService(data, id) {
     throw err
   }
 
-  if (data.parent_id !== undefined && data.parent_id !== null) {
-    if (data.parent_id === organizationId) {
+  const input = toUpdateInput(value)
+
+  if (input.parent_id !== undefined && input.parent_id !== null) {
+    if (input.parent_id === organizationId) {
       const err = new Error('لا يمكن أن تكون المؤسسة أب لنفسها')
       err.statusCode = 400
       throw err
     }
 
-    const parent = await organizationRepository.findById(data.parent_id)
+    const parent = await organizationRepository.findById(input.parent_id)
     if (!parent) {
       const err = new Error('المؤسسة الأب غير موجودة')
       err.statusCode = 404
@@ -88,8 +98,8 @@ async function updateOrganizationService(data, id) {
     }
   }
 
-  if (data.location_id !== undefined && data.location_id !== null) {
-    const location = await locationRepository.findById(data.location_id)
+  if (input.location_id !== undefined && input.location_id !== null) {
+    const location = await locationRepository.findById(input.location_id)
     if (!location) {
       const err = new Error('الموقع غير موجود')
       err.statusCode = 404
@@ -97,16 +107,16 @@ async function updateOrganizationService(data, id) {
     }
   }
 
-  const payload = {}
-  if (data.name !== undefined) payload.name = data.name
-  if (data.parent_id !== undefined) payload.parent_id = data.parent_id
-  if (data.location_id !== undefined) payload.location_id = data.location_id
+  const updated = await organizationRepository.updateInstance(
+    organization,
+    toUpdatePayload(input)
+  )
 
-  return organizationRepository.updateInstance(organization, payload)
+  return toDTO(updated)
 }
 
 // ================= DELETE =================
-async function deleteOrganizationService(id) {
+async function deleteOrganizationService (id) {
   const organizationId = parseInt(id, 10)
 
   if (!Number.isInteger(organizationId) || organizationId < 1) {
@@ -129,12 +139,13 @@ async function deleteOrganizationService(id) {
 }
 
 // ================= GET ALL =================
-async function getAllOrganizationsService() {
-  return organizationRepository.findAll()
+async function getAllOrganizationsService () {
+  const rows = await organizationRepository.findAll()
+  return toDTOList(rows)
 }
 
 // ================= GET BY ID =================
-async function getOrganizationByIdService(id) {
+async function getOrganizationByIdService (id) {
   const organizationId = parseInt(id, 10)
 
   if (!Number.isInteger(organizationId) || organizationId < 1) {
@@ -151,7 +162,7 @@ async function getOrganizationByIdService(id) {
     throw err
   }
 
-  return organization
+  return toDTO(organization)
 }
 
 module.exports = {

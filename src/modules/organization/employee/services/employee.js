@@ -6,8 +6,8 @@ const employeeRepository = require('../repositories/employeeRepository')
 const orgDeptRoleRepository = require('../../role/repositories/orgDeptRoleRepository')
 
 const userRoleAssignmentRepository =
-  require('../../../auth/repositories/userRoleAssignmentRepository')
-const userKeyRepository = require('../../../auth/repositories/userKeyRepository')
+  require('../../../auth/shared/repositories/userRoleAssignmentRepository')
+const userKeyRepository = require('../../../auth/shared/repositories/userKeyRepository')
 const {
   invalidateUserAccessibleDepartments,
   invalidateEmployeesByDepartments,
@@ -24,7 +24,7 @@ const {
   validatePublicKeyPem,
   validatePrivateKeyPem,
   assertPrivatePublicKeyPair
-} = require('../../../auth/services/cryptoAuthService')
+} = require('../../../auth/shared/services/cryptoAuthService')
 
 const {
   encryptPrivateKeyPem,
@@ -36,6 +36,13 @@ const {
   validateListEmployeesQuery,
   validateUsersByOrgRoleDeptQuery
 } = require('../validations/employeeValidation')
+const {
+  toUpdateInput,
+  toUpdateUserPayload,
+  toDTO,
+  toDTOList,
+  toAssignmentDTOList
+} = require('../mappers/employeeMapper')
 
 // أداة موحّدة لرمي خطأ مع statusCode (نفس نمط بقية الخدمات)
 function fail (message, statusCode = 400) {
@@ -52,44 +59,6 @@ function parseId (id, label = 'معرّف الموظف') {
   }
 
   return value
-}
-
-// يحوّل سجل المستخدم (مع علاقاته) إلى شكل مسطّح مناسب للواجهة.
-function shapeEmployee (user) {
-  const plain =
-    user && typeof user.get === 'function'
-      ? user.get({ plain: true })
-      : user
-
-  if (!plain) return null
-
-  const assignment = (plain.role_assignments || [])[0] || null
-  const odr = assignment ? assignment.org_department_role : null
-
-  return {
-    id: plain.id,
-    userName: plain.userName,
-    email: plain.email,
-    phone_number: plain.phone_number,
-    first_name: plain.first_name,
-    last_name: plain.last_name,
-    father_name: plain.father_name,
-    mother_name: plain.mother_name,
-    national_id: plain.national_id,
-    is_active: plain.is_active,
-    organization: odr && odr.organization
-      ? { id: odr.organization.id, name: odr.organization.name }
-      : null,
-    department: odr && odr.department
-      ? { id: odr.department.id, name: odr.department.name }
-      : null,
-    role: odr && odr.role
-      ? { id: odr.role.id, name: odr.role.name, code: odr.role.code }
-      : null,
-    organization_department_roles_id: odr ? odr.id : null,
-    created_at: plain.created_at,
-    updated_at: plain.updated_at
-  }
 }
 
 // ================= GET ALL (paginated + search) =================
@@ -112,7 +81,7 @@ async function getAllEmployeesService (query = {}) {
   const totalPages = Math.ceil(count / limit) || 0
 
   return {
-    items: rows.map(shapeEmployee),
+    items: toDTOList(rows),
     pagination: {
       page,
       limit,
@@ -134,41 +103,7 @@ async function getEmployeeByIdService (id) {
     throw fail('الموظف غير موجود', 404)
   }
 
-  return shapeEmployee(employee)
-}
-
-function shapeUserByOrgDeptRoleAssignment (assignment) {
-  const plain =
-    assignment && typeof assignment.get === 'function'
-      ? assignment.get({ plain: true })
-      : assignment
-
-  const user = plain?.user || null
-
-  return {
-    assignment_id: plain.id,
-    organization_department_roles_id: plain.organization_department_roles_id,
-    priority: plain.priority,
-    is_active: plain.is_active,
-    user: user
-      ? {
-          id: user.id,
-          userName: user.userName,
-          email: user.email,
-          phone_number: user.phone_number,
-          first_name: user.first_name,
-          last_name: user.last_name,
-          father_name: user.father_name,
-          mother_name: user.mother_name,
-          national_id: user.national_id,
-          is_active: user.is_active,
-          created_at: user.created_at,
-          updated_at: user.updated_at
-        }
-      : null,
-    created_at: plain.created_at,
-    updated_at: plain.updated_at
-  }
+  return toDTO(employee)
 }
 
 // ================= GET USERS BY organization + role + department =================
@@ -198,7 +133,7 @@ async function loadUsersByOrgRoleDept ({
     department_id: departmentId,
     organization_department_roles_id: orgDeptRole.id,
     total: assignments.length,
-    items: assignments.map(shapeUserByOrgDeptRoleAssignment)
+    items: toAssignmentDTOList(assignments)
   }
 }
 
@@ -248,6 +183,8 @@ async function updateEmployeeService (data, id) {
     throw fail(error.details.map(d => d.message).join(' | '), 400)
   }
 
+  const input = toUpdateInput(value)
+
   const sequelize = employeeRepository.getSequelize()
   const transaction = await sequelize.transaction()
 
@@ -259,43 +196,36 @@ async function updateEmployeeService (data, id) {
     }
 
     // ---- تحقق من تفرّد الحقول الفريدة (مع استثناء الموظف نفسه) ----
-    if (value.email !== undefined) {
+    if (input.email !== undefined) {
       const clash = await employeeRepository.findByEmailExcludingId(
-        value.email, employeeId, { transaction }
+        input.email, employeeId, { transaction }
       )
       if (clash) throw fail('البريد الإلكتروني مستخدم مسبقاً، الرجاء استخدام بريد آخر', 409)
     }
 
-    if (value.userName !== undefined) {
+    if (input.userName !== undefined) {
       const clash = await employeeRepository.findByUserNameExcludingId(
-        value.userName, employeeId, { transaction }
+        input.userName, employeeId, { transaction }
       )
       if (clash) throw fail('اسم المستخدم مستخدم مسبقاً، الرجاء اختيار اسم آخر', 409)
     }
 
-    if (value.national_id !== undefined) {
+    if (input.national_id !== undefined) {
       const clash = await employeeRepository.findByNationalIdExcludingId(
-        value.national_id, employeeId, { transaction }
+        input.national_id, employeeId, { transaction }
       )
       if (clash) throw fail('الرقم الوطني مسجّل مسبقاً', 409)
     }
 
     // ---- بناء حمولة تحديث جدول users ----
-    const payload = {}
-    const directFields = [
-      'first_name', 'last_name', 'father_name', 'mother_name',
-      'national_id', 'userName', 'email', 'phone_number', 'is_active'
-    ]
-    for (const field of directFields) {
-      if (value[field] !== undefined) payload[field] = value[field]
+    const payload = toUpdateUserPayload(input)
+
+    if (input.password !== undefined) {
+      payload.password = await bcrypt.hash(input.password, 10)
     }
 
-    if (value.password !== undefined) {
-      payload.password = await bcrypt.hash(value.password, 10)
-    }
-
-    if (value.pin !== undefined) {
-      payload.pin_hash = await hashPin(value.pin)
+    if (input.pin !== undefined) {
+      payload.pin_hash = await hashPin(input.pin)
     }
 
     if (Object.keys(payload).length > 0) {
@@ -303,11 +233,11 @@ async function updateEmployeeService (data, id) {
     }
 
     // ---- إعادة التعيين: المؤسسة/القسم/الدور ----
-    if (value.organization_id !== undefined) {
+    if (input.organization_id !== undefined) {
       const orgDeptRole = await orgDeptRoleRepository.findByRoleOrgDept(
-        value.role_id,
-        value.organization_id,
-        value.department_id,
+        input.role_id,
+        input.organization_id,
+        input.department_id,
         { transaction }
       )
 
@@ -334,16 +264,16 @@ async function updateEmployeeService (data, id) {
     }
 
     // ---- تحديث المفتاح العام (واختيارياً الخاص) ----
-    if (value.public_key !== undefined) {
-      const publicKeyPem = validatePublicKeyPem(value.public_key)
+    if (input.public_key !== undefined) {
+      const publicKeyPem = validatePublicKeyPem(input.public_key)
 
-      if (value.private_key) {
-        const privateKeyPem = validatePrivateKeyPem(value.private_key)
+      if (input.private_key) {
+        const privateKeyPem = validatePrivateKeyPem(input.private_key)
         assertPrivatePublicKeyPair(privateKeyPem, publicKeyPem)
 
         const encryptedPrivateKey = encryptPrivateKeyPem(
           privateKeyPem,
-          value.pin,
+          input.pin,
           computeKeyFingerprint(publicKeyPem)
         )
 
@@ -352,7 +282,7 @@ async function updateEmployeeService (data, id) {
             meta: encryptedPrivateKey.meta,
             ciphertextBase64: encryptedPrivateKey.ciphertext
           },
-          value.pin
+          input.pin
         )
 
         if (decryptedCheck !== privateKeyPem) {
@@ -390,19 +320,19 @@ async function updateEmployeeService (data, id) {
     throw err
   }
 
-  if (value.organization_id !== undefined) {
+  if (input.organization_id !== undefined) {
     await invalidateUserAccessibleDepartments(employeeId)
   }
 
   await invalidateEmployeesByDepartments()
 
-  if (value.department_id !== undefined) {
-    await invalidateDepartmentOverview(value.department_id)
+  if (input.department_id !== undefined) {
+    await invalidateDepartmentOverview(input.department_id)
   }
 
   // أعد قراءة الموظف بكامل علاقاته بعد التحديث
   const updated = await employeeRepository.findEmployeeById(employeeId)
-  return shapeEmployee(updated)
+  return toDTO(updated)
 }
 
 module.exports = {

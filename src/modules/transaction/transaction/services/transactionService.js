@@ -41,8 +41,8 @@ const {
 } = require('../../../workflow/services/stageSubmissionService')
 
 const operationGuardService = require('../../../../core/security/operationGuardService')
-const userRepository = require('../../../auth/repositories/userRepository')
-const userRoleAssignmentRepository = require('../../../auth/repositories/userRoleAssignmentRepository')
+const userRepository = require('../../../auth/shared/repositories/userRepository')
+const userRoleAssignmentRepository = require('../../../auth/shared/repositories/userRoleAssignmentRepository')
 const {
   verifySignatureForComplete,
   persistVerifiedSignature,
