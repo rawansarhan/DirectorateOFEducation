@@ -74,25 +74,25 @@ app.use('/api/typeProcess', typeProcessRoutes)
 //==========================================================================
 //====================  organization services ==============================
 
-const organizationRoutes = require('./modules/organization/routes/organization')
+const organizationRoutes = require('./modules/organization/organization/routes/organization')
 app.use('/api/organization', organizationRoutes)
 
-const departmentRoutes = require('./modules/organization/routes/department')
+const departmentRoutes = require('./modules/organization/department/routes/department')
 app.use('/api/department', departmentRoutes)
 
-const roleRoutes = require('./modules/organization/routes/role')
+const roleRoutes = require('./modules/organization/role/routes/role')
 app.use('/api/role', roleRoutes)
 
-const locationRoutes = require('./modules/organization/routes/location')
+const locationRoutes = require('./modules/organization/location/routes/location')
 app.use('/api/location', locationRoutes)
 
-const employeeRoutes = require('./modules/organization/routes/employee')
+const employeeRoutes = require('./modules/organization/employee/routes/employee')
 app.use('/api/employees', employeeRoutes)
 
 // organization client 
 
 const organizationClientRoutes =
-  require('./modules/organization/routes/internal/Organization')
+  require('./modules/organization/organization/routes/internal/Organization')
 app.use(
   '/organizations',
   organizationClientRoutes
@@ -101,7 +101,7 @@ app.use(
 //  OrgDeptRole
 
 const OrgDeptRoleClientRoutes =
-  require('./modules/organization/routes/internal/OrgDeptRoles')
+  require('./modules/organization/role/routes/internal/OrgDeptRoles')
 app.use(
   '/internal/org-dept-roles',
   OrgDeptRoleClientRoutes
