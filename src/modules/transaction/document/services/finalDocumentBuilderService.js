@@ -409,10 +409,6 @@ async function generateMergedFinalDocument (
     throw createTransactionError('TRANSACTION_NOT_FOUND')
   }
 
-  if (userId && transaction.user_id !== userId) {
-    throw createTransactionError('UNAUTHORIZED')
-  }
-
   // idempotent: إذا وُجدت نسخة نهائية مسبقاً نرجّعها دون إعادة توليد/استبدال
   // (قراءة مكاشة — تُبطَّل تلقائياً عند توليد/تحديث الوثيقة النهائية)
   // force=true: يتخطّى ذلك ويعيد التوليد ويستبدل النسخة السابقة

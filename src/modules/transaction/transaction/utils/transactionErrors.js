@@ -117,10 +117,18 @@ function httpStatusForError (error) {
     error?.code === 'TRANSACTION_IN_PROGRESS' ||
     error?.code === 'VALIDATION_ERROR' ||
     error?.code === 'FINAL_DOCUMENT_NOT_READY' ||
+    error?.code === 'ENCRYPTED_PAYLOAD_INVALID' ||
+    error?.code === 'DECRYPTION_FAILED' ||
+    error?.code === 'DECRYPTED_JSON_INVALID' ||
+    error?.code === 'SUBMIT_AES_KEY_INVALID' ||
     msg.includes('not active') ||
     msg.includes('Only draft')
   ) {
     return 400
+  }
+
+  if (error?.code === 'SUBMIT_AES_KEY_MISSING') {
+    return 503
   }
 
   if (

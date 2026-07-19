@@ -72,6 +72,11 @@ module.exports = {
   JWT_SECRET: required('JWT_SECRET'),
   JWT_EXPIRES_IN: optional('JWT_EXPIRES_IN') || optional('JWT_ACCESS_EXPIRES_IN') || '1h',
 
+  // مفتاح مشترك AES-256 (32 بايت base64) لفك تشفير
+  // POST /api/transaction/submit/process/{processId}/encrypted
+  // توليد مثال: node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+  SUBMIT_AES_KEY_BASE64: optional('SUBMIT_AES_KEY_BASE64'),
+
   // مفتاح سلطة الإصدار (Ed25519) — يوقّع به الخادم محتوى رمز QR في الـ PDF.
   // اختياري عند الإقلاع؛ لكنه مطلوب فعلياً وقت توليد PDF (يُرمى خطأ واضح حينها).
   // ولّد الزوج عبر: npm run keys:authority

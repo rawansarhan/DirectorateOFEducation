@@ -306,9 +306,24 @@ async function getProcessesByTypeForAdmin (typeTransID, paginationInput) {
     }
   }
 
-  const processes = allTypes
-    ? await processRepository.findAllProcessesForAdmin()
-    : await processRepository.findProcessesByTypeForAdmin(Number(typeTransID))
+  const cacheKey = allTypes
+    ? KEYS.adminProcessesAll()
+    : KEYS.adminProcessesByType(Number(typeTransID))
+
+  console.log(
+    `${LOG_PREFIX} GET /api/process_definitions/admin/type/${typeTransID} — cache key: api:${cacheKey}`
+  )
+
+  const processes = await getOrLoad(
+    cacheKey,
+    () => allTypes
+      ? processRepository.findAllProcessesForAdmin()
+      : processRepository.findProcessesByTypeForAdmin(Number(typeTransID)),
+    {
+      label: `ProcessDefinition GET /api/process_definitions/admin/type/${typeTransID}`,
+      ttlSeconds: PROCESS_CACHE_TTL_SECONDS
+    }
+  )
 
   const items = sortAuthProcessesByPriority(processes).map(
     toAdminProcessByTypeItem
@@ -319,6 +334,37 @@ async function getProcessesByTypeForAdmin (typeTransID, paginationInput) {
     message: allTypes
       ? 'تم جلب كل عمليات الأنواع بنجاح'
       : 'تم جلب عمليات النوع بنجاح',
+    data: {
+      items: pageItems,
+      pagination
+    }
+  }
+}
+
+async function getComplaintProcessesForAdmin (paginationInput) {
+  const cacheKey = KEYS.adminComplaintProcesses()
+
+  console.log(
+    `${LOG_PREFIX} GET /api/process_definitions/admin/complaints — cache key: api:${cacheKey}`
+  )
+
+  const processes = await getOrLoad(
+    cacheKey,
+    () => processRepository.findComplaintProcessesForAdmin(),
+    {
+      label: 'ProcessDefinition GET /api/process_definitions/admin/complaints',
+      ttlSeconds: PROCESS_CACHE_TTL_SECONDS
+    }
+  )
+
+  const items = sortAuthProcessesByPriority(processes).map(process => ({
+    ...toAdminProcessByTypeItem(process),
+    is_complaint: true
+  }))
+  const { items: pageItems, pagination } = paginateArray(items, paginationInput)
+
+  return {
+    message: 'تم جلب عمليات الشكاوى بنجاح',
     data: {
       items: pageItems,
       pagination
@@ -498,6 +544,7 @@ module.exports = {
   getUnapprovedOrInactiveProcesses,
   getProcessesWithMissingStageConfig,
   getProcessesByTypeForAdmin,
+  getComplaintProcessesForAdmin,
   getProcessDetailsWithValidation,
   reviewProcess
 }

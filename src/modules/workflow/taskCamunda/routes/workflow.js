@@ -657,11 +657,9 @@ router.get(
 
  *     description: |
 
- *       نفس payload مسار `/api/transaction/{transactionId}/certificate` لكن للموظف:
+ *       نفس payload مسار `/api/transaction/{transactionId}/certificate`.
 
- *       transaction_history, integrity_chain.qr_payload, final_document
-
- *       **صلاحية:** موظف لديه أدوار على process definition المعاملة (أو مالك المعاملة).
+ *       **Auth:** Bearer (تسجيل دخول فقط — بدون تقييد دور داخل المنطق)
 
  *       **متاح فقط للمعاملات completed**
 
@@ -689,15 +687,16 @@ router.get(
 
  *         description: بيانات الشهادة
 
- *       403:
+ *       400:
 
- *         description: لا تملك صلاحية عرض شهادة هذه المعاملة
+ *         description: المعاملة ليست completed
 
  *       404:
 
  *         description: المعاملة غير موجودة
 
  */
+
 
 router.get(
   '/transactions/:transactionId/certificate',

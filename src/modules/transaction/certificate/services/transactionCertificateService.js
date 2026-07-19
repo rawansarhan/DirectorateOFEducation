@@ -94,11 +94,13 @@ async function loadAuthorizedTransaction (
 
 async function getCertificateBundle (
   transactionId,
-  { userId = null, audience = CERTIFICATE_AUDIENCE.OWNER } = {}
+  { userId: _userId = null, audience: _audience = CERTIFICATE_AUDIENCE.OWNER } = {}
 ) {
-  const transaction = await loadAuthorizedTransaction(transactionId, userId, {
-    audience
-  })
+  const transaction = await transactionRepository.findById(transactionId)
+
+  if (!transaction) {
+    throw createTransactionError('TRANSACTION_NOT_FOUND')
+  }
 
   if (!COMPLETED_STATUSES.has(transaction.status)) {
     throw createTransactionError(

@@ -31,10 +31,7 @@ function handleCertificateError (res, err) {
 
 async function getCertificateController (req, res) {
   try {
-    const data = await getCertificateBundle(req.params.transactionId, {
-      userId: req.user.id,
-      audience: 'owner'
-    })
+    const data = await getCertificateBundle(req.params.transactionId)
 
     return successResponse(res, {
       message: 'تم جلب بيانات الشهادة بنجاح',

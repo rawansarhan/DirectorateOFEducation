@@ -370,19 +370,14 @@ async function completeDocumentSubmitByTransactionController (req, res) {
 
 async function getEmployeeCertificateController (req, res) {
   try {
-    const data = await getCertificateBundle(req.params.transactionId, {
-      userId: req.user.id,
-      audience: 'employee'
-    })
+    const data = await getCertificateBundle(req.params.transactionId)
 
     return sendWorkflowSuccess(res, data, 'تم جلب بيانات الشهادة بنجاح')
   } catch (error) {
     const status =
-      error.code === 'UNAUTHORIZED'
-        ? 403
-        : error.code === 'TRANSACTION_NOT_FOUND' || error.code === 'NOT_FOUND'
-          ? 404
-          : 400
+      error.code === 'TRANSACTION_NOT_FOUND' || error.code === 'NOT_FOUND'
+        ? 404
+        : 400
 
     return handleWorkflowError(res, error, status)
   }

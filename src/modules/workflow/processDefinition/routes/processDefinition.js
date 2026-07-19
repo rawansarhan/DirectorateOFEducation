@@ -9,6 +9,7 @@ const {
   getUnapprovedOrInactiveProcessesController,
   getProcessesWithMissingStageConfigController,
   getProcessesByTypeForAdminController,
+  getComplaintProcessesForAdminController,
   getProcessDetails,
   reviewProcessController,
   processById,
@@ -254,10 +255,13 @@ router.get(
  * @swagger
  * /api/process_definitions/admin/type/{id}:
  *   get:
- *     summary: كل عمليات نوع معاملة => (المسؤول التقني)
+ *     summary: كل عمليات نوع معاملة
  *     description: |
  *       مثل GET /auth/{id} للمواطن/الموظف، لكن بدون شرط أن تكون أول مرحلة AUTH.
  *       id = type_trans_id. أرسل 0 لجلب كل الأنواع (ما عدا الشكاوى).
+ *
+ *       **Auth:** Bearer (تسجيل دخول فقط — بدون تقييد دور/صلاحية داخل المنطق)
+ *       مع Redis cache (TTL = PROCESS_CACHE_TTL_SECONDS).
  *     tags: [Process Definition]
  *     security:
  *       - bearerAuth: []
@@ -284,14 +288,74 @@ router.get(
  *     responses:
  *       200:
  *         description: تم الجلب بنجاح
- *       403:
- *         description: PROCESS_VIEW مطلوب
+ *       400:
+ *         description: نوع المعاملة غير موجود
+ *       401:
+ *         description: Unauthorized
  */
 router.get(
   '/admin/type/:id',
   authMiddleware,
-  // authorize('PROCESS_VIEW'),
   getProcessesByTypeForAdminController
+)
+
+/**
+ * @swagger
+ * /api/process_definitions/admin/complaints:
+ *   get:
+ *     summary: كل عمليات الشكاوى (is_complaint=true)
+ *     description: |
+ *       يعرض كل تعريفات العمليات حيث `is_complaint = true`.
+ *       مع Redis cache (TTL = PROCESS_CACHE_TTL_SECONDS).
+ *
+ *       **Auth:** Bearer (تسجيل دخول فقط — بدون تقييد دور)
+ *     tags: [Process Definition]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 70
+ *           default: 20
+ *     responses:
+ *       200:
+ *         description: تم جلب عمليات الشكاوى بنجاح
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: true
+ *               status_code: 200
+ *               message: تم جلب عمليات الشكاوى بنجاح
+ *               data:
+ *                 items:
+ *                   - process_id: 10
+ *                     name: شكوى خدمة
+ *                     code: COMP-01
+ *                     priority: 1
+ *                     deployment_status: deployed
+ *                     approval_status: APPROVED
+ *                     is_active: true
+ *                     is_complaint: true
+ *                 pagination:
+ *                   page: 1
+ *                   limit: 20
+ *                   total: 1
+ *       401:
+ *         description: Unauthorized
+ */
+router.get(
+  '/admin/complaints',
+  authMiddleware,
+  getComplaintProcessesForAdminController
 )
 
 /**
