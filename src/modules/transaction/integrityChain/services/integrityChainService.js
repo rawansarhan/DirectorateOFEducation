@@ -25,6 +25,11 @@ const {
   verifySignatureValue,
   resolveStageDataForIntegrity
 } = require('../utils/integrityChainUtils')
+const {
+  toVerifyResultDTO,
+  toIntegrityChainDTO,
+  toDocumentQrVerifyDTO
+} = require('../mappers/integrityChainMapper')
 
 async function ensureGenesisHash (transactionLike, { transaction: dbTransaction } = {}) {
   const transaction = typeof transactionLike?.update === 'function'
@@ -249,7 +254,7 @@ async function verifyIntegrityChain (transactionId, hints = {}) {
 
   const valid = issues.length === 0 && links.length > 0
 
-  return {
+  return toVerifyResultDTO({
     transaction_id: transaction.id,
     transaction_status: transaction.status,
     genesis_hash: transaction.genesis_hash,
@@ -262,7 +267,7 @@ async function verifyIntegrityChain (transactionId, hints = {}) {
     valid,
     issues,
     verified_at: new Date()
-  }
+  })
 }
 
 async function getIntegrityChain (transactionId, { userId = null, skipOwnerCheck = false } = {}) {
@@ -285,7 +290,7 @@ async function getIntegrityChain (transactionId, { userId = null, skipOwnerCheck
     ? links[links.length - 1].cumulative_hash
     : null
 
-  return {
+  return toIntegrityChainDTO({
     transaction_id: transaction.id,
     transaction_status: transaction.status,
     genesis_hash: transaction.genesis_hash,
@@ -300,19 +305,9 @@ async function getIntegrityChain (transactionId, { userId = null, skipOwnerCheck
       totalLinks: links.length,
       apiBaseUrl: API_PUBLIC_URL
     }),
-    links: links.map(link => ({
-      signature_order: link.signature_order,
-      stage_id: link.stage_id,
-      stage_code: link.stage_code,
-      stage_data_hash: link.stage_data_hash,
-      cumulative_hash: link.cumulative_hash,
-      link_hash: link.link_hash,
-      previous_link_hash: link.previous_link_hash,
-      digital_signature_id: link.digital_signature_id,
-      signed_at: link.signed_at
-    })),
+    links,
     last_verification: lastVerification
-  }
+  })
 }
 
 /**
@@ -355,12 +350,12 @@ async function verifyDocumentQr ({
   })
 
   if (!signatureValid) {
-    return {
+    return toDocumentQrVerifyDTO({
       valid: false,
       signature_valid: false,
       reason: 'توقيع سلطة الإصدار غير صالح — قد يكون رمز QR مزوّراً',
       verified_at: new Date()
-    }
+    })
   }
 
   const transaction = await transactionRepository.findById(numericTransactionId)
@@ -370,12 +365,12 @@ async function verifyDocumentQr ({
   }
 
   if (transaction.genesis_hash !== genesisHash) {
-    return {
+    return toDocumentQrVerifyDTO({
       valid: false,
       signature_valid: true,
       reason: 'genesis_hash لا يطابق المعاملة',
       verified_at: new Date()
-    }
+    })
   }
 
   const documentInstance = await documentInstanceRepository.findById(
@@ -383,17 +378,17 @@ async function verifyDocumentQr ({
   )
 
   if (!documentInstance || documentInstance.transaction_id !== numericTransactionId) {
-    return {
+    return toDocumentQrVerifyDTO({
       valid: false,
       signature_valid: true,
       reason: 'نسخة الوثيقة لا تخص هذه المعاملة',
       verified_at: new Date()
-    }
+    })
   }
 
   const chain = await verifyIntegrityChain(numericTransactionId, { genesis_hash: genesisHash })
 
-  return {
+  return toDocumentQrVerifyDTO({
     valid: chain.valid,
     signature_valid: true,
     transaction_id: numericTransactionId,
@@ -408,7 +403,7 @@ async function verifyDocumentQr ({
     },
     chain,
     verified_at: new Date()
-  }
+  })
 }
 
 module.exports = {

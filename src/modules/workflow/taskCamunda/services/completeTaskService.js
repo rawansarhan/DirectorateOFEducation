@@ -41,7 +41,7 @@ const transactionRepository =
 const {
   assessFinalDocumentReadiness,
   assertReadyForWorkflowCompletion
-} = require('../../../transaction/document/services/finalDocumentReadinessService')
+} = require('../../../transaction/certificate/services/finalDocumentReadinessService')
 const securityGuardService = require('../../../../core/security/securityGuardService')
 const {
   invalidateEmployeeTasksForUser,
@@ -65,10 +65,10 @@ const {
 } = require('../mappers/taskCamundaMapper')
 const {
   notifyTransactionOwnerOnReject
-} = require('../../../transaction/notification/services/transactionRejectNotificationService')
+} = require('../../../notification/services/transactionRejectNotificationService')
 const {
   scheduleNotifyTechnicalOfficersIfNoAssigneeStaff
-} = require('../../../transaction/notification/services/missingAssigneeStaffNotificationService')
+} = require('../../../notification/services/missingAssigneeStaffNotificationService')
 const { enrichCamundaTaskNotFoundError } = require('../../../../core/utils/errorMessageHelper')
 const { formatTransactionDate } = require('../utils/employeeTaskFormatters')
 const {

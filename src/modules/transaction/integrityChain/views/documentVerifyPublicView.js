@@ -1,5 +1,9 @@
 'use strict'
 
+const {
+  toPublicDocumentVerifyDTO
+} = require('../mappers/integrityChainMapper')
+
 function escapeHtml (value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -62,7 +66,7 @@ function buildPublicVerifyResult (result, transaction = null, detailsMeta = null
       detailsMeta.expires_in_seconds ?? null
   }
 
-  return payload
+  return toPublicDocumentVerifyDTO(payload)
 }
 
 function renderIdentityRow (label, value) {

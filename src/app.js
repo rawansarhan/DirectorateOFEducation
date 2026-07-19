@@ -140,16 +140,28 @@ app.use(
 const transactionRoutes = require('./modules/transaction/transaction/routes/transaction')
 app.use('/api/transaction', transactionRoutes)
 
+const certificateRoutes =
+  require('./modules/transaction/certificate/routes/certificate')
+app.use('/api/transaction', certificateRoutes)
+
 const documentUploadRoutes =
   require('./modules/transaction/document/routes/documentUpload')
 app.use('/api/transaction/files', documentUploadRoutes)
 
-const notificationRoutes = require('./modules/transaction/notification/routes/notification')
+const transactionDocumentsRoutes =
+  require('./modules/transaction/document/routes/documentsTransaction')
+app.use('/api/transaction', transactionDocumentsRoutes)
+
+const notificationRoutes = require('./modules/notification/routes/notification')
 app.use('/api/notifications', notificationRoutes)
 
 const verifyDocumentRoutes =
   require('./modules/transaction/integrityChain/routes/verifyDocument')
 app.use('/api/verify', verifyDocumentRoutes)
+
+const integrityChainRoutes =
+  require('./modules/transaction/integrityChain/routes/integrityChain')
+app.use('/api/transaction', integrityChainRoutes)
 
 const internalTransactionRoutes =
   require('./modules/transaction/transaction/routes/transactionInternal')

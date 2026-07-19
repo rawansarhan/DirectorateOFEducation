@@ -5,35 +5,26 @@ const processRepository = require('../../../workflow/processDefinition/repositor
 const documentInstanceRepository = require('../../document/repositories/documentInstanceRepository')
 const documentFinalTransactionRepository = require('../repositories/documentFinalTransactionRepository')
 const { getIntegrityChain } = require('../../integrityChain/services/integrityChainService')
-const { formatTransactionHistoryForDisplay, enrichHistoryTemplatesWithDocumentInstances } = require('../../../workflow/taskCamunda/utils/transactionHistoryDisplay')
+const {
+  formatTransactionHistoryForDisplay,
+  enrichHistoryTemplatesWithDocumentInstances
+} = require('../../../workflow/taskCamunda/utils/transactionHistoryDisplay')
 const {
   normalizeProcessPriority,
   formatTransactionDate
 } = require('../../../workflow/taskCamunda/utils/employeeTaskFormatters')
 const { createTransactionError } = require('../../transaction/utils/transactionErrors')
 const employeeTaskRepository = require('../../../workflow/taskCamunda/repositories/employeeTaskRepository')
+const {
+  toFinalDocumentDTO,
+  toCertificateBundleDTO,
+  toSaveFinalDocumentInput
+} = require('../mappers/certificateMapper')
 
 const COMPLETED_STATUSES = new Set(['completed'])
 const CERTIFICATE_AUDIENCE = {
   OWNER: 'owner',
   EMPLOYEE: 'employee'
-}
-
-function mapFinalDocument (row) {
-  if (!row) {
-    return null
-  }
-
-  return {
-    id: row.id,
-    file_path: row.file_path,
-    file_url: row.file_path,
-    original_name: row.original_name,
-    mime_type: row.mime_type,
-    file_size_bytes: row.file_size_bytes,
-    generated_at: row.generated_at,
-    qr_payload_snapshot: row.qr_payload_snapshot ?? null
-  }
 }
 
 async function employeeCanAccessCertificate (userId, transaction) {
@@ -75,7 +66,7 @@ async function loadAuthorizedTransaction (
   if (transaction.user_id === userId) {
     return transaction
   }
-//تحقق من صلاحية الموظف
+
   if (audience === CERTIFICATE_AUDIENCE.EMPLOYEE) {
     const allowed = await employeeCanAccessCertificate(userId, transaction)
 
@@ -123,19 +114,7 @@ async function getCertificateBundle (
     documentInstances
   )
 
-  // الشهادة لا تتضمّن أي بيانات QR — نُسقط qr_payload_snapshot من الوثيقة النهائية
-  const mappedFinalDocument = mapFinalDocument(finalDocument)
-
-  if (mappedFinalDocument) {
-    delete mappedFinalDocument.qr_payload_snapshot
-  }
-
-  const finalDocumentResult = mappedFinalDocument || {
-    available: false,
-    message: 'لم يتم توليد نسخة pdf من هذا الطلب'
-  }
-
-  return {
+  return toCertificateBundleDTO({
     transaction_id: transaction.id,
     status: transaction.status,
     process_name: process?.name ?? null,
@@ -147,17 +126,16 @@ async function getCertificateBundle (
       priority: normalizeProcessPriority(process?.priority),
       data: historyData
     },
-    final_document: finalDocumentResult
-  }
+    final_document: finalDocument
+  })
 }
 
-async function saveFinalDocument ({
-  transactionId,
-  userId,
-  file,
-  qrPayloadSnapshot = null
-}) {
-  const transaction = await loadAuthorizedTransaction(transactionId, userId)
+async function saveFinalDocument (payload) {
+  const input = toSaveFinalDocumentInput(payload)
+  const transaction = await loadAuthorizedTransaction(
+    input.transactionId,
+    input.userId
+  )
 
   if (!COMPLETED_STATUSES.has(transaction.status)) {
     throw createTransactionError(
@@ -166,34 +144,35 @@ async function saveFinalDocument ({
     )
   }
 
-  if (!file) {
+  if (!input.file) {
     throw createTransactionError('VALIDATION_ERROR', 'الملف PDF مطلوب')
   }
 
-  const filePath = `/uploads/${file.filename}`
-  let qrSnapshot = qrPayloadSnapshot
+  const filePath = `/uploads/${input.file.filename}`
+  let qrSnapshot = input.qrPayloadSnapshot
 
   if (!qrSnapshot) {
-    const chain = await getIntegrityChain(transactionId, { userId })
+    const chain = await getIntegrityChain(input.transactionId, {
+      userId: input.userId
+    })
     qrSnapshot = chain.qr_payload ?? null
   }
 
   const saved = await documentFinalTransactionRepository.upsertForTransaction({
     transactionId: transaction.id,
     filePath,
-    originalName: file.originalname,
-    mimeType: file.mimetype || 'application/pdf',
-    fileSizeBytes: file.size ?? null,
+    originalName: input.file.originalname,
+    mimeType: input.file.mimetype || 'application/pdf',
+    fileSizeBytes: input.file.size ?? null,
     qrPayloadSnapshot: qrSnapshot,
-    generatedByUserId: userId,
+    generatedByUserId: input.userId,
     generatedAt: new Date()
   })
 
-  return mapFinalDocument(saved)
+  return toFinalDocumentDTO(saved, { includeQrSnapshot: true })
 }
-//جلب الوثيقة النهائية 
+
 async function getFinalDocument (transactionId, { userId = null } = {}) {
-  //تحقق من صلاحية المعاملة 
   await loadAuthorizedTransaction(transactionId, userId)
 
   const row = await documentFinalTransactionRepository.findByTransactionIdCached(
@@ -207,7 +186,7 @@ async function getFinalDocument (transactionId, { userId = null } = {}) {
     )
   }
 
-  return mapFinalDocument(row)
+  return toFinalDocumentDTO(row, { includeQrSnapshot: true })
 }
 
 module.exports = {
