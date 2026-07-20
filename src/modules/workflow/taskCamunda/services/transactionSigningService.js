@@ -32,12 +32,12 @@ const {
   TX_SIGN_TTL_MS
 } = require('../../../auth/shared/services/cryptoAuthService')
 const { assertTaskLockHolder } = require('./taskLockService')
+const { toSigningChallenge } = require('../mappers/signingChallengeMapper')
 const {
-  toSigningChallenge,
   toDigitalSignatureRecord,
   toSignatureLedgerEntry,
   toSignatureLedger
-} = require('../mappers/taskCamundaMapper')
+} = require('../mappers/signatureMapper')
 /////////////////////////////////////////////////////////////
 async function loadTaskContext (taskId) {
   const task = await camundaClient.getTaskById(taskId)
@@ -501,7 +501,7 @@ async function verifySignatureForComplete ({
       url_task_id: String(expectedTaskId),
       failure_stage: 'signature_verification',
       next_steps: [
-        'GET /api/workflow/tasks/pending-pickup أو /in-progress',
+        'GET /api/workflow/tasks?status=active',
         `POST /api/workflow/tasks/${expectedTaskId}/signing-challenge`,
         `POST /api/workflow/tasks/${expectedTaskId}/complete`
       ]

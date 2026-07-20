@@ -1,7 +1,7 @@
 const completeTaskService = require('../services/completeTaskService')
 const getAllTasksService = require('../services/getAllTasksService')
 const getTaskStatsService = require('../services/getTaskStatsService')
-const { EMPLOYEE_STATUS_FILTERS, parseDepartmentIds, parseDateRange} = getAllTasksService
+const { parseDepartmentIds, parseDateRange } = getAllTasksService
 const getTaskDetailsService = require('../services/getTaskDetailsService')
 const { startWorkflow } = require('../services/startWorkflowService')
 const { createSigningChallenge } = require('../services/transactionSigningService')
@@ -18,7 +18,7 @@ const {
 } = require('../../../../core/utils/workflowResponseHelper')
 const { validateCompleteTaskPayload } = require('../../schemas/completeTaskSchema')
 const { validateSigningChallengePayload } = require('../../schemas/signingChallengeSchema')
-const { parsePaginationQuery, parseCursorPaginationQuery } = require('../../../../core/utils/pagination')
+const { parseCursorPaginationQuery } = require('../../../../core/utils/pagination')
 const {
   getCertificateBundle
 } = require('../../../transaction/certificate/services/transactionCertificateService')
@@ -120,42 +120,6 @@ async function getAllTasksController (req, res) {
   }
 }
 
-async function getInProgressTasksController (req, res) {
-  try {
-    const { page, limit, offset } = parsePaginationQuery(req.query)
-
-    const result = await getAllTasksService.getActiveEmployeeTasks({
-      userId: req.user.id,
-      page,
-      limit,
-      offset,
-      employeeStatusFilter: EMPLOYEE_STATUS_FILTERS.IN_PROGRESS
-    })
-
-    return sendWorkflowSuccess(res, result.data, result.message)
-  } catch (error) {
-    return handleWorkflowError(res, error, 500)
-  }
-}
-
-async function getPendingPickupTasksController (req, res) {
-  try {
-    const { page, limit, offset } = parsePaginationQuery(req.query)
-
-    const result = await getAllTasksService.getActiveEmployeeTasks({
-      userId: req.user.id,
-      page,
-      limit,
-      offset,
-      employeeStatusFilter: EMPLOYEE_STATUS_FILTERS.PENDING_PICKUP
-    })
-
-    return sendWorkflowSuccess(res, result.data, result.message)
-  } catch (error) {
-    return handleWorkflowError(res, error, 500)
-  }
-}
-///////////////////////////////////////////////////////////////////////////////////
 async function getCompletedByDepartmentController (req, res) {
   try {
     const { limit, cursor } = parseCursorPaginationQuery(req.query)
@@ -248,21 +212,6 @@ async function getActiveStatsController (req, res) {
   }
 }
 
-async function createDocumentSubmitSigningChallengeController (req, res) {
-  try {
-    const result = await createDocumentSubmitSigningChallenge({
-      taskId: req.params.taskId,
-      userId: req.user.id,
-      payload: req.body || {},
-      clientMeta: getClientMeta(req)
-    })
-
-    return sendWorkflowSuccess(res, result.data, result.message)
-  } catch (error) {
-    return handleWorkflowError(res, error, 400)
-  }
-}
-
 async function createDocumentSubmitSigningChallengeByProcessController (req, res) {
   try {
     const result = await createDocumentSubmitSigningChallengeByProcess({
@@ -306,29 +255,6 @@ async function createDocumentSubmitSigningChallengeByTransactionController (req,
           : 400
 
     return handleWorkflowError(res, error, status)
-  }
-}
-
-async function completeDocumentSubmitController (req, res) {
-  try {
-    const result = await completeDocumentSubmit({
-      taskId: req.params.taskId,
-      userId: req.user.id,
-      payload: req.body || {},
-      clientMeta: getClientMeta(req)
-    })
-
-    return sendWorkflowSuccess(res, result.data, result.message)
-  } catch (error) {
-    if (error.code === 'IDEMPOTENT_REPLAY' && error.result) {
-      return sendWorkflowSuccess(
-        res,
-        error.result.data,
-        error.result.message
-      )
-    }
-
-    return handleWorkflowError(res, error, 500)
   }
 }
 
@@ -435,15 +361,11 @@ async function releaseTaskController (req, res) {
 module.exports = {
   startWorkflowController,
   createSigningChallengeController,
-  createDocumentSubmitSigningChallengeController,
   createDocumentSubmitSigningChallengeByProcessController,
   createDocumentSubmitSigningChallengeByTransactionController,
-  completeDocumentSubmitController,
   completeDocumentSubmitByTransactionController,
   completeTaskController,
   getAllTasksController,
-  getInProgressTasksController,
-  getPendingPickupTasksController,
   getCompletedByDepartmentController,
   getRejectedByDepartmentController,
   getCompletedLastMonthStatsController,

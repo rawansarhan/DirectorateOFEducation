@@ -17,7 +17,7 @@ const {
   completeTask,
   buildAutoCompleteAuthPayload
 } = require('./completeTaskService')
-const { toStartWorkflow } = require('../mappers/taskCamundaMapper')
+const { toStartWorkflow } = require('../mappers/startWorkflowMapper')
 
 async function rollbackCamundaProcess (camundaProcessInstanceId) {
   if (!camundaProcessInstanceId) {

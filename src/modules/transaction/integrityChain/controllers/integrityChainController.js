@@ -138,6 +138,28 @@ async function verifyDocumentController (req, res) {
   }
 }
 
+async function respondWithDocumentVerifyDetails (res, transactionId) {
+  const numericId = Number.parseInt(transactionId, 10)
+
+  if (!Number.isInteger(numericId) || numericId < 1) {
+    return ApiResponder.badRequestResponse(res, 'معرّف المعاملة غير صالح')
+  }
+
+  const transaction = await transactionRepository.findById(numericId)
+
+  if (!transaction) {
+    return ApiResponder.errorResponse(res, 'المعاملة غير موجودة', 404)
+  }
+
+  const bundle = await buildDocumentQrScanBundle(transaction)
+
+  return ApiResponder.okResponse(
+    res,
+    bundle,
+    'تم جلب تفاصيل التحقق من الوثيقة بنجاح'
+  )
+}
+
 /**
  * جلب تفاصيل المعاملة باستخدام رمز QR (6 أرقام) — يتطلب Bearer token.
  */
@@ -145,19 +167,25 @@ async function getDocumentVerifyDetailsController (req, res) {
   try {
     const code = req.query.code || req.body?.code || req.body?.details_code
     const { transactionId } = await resolveDocumentDetailsCode(code)
-    const transaction = await transactionRepository.findById(transactionId)
 
-    if (!transaction) {
-      return ApiResponder.errorResponse(res, 'المعاملة غير موجودة', 404)
-    }
+    return respondWithDocumentVerifyDetails(res, transactionId)
+  } catch (error) {
+    const statusCode = error.message === 'Transaction not found' ? 404 : 400
+    return ApiResponder.errorResponse(res, error.message, statusCode)
+  }
+}
 
-    const bundle = await buildDocumentQrScanBundle(transaction)
+/**
+ * جلب تفاصيل المعاملة عبر transaction_id — يتطلب Bearer token.
+ */
+async function getDocumentVerifyDetailsByTransactionController (req, res) {
+  try {
+    const transactionId =
+      req.query.transaction_id ||
+      req.params.transactionId ||
+      req.body?.transaction_id
 
-    return ApiResponder.okResponse(
-      res,
-      bundle,
-      'تم جلب تفاصيل التحقق من الوثيقة بنجاح'
-    )
+    return respondWithDocumentVerifyDetails(res, transactionId)
   } catch (error) {
     const statusCode = error.message === 'Transaction not found' ? 404 : 400
     return ApiResponder.errorResponse(res, error.message, statusCode)
@@ -168,5 +196,6 @@ module.exports = {
   getIntegrityChainController,
   verifyIntegrityChainController,
   verifyDocumentController,
-  getDocumentVerifyDetailsController
+  getDocumentVerifyDetailsController,
+  getDocumentVerifyDetailsByTransactionController
 }
