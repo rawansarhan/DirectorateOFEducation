@@ -1370,19 +1370,21 @@ router.post(
 
  *
 
- *       **`assignments` (حسب المرحلة):** إذا `config_json.assignments` موجود —
+ *       **`assignments` (حسب المرحلة):** إذا `is_assignment=true` —
 
- *       أرسل الهيكل كاملاً كما في stageConfig + `value` المختار (key = camunda_group_key).
+ *       أرسل `[{ organization_id, department_id, role_id }]`.
 
- *       مثال: انظر `CompleteTaskWithDestination` / `LeaveProcessReviewComplete` في Swagger examples.
+ *       يُطابق OrgDeptRole نشط ويُوجّه USER_TASK التالية.
+
+ *       عند عدم التطابق: «لم يتم العثور على وظيفة مثل التي ارسلت».
+
+ *       عند فشل التوجيه → fallback إلى stage_assignments للمرحلة التالية.
+
+ *       إن `is_assignment=false` → التوجيه عبر stage_assignments للمرحلة التالية.
 
  *
 
- *       إن لم يوجد في الإعداد → التوجيه عبر `stage_assignments` للمرحلة التالية.
-
- *
-
- *       **عند الرفض (`decision = reject`):** `note` إلزامي — يُرسل إشعار لـ `transaction.user_id`:
+  *       **عند الرفض (`decision = reject`):** `note` إلزامي — يُرسل إشعار لـ `transaction.user_id`:
 
  *       «لقد تم رفض معاملتك (اسم المعاملة) بسبب (note)» — Firebase للمواطن (CITIZEN)، WebSocket للموظف.
 

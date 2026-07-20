@@ -207,7 +207,7 @@ async function loadTaskDetailsContext ({ taskId, userId }) {
   )
 
   const configJson = stageConfig?.config_json || {}
-  const assignments = buildAssignmentsResponseFromConfig(configJson, '')
+  const assignments = buildAssignmentsResponseFromConfig(configJson)
 
   const details = toTaskDetails({
     task,

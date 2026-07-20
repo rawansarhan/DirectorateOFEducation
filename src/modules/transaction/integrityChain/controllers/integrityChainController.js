@@ -103,7 +103,7 @@ async function verifyDocumentController (req, res) {
 
     const detailsMeta =
       result.valid && transaction
-        ? issueDocumentDetailsCode(transaction.id)
+        ? await issueDocumentDetailsCode(transaction.id)
         : null
 
     const publicResult = buildPublicVerifyResult(result, transaction, detailsMeta)
@@ -139,12 +139,12 @@ async function verifyDocumentController (req, res) {
 }
 
 /**
- * جلب تفاصيل المعاملة بعد المسح باستخدام details_code من /api/verify/document.
+ * جلب تفاصيل المعاملة باستخدام رمز QR (6 أرقام) — يتطلب Bearer token.
  */
 async function getDocumentVerifyDetailsController (req, res) {
   try {
     const code = req.query.code || req.body?.code || req.body?.details_code
-    const { transactionId } = resolveDocumentDetailsCode(code)
+    const { transactionId } = await resolveDocumentDetailsCode(code)
     const transaction = await transactionRepository.findById(transactionId)
 
     if (!transaction) {

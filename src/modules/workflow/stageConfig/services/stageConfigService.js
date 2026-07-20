@@ -65,6 +65,10 @@ function throwBusinessError (message, statusCode = HTTP_STATUS.BAD_REQUEST) {
 const normalizeOrgId = (v) => (v === 0 || v === '0' || v == null ? null : v)
 
 function hasDynamicOrgDepRoleDestination (configJson = {}) {
+  if (configJson?.is_assignment === true) {
+    return true
+  }
+
   const widget = configJson?.assignments
   return (
     widget?.widget_type === 'dropdown' &&
@@ -285,7 +289,7 @@ async function createStageConfigService (data) {
       if (!assignments.length) {
         throwBusinessError(
           dynamicDestination
-            ? `المرحلة ${item.stage_id} (USER_TASK): عند وجود config_json.assignments أرسل assignments: [{ organization_id: null, department_id: null, role_id: null }]`
+            ? `المرحلة ${item.stage_id} (USER_TASK): عند is_assignment=true أرسل assignments: [{ organization_id: null, department_id: null, role_id: null }]`
             : `المرحلة ${item.stage_id} (USER_TASK): يجب تحديد assignments (مؤسسة/قسم/دور)`
         )
       }
@@ -295,12 +299,12 @@ async function createStageConfigService (data) {
 
         if (!allNull) {
           throwBusinessError(
-            `المرحلة ${item.stage_id}: عند وجود config_json.assignments (OrgDepRole) يجب أن تكون assignments كلها null — التوجيه للـ USER_TASK التالية يتم عبر POST /complete`
+            `المرحلة ${item.stage_id}: عند is_assignment=true يجب أن تكون assignments كلها null — التوجيه يتم عبر POST /complete`
           )
         }
       } else if (assignments.some(isNullStageAssignment)) {
         throwBusinessError(
-          `المرحلة ${item.stage_id}: assignments بـ null مسموحة فقط مع config_json.assignments (OrgDepRole)`
+          `المرحلة ${item.stage_id}: assignments بـ null مسموحة فقط مع is_assignment=true`
         )
       }
     }
@@ -464,9 +468,8 @@ async function loadAuthStageConfigPayload (numericProcessId) {
 
   const configJson = stageConfig.config_json || {}
 
-  // استمارة المواطن: لا تُعرض assignments (OrgDepRole) — اختيار الوجهة للموظف عند complete فقط
-  if (configJson.assignments) {
-    const { assignments, ...citizenConfig } = configJson
+  if (configJson.is_assignment || configJson.assignments) {
+    const { is_assignment, assignments, ...citizenConfig } = configJson
     return { config_json: citizenConfig }
   }
 

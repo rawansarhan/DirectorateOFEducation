@@ -1,17 +1,11 @@
 'use strict'
 
-/**
- * معاينة صفحة الغلاف للوثيقة النهائية ببيانات وهمية + الشعار + رمز QR موقّع.
- * التشغيل: node scripts/previewFinalCover.js
- * الناتج : preview-final-cover.pdf في جذر المشروع.
- */
-
 const fs = require('fs')
 const path = require('path')
 
 const {
   buildCoverPdfBytes
-} = require('../src/modules/transaction/document/services/finalDocumentBuilderService')
+} = require('../src/modules/transaction/certificate/services/finalDocumentBuilderService')
 const {
   signDocumentBinding,
   isAuthorityKeyConfigured

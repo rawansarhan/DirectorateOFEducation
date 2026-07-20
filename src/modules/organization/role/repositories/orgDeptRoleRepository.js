@@ -44,6 +44,19 @@ async function findByRoleOrgDept(roleId, organizationId, departmentId, options =
   })
 }
 
+async function findActiveByRoleOrgDept (roleId, organizationId, departmentId, options = {}) {
+  return OrgDeptRole.findOne({
+    where: {
+      role_id: roleId,
+      organization_id: organizationId,
+      department_id: departmentId,
+      is_active: true
+    },
+    include: fullIncludes,
+    ...options
+  })
+}
+
 async function findActiveByCamundaGroupKey (camundaGroupKey, options = {}) {
   if (!camundaGroupKey) {
     return null
@@ -138,6 +151,7 @@ module.exports = {
   findByIdWithRelations,
   findByIdWithRole,
   findByRoleOrgDept,
+  findActiveByRoleOrgDept,
   findActiveByCamundaGroupKey,
   findAll,
   findActiveByDepartmentIdWithRole,

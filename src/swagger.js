@@ -3156,36 +3156,16 @@ const swaggerOptions = {
                   $ref: '#/components/schemas/StageSubmissionSignature'
                 },
                 assignments: {
-                  type: 'object',
+                  type: 'array',
                   description:
-                    'مطلوب إذا المرحلة تحتوي config_json.assignments — نفس الهيكل الكامل من stageConfig + value. value = options[].key = camunda_group_key.',
-                  required: ['widget_type', 'data', 'value'],
-                  properties: {
-                    widget_type: { type: 'string', enum: ['dropdown'], example: 'dropdown' },
-                    data: {
-                      type: 'object',
-                      required: ['id', 'label', 'options'],
-                      properties: {
-                        id: { type: 'string', example: 'OrgDepRole' },
-                        label: { type: 'string', example: 'تعيين الوجهة التالية للمسار' },
-                        is_required: { type: 'boolean', example: true },
-                        options: {
-                          type: 'array',
-                          items: {
-                            type: 'object',
-                            required: ['key', 'value'],
-                            properties: {
-                              key: { type: 'string', example: 'ROLE__ORG1__DEPT2' },
-                              value: { type: 'string', example: 'تقنية المعلومات' }
-                            }
-                          }
-                        }
-                      }
-                    },
-                    value: {
-                      type: 'string',
-                      example: 'ROLE__ORG1__DEPT2',
-                      description: 'يجب أن يطابق options[].key و OrgDepRole.camunda_group_key'
+                    'مطلوب إذا is_assignment=true — [{ organization_id, department_id, role_id }]. يُطابق OrgDeptRole نشط.',
+                  items: {
+                    type: 'object',
+                    required: ['organization_id', 'department_id', 'role_id'],
+                    properties: {
+                      organization_id: { type: 'integer', example: 1 },
+                      department_id: { type: 'integer', example: 2 },
+                      role_id: { type: 'integer', example: 3 }
                     }
                   }
                 }
@@ -3194,7 +3174,7 @@ const swaggerOptions = {
                 'POST /workflow/tasks/{taskId}/complete — config_json + value. ' +
                 'مسار Camunda gateway من radio_group (is_gateway) داخل widgets — لا variables. ' +
                 'idempotency_key يُولَّد من السيرفر ولا يُرسل في الطلب. ' +
-                'assignments اختياري/إلزامي حسب config_json.assignments لاختيار الوجهة التالية.',
+                'assignments[] اختياري/إلزامي حسب is_assignment لاختيار الوجهة التالية.',
             }
           ],
           example: {
@@ -3224,19 +3204,13 @@ const swaggerOptions = {
               signature:
                 'Bj7trXvyM9jfruXKttly27VY1xsVuqtKgcjfLf7fZrohjBGX0MwIFtYRMQ3nP5WHtbx0EFadm9rXy/RQqVw2Dg=='
             },
-            assignments: {
-              widget_type: 'dropdown',
-              data: {
-                id: 'OrgDepRole',
-                label: 'تعيين الوجهة التالية للمسار',
-                is_required: true,
-                options: [
-                  { key: 'ROLE__ORG1__DEPT2', value: 'تقنية المعلومات' },
-                  { key: 'ROLE__ORG1__DEPT3', value: 'التربية' }
-                ]
-              },
-              value: 'ROLE__ORG1__DEPT2'
-            }
+            assignments: [
+              {
+                organization_id: 1,
+                department_id: 2,
+                role_id: 3
+              }
+            ]
           }
         },
 
@@ -4546,7 +4520,7 @@ const swaggerOptions = {
         },
 
         LeaveProcessReviewComplete: {
-          summary: 'POST /tasks/{taskId}/complete — مراجعة مع اختيار الوجهة التالية (assignments كامل)',
+          summary: 'POST /tasks/{taskId}/complete — مراجعة مع assignments[]',
           value: {
             form_id: 'leave_process_review',
             form_name: 'التشيك على المعلومات المدخلة',
@@ -4574,24 +4548,18 @@ const swaggerOptions = {
               signature:
                 'Bj7trXvyM9jfruXKttly27VY1xsVuqtKgcjfLf7fZrohjBGX0MwIFtYRMQ3nP5WHtbx0EFadm9rXy/RQqVw2Dg=='
             },
-            assignments: {
-              widget_type: 'dropdown',
-              data: {
-                id: 'OrgDepRole',
-                label: 'تعيين الوجهة التالية للمسار',
-                is_required: true,
-                options: [
-                  { key: 'ROLE__ORG1__DEPT2', value: 'تقنية المعلومات' },
-                  { key: 'ROLE__ORG1__DEPT3', value: 'التربية' }
-                ]
-              },
-              value: 'ROLE__ORG1__DEPT2'
-            }
+            assignments: [
+              {
+                organization_id: 1,
+                department_id: 2,
+                role_id: 3
+              }
+            ]
           }
         },
 
         CompleteTaskWithDestination: {
-          summary: 'POST /tasks/{taskId}/complete — مثال كامل مع assignments (نفس شكل stageConfig + value)',
+          summary: 'POST /tasks/{taskId}/complete — مثال كامل مع assignments[]',
           value: {
             form_id: 'leave_process_review',
             form_name: 'التشيك على المعلومات المدخلة',
@@ -4629,19 +4597,13 @@ const swaggerOptions = {
               signature:
                 'Bj7trXvyM9jfruXKttly27VY1xsVuqtKgcjfLf7fZrohjBGX0MwIFtYRMQ3nP5WHtbx0EFadm9rXy/RQqVw2Dg=='
             },
-            assignments: {
-              widget_type: 'dropdown',
-              data: {
-                id: 'OrgDepRole',
-                label: 'تعيين الوجهة التالية للمسار',
-                is_required: true,
-                options: [
-                  { key: 'ROLE__ORG1__DEPT2', value: 'تقنية المعلومات' },
-                  { key: 'ROLE__ORG1__DEPT3', value: 'التربية' }
-                ]
-              },
-              value: 'ROLE__ORG1__DEPT3'
-            }
+            assignments: [
+              {
+                organization_id: 1,
+                department_id: 3,
+                role_id: 2
+              }
+            ]
           }
         },
 

@@ -53,6 +53,7 @@ const KEYS = {
   currentStage: (processDefinitionId, taskDefinitionKey) =>
     `current-stage:${processDefinitionId}:${taskDefinitionKey}`,
   finalDocument: (transactionId) => `final-document:tx:${transactionId}`,
+  documentVerifyDetailsCode: (pin) => `verify:details-code:${pin}`,
   taskDetails: (taskId, userId) => `task-details:${taskId}:user:${userId}`,
   transactionDraft: (userId, processId) => `transaction:draft:${userId}:${processId}`,
   createDraft: (userId, processId) => `transaction:create-draft:${userId}:${processId}`,
@@ -738,6 +739,8 @@ async function invalidateAllUserAccessibleDepartments () {
 module.exports = {
   KEYS,
   deleteKeysByPattern,
+  getCachedJson,
+  setCachedJson,
   getOrLoad,
   invalidateOrganizations,
   invalidateTypeProcesses,

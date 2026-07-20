@@ -5,22 +5,10 @@
  * qrStampService — توليد رمز QR موقّع وحقنه في الـ PDF المولّد
  * =============================================================================
  *
- * يُحقن رمز QR في أسفل يمين الصفحة الأخيرة (قابل للتهيئة عبر config_json.pdf.qr).
- * محتوى الرمز رابط تحقق عام يحمل ربطاً موقّعاً من سلطة الإصدار:
+ * محتوى الرمز: رابط تحقق عام موقّع. كل مسح يُصدر رمز تفاصيل جديد (6 أرقام، 5 دقائق)
+ * عبر GET /api/verify/document ثم GET /api/verify/document/details مع Bearer token.
  *
  *   <API>/api/verify/document?v=1&tx=<id>&g=<genesis>&doc=<instanceId>&s=<sig>
- *
- *   - tx  : معرّف المعاملة
- *   - g   : genesis_hash للمعاملة
- *   - doc : معرّف نسخة الوثيقة (document_instance.id)
- *   - s   : توقيع Ed25519 من الخادم على (DOE-DOC-QR|v1|tx|g|doc)
- *
- * الرمز "مؤشّر حيّ": لا يخزّن السلسلة نفسها، بل يشير لنقطة تحقق تُعيد دائماً
- * أحدث سلسلة تواقيع كاملة للمعاملة. لذا أي PDF مولّد في أي مرحلة، عند مسحه،
- * يُظهر السلسلة النهائية الكاملة.
- *
- * لا يُضمَّن content_hash داخل الرمز (تجنّباً للدائرية: الرمز جزء من الملف).
- * يُحسب content_hash بعد الحقن والحفظ ويُخزَّن للمطابقة عند التحقق.
  */
 
 const QRCode = require('qrcode')
@@ -76,7 +64,7 @@ async function generateQrPngBuffer (text, size) {
     type: 'png',
     errorCorrectionLevel: 'M',
     margin: 1,
-    width: Math.round(size * 4) // دقّة أعلى ثم يُصغَّر عند الرسم
+    width: Math.round(size * 4)
   })
 }
 
@@ -104,10 +92,6 @@ function computeQrRectangle ({ page, size, margin, position }) {
   }
 }
 
-/**
- * يحقن رمز QR موقّعاً في الصفحة الأخيرة من pdfDoc.
- * يعيد بيانات الرمز (الرابط/التوقيع/الموضع) أو enabled=false إن عُطِّل.
- */
 async function injectIntegrityQr ({
   pdfDoc,
   configJson = {},

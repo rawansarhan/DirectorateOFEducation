@@ -3,6 +3,7 @@
 const express = require('express')
 const router = express.Router()
 
+const { authMiddleware } = require('../../../../core/middleware/authMiddleware')
 const {
   verifyDocumentController,
   getDocumentVerifyDetailsController
@@ -15,10 +16,8 @@ const {
  *     summary: Verify a generated document via its QR code (public)
  *     description: |
  *       شاشة عامة للتحقق (بدون مصادقة) عند مسح QR.
- *       تعرض فقط: النتيجة + بيانات هوية طالب المعاملة + **رمز التفاصيل** `details_code`.
- *
- *       لجلب التفاصيل الكاملة (الموقّعون، السجل، الوثيقة النهائية، التواريخ)
- *       استخدم `GET /api/verify/document/details?code=<details_code>`.
+ *       عند النجاح يُصدر **رمز تفاصيل جديد** (6 أرقام) صالح **5 دقائق فقط**.
+ *       استخدمه في `GET /api/verify/document/details?code=<details_code>` مع Bearer token.
  *     tags: [IntegrityChain]
  *     parameters:
  *       - in: query
@@ -59,8 +58,8 @@ const {
  *                   father_name: محمد
  *                   mother_name: فاطمة
  *                   national_id: "01234567890"
- *                 details_code: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
- *                 details_code_expires_in_seconds: 900
+ *                 details_code: "482913"
+ *                 details_code_expires_in_seconds: 300
  *       400:
  *         description: بيانات غير صالحة أو الوثيقة غير موثوقة
  *       404:
@@ -72,20 +71,22 @@ router.get('/document', verifyDocumentController)
  * @swagger
  * /api/verify/document/details:
  *   get:
- *     summary: تفاصيل المعاملة بعد مسح QR (عبر details_code)
+ *     summary: تفاصيل المعاملة بعد مسح QR (رمز مؤقت 6 أرقام)
  *     description: |
- *       API ثاني لجلب التفاصيل بعد المسح العام.
- *       أرسل `details_code` الذي ظهر من `/api/verify/document`.
+ *       أرسل `code` (6 أرقام) الذي ظهر بعد مسح QR عبر `/api/verify/document`.
+ *       الرمز صالح **5 دقائق** فقط من لحظة إصداره.
  *
  *       يعيد: الموقّعين، طالب المعاملة، transaction_history، final_document،
  *       تاريخ الطلب وتاريخ الإكمال/الرفض.
  *     tags: [IntegrityChain]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: query
  *         name: code
  *         required: true
- *         schema: { type: string }
- *         description: details_code من نتيجة المسح العام
+ *         schema: { type: string, pattern: '^\\d{6}$' }
+ *         description: رمز التحقق من QR (6 أرقام)
  *     responses:
  *       200:
  *         description: تفاصيل التحقق
@@ -121,11 +122,13 @@ router.get('/document', verifyDocumentController)
  *                 final_document:
  *                   available: true
  *                   file_url: https://host/uploads/final/tx-42.pdf
+ *       401:
+ *         description: Bearer token مطلوب أو غير صالح
  *       400:
- *         description: رمز غير صالح أو منتهٍ
+ *         description: رمز غير صالح أو منتهٍ الصلاحية
  *       404:
  *         description: المعاملة غير موجودة
  */
-router.get('/document/details', getDocumentVerifyDetailsController)
+router.get('/document/details', authMiddleware, getDocumentVerifyDetailsController)
 
 module.exports = router
