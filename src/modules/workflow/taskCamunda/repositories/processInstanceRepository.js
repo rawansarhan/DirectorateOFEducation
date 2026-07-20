@@ -1,4 +1,7 @@
-const { ProcessInstance } = require('../../../../entities')
+'use strict'
+
+const db = require('../../../../entities')
+const { ProcessInstance } = db
 
 class ProcessInstanceRepository {
   getSequelize () {
@@ -28,6 +31,53 @@ class ProcessInstanceRepository {
     return ProcessInstance.findOne({
       where: { camunda_process_instance_id: camundaProcessInstanceId },
       transaction: dbTransaction
+    })
+  }
+
+  /**
+   * Process instance + definition, transaction/user, current stage config.
+   * Used by task details and similar read paths.
+   */
+  async findByCamundaIdWithDetails (camundaProcessInstanceId) {
+    return ProcessInstance.findOne({
+      where: {
+        camunda_process_instance_id: camundaProcessInstanceId
+      },
+      include: [
+        {
+          model: db.ProcessDefinition,
+          as: 'process_definition',
+          attributes: ['id', 'name', 'priority', 'code']
+        },
+        {
+          model: db.Transaction,
+          as: 'transaction',
+          include: [
+            {
+              model: db.User,
+              as: 'user',
+              attributes: [
+                'id',
+                'phone_number',
+                'first_name',
+                'father_name',
+                'last_name'
+              ]
+            }
+          ]
+        },
+        {
+          model: db.Stage,
+          as: 'current_stage',
+          include: [
+            {
+              model: db.StageConfig,
+              as: 'stage_config',
+              attributes: ['id', 'stage_id', 'config_json']
+            }
+          ]
+        }
+      ]
     })
   }
 

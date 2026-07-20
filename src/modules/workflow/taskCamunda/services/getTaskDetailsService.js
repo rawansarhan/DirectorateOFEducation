@@ -1,7 +1,6 @@
 'use strict'
 
 const camundaClient = require('../../../../core/shared/clients/camunda/camundaClient')
-const taskDetailsRepository = require('../repositories/taskDetailsRepository')
 const processInstanceRepository = require('../repositories/processInstanceRepository')
 const stageRepository = require('../../processDefinition/repositories/stageRepository')
 const stageConfigRepository = require('../../stageConfig/repositories/stageConfigRepository')
@@ -11,7 +10,7 @@ const {
   releaseTaskLockStrict,
   buildTaskLockStatus
 } = require('./taskLockService')
-const { toTaskDetails } = require('../mappers/taskCamundaMapper')
+const { toTaskDetails } = require('../mappers/taskDetailsMapper')
 const { retryWithBackoff } = require('../../../../core/utils/retryWithBackoff')
 const {
   formatTransactionHistoryForDisplay,
@@ -66,10 +65,10 @@ async function fetchCamundaTask (taskId) {
 async function fetchProcessInstance (camundaProcessInstanceId) {
   const processInstance = await retryWithBackoff(
     () =>
-      taskDetailsRepository.findProcessInstanceByCamundaId(
+      processInstanceRepository.findByCamundaIdWithDetails(
         camundaProcessInstanceId
       ),
-    { label: `taskDetails.findProcessInstance:${camundaProcessInstanceId}` }
+    { label: `processInstance.findByCamundaIdWithDetails:${camundaProcessInstanceId}` }
   )
 
   if (!processInstance) {

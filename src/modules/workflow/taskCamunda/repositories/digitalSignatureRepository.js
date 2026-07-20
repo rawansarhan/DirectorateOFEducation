@@ -7,13 +7,6 @@ class DigitalSignatureRepository {
     return DigitalSignature.create(data, options)
   }
 
-  async findLatestByDocumentId (documentId) {
-    return DigitalSignature.findOne({
-      where: { document_id: documentId },
-      order: [['signature_order', 'DESC']]
-    })
-  }
-
   async findLatestByTransactionId (transactionId) {
     return DigitalSignature.findOne({
       include: [{
@@ -34,12 +27,6 @@ class DigitalSignatureRepository {
         where: { transaction_id: transactionId },
         attributes: []
       }]
-    })
-  }
-
-  async countByDocumentId (documentId) {
-    return DigitalSignature.count({
-      where: { document_id: documentId }
     })
   }
 
