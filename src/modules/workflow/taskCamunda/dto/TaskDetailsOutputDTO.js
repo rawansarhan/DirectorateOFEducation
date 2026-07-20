@@ -46,7 +46,7 @@ class TaskDetailsOutputDTO {
       config: currentStageConfig || {}
     }
 
-    // نفس هيكل config_json.assignments + value (null إن لم تُعرَّف في المرحلة)
+    // is_assignment=true → الموظف يرسل assignments[] عند complete
     this.assignments = assignments ?? null
   }
 }

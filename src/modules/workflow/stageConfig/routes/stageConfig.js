@@ -43,10 +43,8 @@ const { createStageConfig , getJsonProcess} = require('../controllers/stageConfi
  *                     config_json:
  *                       type: object
  *                       description: |
- *                         عقد الاستمارة: form_id, form_name, widgets, template, actions, assignments.
- *                         widgets اختياري — [] أو أي عدد (text_field, file_picker, …).
- *                         assignments اختياري — dropdown واحد (id=OrgDepRole) لاختيار الوجهة التالية؛
- *                         كل options[].key يجب أن يطابق camunda_group_key نشط.
+ *                         عقد الاستمارة: form_id, form_name, widgets, template, actions, is_assignment.
+ *                         is_assignment=true → الموظف يختار الوجهة التالية عند POST /complete.
  *                         type_doc_id مطلوب فقط داخل file_picker.
  *                         لمرحلة SERVICE_TASK أضف actions (GENERATE_PDF، SEND_EMAIL، …).
  *                       example:
@@ -74,17 +72,7 @@ const { createStageConfig , getJsonProcess} = require('../controllers/stageConfi
  *                         template:
  *                           - template_id: 1
  *                         requires_digital_signature: true
- *                         assignments:
- *                           widget_type: dropdown
- *                           data:
- *                             id: OrgDepRole
- *                             label: تعيين الوجهة التالية للمسار
- *                             is_required: true
- *                             options:
- *                               - key: ROLE__ORG1__DEPT2
- *                                 value: تقنية المعلومات
- *                               - key: ROLE__ORG1__DEPT3
- *                                 value: التربية
+ *                         is_assignment: false
  *                         actions:
  *                           - name: GENERATE_PDF
  *                             payload:
@@ -108,9 +96,10 @@ const { createStageConfig , getJsonProcess} = require('../controllers/stageConfi
  *                       type: array
  *                       description: |
  *                         تعيينات المرحلة (تُحفظ في stage_assignments).
- *                         عند وجود `config_json.assignments` (OrgDepRole) يجب إرسال:
+ *                         عند `is_assignment=true` أرسل:
  *                         `[{ organization_id: null, department_id: null, role_id: null }]`
  *                         ولا تُحفظ stage_assignments — التوجيه يتم عبر POST /complete.
+ *                         الحالة الافتراضية: org/dept/role فعلية للمرحلة التالية.
  *                       items:
  *                         type: object
  *                         required:
@@ -131,8 +120,8 @@ const { createStageConfig , getJsonProcess} = require('../controllers/stageConfi
  *                             nullable: true
  *                             example: null
  *           examples:
- *             with_destination_dropdown:
- *               summary: USER_TASK مع OrgDepRole — assignments كلها null والتوجيه من complete
+ *             with_dynamic_assignment:
+ *               summary: USER_TASK مع is_assignment — assignments كلها null
  *               value:
  *                 stages:
  *                   - stage_id: 2
@@ -153,21 +142,26 @@ const { createStageConfig , getJsonProcess} = require('../controllers/stageConfi
  *                                 value: الطلب مقبول
  *                       template: []
  *                       requires_digital_signature: true
- *                       assignments:
- *                         widget_type: dropdown
- *                         data:
- *                           id: OrgDepRole
- *                           label: تعيين الوجهة التالية للمسار
- *                           is_required: true
- *                           options:
- *                             - key: ROLE__ORG1__DEPT2
- *                               value: تقنية المعلومات
- *                             - key: ROLE__ORG1__DEPT3
- *                               value: التربية
+ *                       is_assignment: true
  *                     assignments:
  *                       - organization_id: null
  *                         department_id: null
  *                         role_id: null
+ *             with_static_assignment:
+ *               summary: USER_TASK — تعيين ثابت للمرحلة التالية
+ *               value:
+ *                 stages:
+ *                   - stage_id: 3
+ *                     config_json:
+ *                       form_id: leave_process_sign
+ *                       form_name: توقيع مدير التربية
+ *                       widgets: []
+ *                       template: []
+ *                       is_assignment: false
+ *                     assignments:
+ *                       - organization_id: 1
+ *                         department_id: 3
+ *                         role_id: 2
  *     responses:
  *       200:
  *         description: تم إعداد المراحل بنجاح
@@ -214,7 +208,7 @@ router.post(
  *     description: |
  *       يجلب استمارة التقديم للمواطن من مرحلة AUTH:
  *       - يُعاد `stageConfig.config_json` (القالب)
- *       - إن وُجد `config_json.assignments` (OrgDepRole) يُحذف من الاستجابة — اختيار الوجهة للموظف عند `POST /complete` فقط
+ *       - إن وُجد `is_assignment` يُحذف من الاستجابة — اختيار الوجهة للموظف عند `POST /complete` فقط
  *     tags: [Stage Config]
  *     security:
  *       - bearerAuth: []

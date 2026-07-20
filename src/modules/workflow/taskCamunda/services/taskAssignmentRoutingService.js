@@ -15,6 +15,32 @@ const {
 } = require('../../stageConfig/validations/stageConfigSchema')
 
 const ASSIGNEE_ROUTE_KEY = '__assignee_route'
+const ORG_DEPT_ROLE_NOT_FOUND_MESSAGE = 'لم يتم العثور على وظيفة مثل التي ارسلت'
+
+const normalizeOrgId = (value) =>
+  value === 0 || value === '0' || value == null ? null : Number(value)
+
+function normalizeRoleId (value) {
+  if (value === 0 || value === '0' || value == null) {
+    return null
+  }
+
+  const numeric = Number(value)
+  return Number.isInteger(numeric) && numeric > 0 ? numeric : null
+}
+
+function hasLegacyOrgDepRoleWidget (configJson = null) {
+  const widget = configJson?.assignments
+
+  return (
+    widget?.widget_type === 'dropdown' &&
+    widget?.data?.id === ORG_DEP_ROLE_ASSIGNMENT_WIDGET_ID
+  )
+}
+
+function stageRequiresAssignmentSelection (configJson = null) {
+  return configJson?.is_assignment === true || hasLegacyOrgDepRoleWidget(configJson)
+}
 
 function shapeAssignmentForPickup (assignment) {
   const odr = assignment.organization_department_role
@@ -60,167 +86,98 @@ async function invalidateStageAssignmentsCache (stageId) {
   await invalidateStageAssignments(stageId)
 }
 
-function getConfigAssignmentsWidget (configJson = null) {
-  return configJson?.assignments || null
-}
-
-/**
- * يعيد assignments كما في stageConfig + value (للـ GET/pickup).
- */
-function buildAssignmentsResponseFromConfig (configJson = null, value = '') {
-  const widget = getConfigAssignmentsWidget(configJson)
-
-  if (!widget) {
+function buildAssignmentsResponseFromConfig (configJson = null) {
+  if (!stageRequiresAssignmentSelection(configJson)) {
     return null
   }
 
   return {
-    widget_type: widget.widget_type || 'dropdown',
-    data: {
-      id: widget.data?.id || ORG_DEP_ROLE_ASSIGNMENT_WIDGET_ID,
-      label: widget.data?.label ?? null,
-      is_required: widget.data?.is_required !== false,
-      options: Array.isArray(widget.data?.options)
-        ? widget.data.options.map(option => ({
-          key: option.key,
-          value: option.value
-        }))
-        : []
-    },
-    value: value == null ? '' : String(value)
+    is_assignment: true
   }
 }
 
-function extractOrgDepRoleDestinationValue (payload = {}) {
-  if (payload?.assignments != null) {
-    if (typeof payload.assignments === 'string') {
-      return String(payload.assignments).trim()
-    }
-
-    if (
-      payload.assignments.value != null &&
-      payload.assignments.value !== ''
-    ) {
-      return String(payload.assignments.value).trim()
-    }
+function extractSubmittedAssignmentItems (payload = {}) {
+  if (!Array.isArray(payload.assignments)) {
+    return []
   }
 
-  const fromWidgets = (payload.widgets || []).find(
-    widget => widget?.data?.id === ORG_DEP_ROLE_ASSIGNMENT_WIDGET_ID
-  )
-
-  if (fromWidgets?.value != null && fromWidgets.value !== '') {
-    return String(fromWidgets.value).trim()
-  }
-
-  return null
+  return payload.assignments
 }
 
-/**
- * إذا كانت المرحلة تحتوي config_json.assignments:
- * - يجب إرسال assignments بنفس الهيكل الكامل + value
- * - value يجب أن تطابق options[].key و camunda_group_key نشط
- */
-async function resolveDestinationOverrideFromComplete ({
-  payload = {},
-  configJson = null,
-  isReject = false
-} = {}) {
-  if (isReject) {
+async function resolveOrgDeptRoleFromAssignmentItem (item = {}) {
+  const organizationId = normalizeOrgId(item.organization_id)
+  const departmentId = normalizeOrgId(item.department_id)
+  const roleId = normalizeRoleId(item.role_id)
+
+  if (organizationId == null || departmentId == null || roleId == null) {
     return null
   }
 
-  const assignmentWidget = getConfigAssignmentsWidget(configJson)
-
-  if (!assignmentWidget) {
-    return null
-  }
-
-  const submitted = payload.assignments
-
-  if (!submitted || typeof submitted !== 'object' || Array.isArray(submitted)) {
-    const error = new Error(
-      `assignments مطلوب بنفس شكل stageConfig (widget_type, data, value) لأن هذه المرحلة تحتوي config_json.assignments`
-    )
-    error.code = 'VALIDATION_ERROR'
-    error.statusCode = 400
-    throw error
-  }
-
-  if (submitted.widget_type !== 'dropdown') {
-    const error = new Error('assignments.widget_type يجب أن يكون dropdown')
-    error.code = 'VALIDATION_ERROR'
-    error.statusCode = 400
-    throw error
-  }
-
-  if (submitted.data?.id !== ORG_DEP_ROLE_ASSIGNMENT_WIDGET_ID) {
-    const error = new Error(
-      `assignments.data.id يجب أن يكون ${ORG_DEP_ROLE_ASSIGNMENT_WIDGET_ID}`
-    )
-    error.code = 'VALIDATION_ERROR'
-    error.statusCode = 400
-    throw error
-  }
-
-  const selectedKey = extractOrgDepRoleDestinationValue(payload)
-
-  if (!selectedKey) {
-    const error = new Error(
-      `assignments.value مطلوب للودجت ${ORG_DEP_ROLE_ASSIGNMENT_WIDGET_ID}`
-    )
-    error.code = 'VALIDATION_ERROR'
-    error.statusCode = 400
-    throw error
-  }
-
-  const configOptions = assignmentWidget.data?.options || []
-  const matchedConfigOption = configOptions.find(
-    option => String(option.key).trim() === selectedKey
+  return orgDeptRoleRepository.findActiveByRoleOrgDept(
+    roleId,
+    organizationId,
+    departmentId
   )
+}
 
-  if (!matchedConfigOption) {
-    const error = new Error('الوجهة التالية التي ارسلتها غير موجودة')
-    error.code = 'NEXT_DESTINATION_NOT_FOUND'
-    error.statusCode = 400
-    throw error
-  }
-
-  const submittedOptions = Array.isArray(submitted.data?.options)
-    ? submitted.data.options
-    : []
-  const matchedSubmittedOption = submittedOptions.find(
-    option => String(option.key).trim() === selectedKey
-  )
-
-  if (!matchedSubmittedOption) {
-    const error = new Error(
-      'assignments.value يجب أن يطابق key ضمن assignments.data.options المرسلة'
-    )
-    error.code = 'VALIDATION_ERROR'
-    error.statusCode = 400
-    throw error
-  }
-
-  const orgDeptRole =
-    await orgDeptRoleRepository.findActiveByCamundaGroupKey(selectedKey)
-
-  if (!orgDeptRole) {
-    const error = new Error('الوجهة التالية التي ارسلتها غير موجودة')
-    error.code = 'NEXT_DESTINATION_NOT_FOUND'
-    error.statusCode = 400
-    throw error
-  }
-
+function buildOverrideTargetFromOrgDeptRole (orgDeptRole, submittedItem = {}) {
   return {
     organization_id: orgDeptRole.organization_id,
     department_id: orgDeptRole.department_id,
     role_id: orgDeptRole.role_id,
     organization_department_roles_id: orgDeptRole.id,
     camunda_group_key: orgDeptRole.camunda_group_key,
-    selected_key: selectedKey,
-    selected_label: matchedConfigOption.value ?? matchedSubmittedOption.value ?? null
+    submitted_assignment: {
+      organization_id: normalizeOrgId(submittedItem.organization_id),
+      department_id: normalizeOrgId(submittedItem.department_id),
+      role_id: normalizeRoleId(submittedItem.role_id)
+    }
   }
+}
+
+function createValidationError (message) {
+  const error = new Error(message)
+  error.code = 'VALIDATION_ERROR'
+  error.statusCode = 400
+  throw error
+}
+
+function createOrgDeptRoleNotFoundError () {
+  const error = new Error(ORG_DEPT_ROLE_NOT_FOUND_MESSAGE)
+  error.code = 'ORG_DEPT_ROLE_NOT_FOUND'
+  error.statusCode = 400
+  throw error
+}
+
+/**
+ * إذا is_assignment=true: assignments[] مطلوب — [{ organization_id, department_id, role_id }]
+ * يُطابق OrgDeptRole نشط. عند عدم التطابق → رسالة خطأ واضحة.
+ */
+async function resolveDestinationOverrideFromComplete ({
+  payload = {},
+  configJson = null,
+  isReject = false
+} = {}) {
+  if (isReject || !stageRequiresAssignmentSelection(configJson)) {
+    return null
+  }
+
+  const submittedItems = extractSubmittedAssignmentItems(payload)
+
+  if (!submittedItems.length) {
+    createValidationError(
+      'assignments مطلوب — [{ organization_id, department_id, role_id }] لأن هذه المرحلة is_assignment=true'
+    )
+  }
+
+  const submittedItem = submittedItems[0]
+  const orgDeptRole = await resolveOrgDeptRoleFromAssignmentItem(submittedItem)
+
+  if (!orgDeptRole) {
+    createOrgDeptRoleNotFoundError()
+  }
+
+  return buildOverrideTargetFromOrgDeptRole(orgDeptRole, submittedItem)
 }
 
 async function resolveOrgDeptRolesForStage (stageId) {
@@ -242,7 +199,9 @@ async function resolveOrgDeptRolesForStage (stageId) {
 }
 
 async function applyCandidateGroupsToTask (taskId, groupKeys = []) {
-  if (!taskId || !groupKeys.length) return
+  if (!taskId || !groupKeys.length) {
+    return true
+  }
 
   try {
     const existing = await camundaClient.getTaskIdentityLinks(taskId)
@@ -263,10 +222,13 @@ async function applyCandidateGroupsToTask (taskId, groupKeys = []) {
         groupId
       })
     }
+
+    return true
   } catch (error) {
     console.warn(
       `[TaskAssignmentRouting] فشل ضبط candidate groups للمهمة ${taskId}: ${error.message}`
     )
+    return false
   }
 }
 
@@ -276,11 +238,41 @@ function clearAssigneeRoute (transactionData) {
   }
 }
 
+function storePendingAssigneeRoute (transactionData, overrideTarget) {
+  transactionData[ASSIGNEE_ROUTE_KEY] = {
+    status: 'pending',
+    organization_department_roles_ids: [
+      overrideTarget.organization_department_roles_id
+    ],
+    camunda_group_key: overrideTarget.camunda_group_key,
+    submitted_assignment: overrideTarget.submitted_assignment
+  }
+}
+
+function storeAppliedAssigneeRoute (transactionData, nextStage, overrideTarget) {
+  transactionData[ASSIGNEE_ROUTE_KEY] = {
+    status: 'applied',
+    stage_code: nextStage.code,
+    organization_department_roles_ids: [
+      overrideTarget.organization_department_roles_id
+    ],
+    camunda_group_key: overrideTarget.camunda_group_key,
+    submitted_assignment: overrideTarget.submitted_assignment
+  }
+}
+
+async function applyStageAssignmentsFallback (nextTask, nextStage) {
+  const targets = await resolveOrgDeptRolesForStage(nextStage.id)
+  const groupKeys = targets.map(item => item.camunda_group_key).filter(Boolean)
+  await applyCandidateGroupsToTask(nextTask.id, groupKeys)
+  return targets
+}
+
 /**
  * يوجّه أول USER_TASK نشطة بعد complete:
- * - إن وُجد override (من OrgDepRole dropdown) → يُطبَّق عليه
- * - وإلا → stage_assignments للمرحلة التالية
- * - إن لم تظهر USER_TASK بعد (SERVICE_TASK/gateway) → يُحفظ التوجيه معلّقاً (pending)
+ * - override من assignments[] المرسلة → OrgDeptRole
+ * - عند فشل التطبيق → stage_assignments للمرحلة التالية
+ * - بدون override → stage_assignments للمرحلة التالية
  */
 async function routeNextUserTaskAssignments ({
   nextTask,
@@ -290,15 +282,7 @@ async function routeNextUserTaskAssignments ({
 }) {
   if (!nextTask || !nextStage) {
     if (overrideTarget) {
-      transactionData[ASSIGNEE_ROUTE_KEY] = {
-        status: 'pending',
-        organization_department_roles_ids: [
-          overrideTarget.organization_department_roles_id
-        ],
-        camunda_group_key: overrideTarget.camunda_group_key,
-        selected_key: overrideTarget.selected_key,
-        selected_label: overrideTarget.selected_label
-      }
+      storePendingAssigneeRoute(transactionData, overrideTarget)
       return { routed: false, pending: true, assignments: [overrideTarget] }
     }
 
@@ -308,15 +292,7 @@ async function routeNextUserTaskAssignments ({
 
   if (nextStage.type && nextStage.type !== 'USER_TASK') {
     if (overrideTarget) {
-      transactionData[ASSIGNEE_ROUTE_KEY] = {
-        status: 'pending',
-        organization_department_roles_ids: [
-          overrideTarget.organization_department_roles_id
-        ],
-        camunda_group_key: overrideTarget.camunda_group_key,
-        selected_key: overrideTarget.selected_key,
-        selected_label: overrideTarget.selected_label
-      }
+      storePendingAssigneeRoute(transactionData, overrideTarget)
       return { routed: false, pending: true, assignments: [overrideTarget] }
     }
 
@@ -324,35 +300,40 @@ async function routeNextUserTaskAssignments ({
     return { routed: false, pending: false, assignments: [] }
   }
 
-  let targets = []
-
   if (overrideTarget) {
-    targets = [overrideTarget]
-    await applyCandidateGroupsToTask(nextTask.id, [
+    const applied = await applyCandidateGroupsToTask(nextTask.id, [
       overrideTarget.camunda_group_key
     ])
 
-    transactionData[ASSIGNEE_ROUTE_KEY] = {
-      status: 'applied',
-      stage_code: nextStage.code,
-      organization_department_roles_ids: [
-        overrideTarget.organization_department_roles_id
-      ],
-      camunda_group_key: overrideTarget.camunda_group_key,
-      selected_key: overrideTarget.selected_key,
-      selected_label: overrideTarget.selected_label
+    if (applied) {
+      storeAppliedAssigneeRoute(transactionData, nextStage, overrideTarget)
+      return {
+        routed: true,
+        pending: false,
+        assignments: [overrideTarget],
+        fallback: false
+      }
     }
-  } else {
-    targets = await resolveOrgDeptRolesForStage(nextStage.id)
-    const groupKeys = targets.map(item => item.camunda_group_key).filter(Boolean)
-    await applyCandidateGroupsToTask(nextTask.id, groupKeys)
+
+    const fallbackTargets = await applyStageAssignmentsFallback(nextTask, nextStage)
     clearAssigneeRoute(transactionData)
+
+    return {
+      routed: true,
+      pending: false,
+      assignments: fallbackTargets,
+      fallback: true
+    }
   }
 
-  return { routed: true, pending: false, assignments: targets }
+  const targets = await resolveOrgDeptRolesForStage(nextStage.id)
+  const groupKeys = targets.map(item => item.camunda_group_key).filter(Boolean)
+  await applyCandidateGroupsToTask(nextTask.id, groupKeys)
+  clearAssigneeRoute(transactionData)
+
+  return { routed: true, pending: false, assignments: targets, fallback: false }
 }
 
-/** توافق خلفي مع الاسم السابق */
 async function routeNextTaskAssignments (args) {
   return routeNextUserTaskAssignments(args)
 }
@@ -379,11 +360,11 @@ function userMatchesAssigneeRoute (roleIds, transactionData, stageCode) {
 module.exports = {
   ASSIGNEE_ROUTE_KEY,
   ORG_DEP_ROLE_ASSIGNMENT_WIDGET_ID,
+  ORG_DEPT_ROLE_NOT_FOUND_MESSAGE,
   getCachedStageAssignmentsForPickup,
   loadStageAssignmentsForPickup,
-  getConfigAssignmentsWidget,
+  stageRequiresAssignmentSelection,
   buildAssignmentsResponseFromConfig,
-  extractOrgDepRoleDestinationValue,
   resolveDestinationOverrideFromComplete,
   resolveOrgDeptRolesForStage,
   routeNextUserTaskAssignments,

@@ -203,8 +203,9 @@ const stageConfigJsonSchema = Joi.object({
   widgets: Joi.array().items(widgetSchema).default([]),
   template: Joi.array().items(templateItemSchema).default([]),
   actions: Joi.array().items(stageActionSchema).optional(),
+  is_assignment: Joi.boolean().default(false).optional(),
+  /** @deprecated — استخدم is_assignment بدلاً من assignments widget */
   assignments: orgDepRoleAssignmentsSchema.optional(),
-  // مُتجاهَل في التشغيل: التوقيع USB إلزامي دائماً لـ USER_TASK (لا يُسمح بالمرور بدون توقيع)
   requires_digital_signature: Joi.boolean().optional().default(true)
 }).unknown(false)
 

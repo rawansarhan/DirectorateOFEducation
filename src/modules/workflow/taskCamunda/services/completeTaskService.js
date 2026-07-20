@@ -59,6 +59,9 @@ const documentInstanceRepository =
   require('../../../transaction/document/repositories/documentInstanceRepository')
 const { normalizeSigningDecision } = require('../../schemas/signingChallengeSchema')
 const {
+  validateCompleteTaskAssignmentsForStage
+} = require('../../schemas/completeTaskSchema')
+const {
   assertTaskLockHolder,
   releaseTaskLock
 } = require('./taskLockService')
@@ -76,8 +79,7 @@ const { enrichCamundaTaskNotFoundError } = require('../../../../core/utils/error
 const { formatTransactionDate } = require('../utils/employeeTaskFormatters')
 const {
   resolveDestinationOverrideFromComplete,
-  routeNextUserTaskAssignments,
-  buildAssignmentsResponseFromConfig
+  routeNextUserTaskAssignments
 } = require('./taskAssignmentRoutingService')
 
 const LOG_PREFIX = '[CompleteTask]'
@@ -718,7 +720,19 @@ async function completeTaskCore ({
     throw error
   }
 
-  // توجيه الوجهة التالية عبر config_json.assignments (OrgDepRole dropdown)
+  const assignmentsValidationError = validateCompleteTaskAssignmentsForStage({
+    payload,
+    configJson: stageConfig?.config_json || null,
+    isReject
+  })
+
+  if (assignmentsValidationError) {
+    const error = new Error(assignmentsValidationError)
+    error.code = 'VALIDATION_ERROR'
+    throw error
+  }
+
+  // توجيه الوجهة التالية عبر is_assignment
   let overrideTarget = null
 
   if (!isReject) {
@@ -886,15 +900,16 @@ async function completeTaskCore ({
   }
 
   if (overrideTarget) {
-    stageSnapshot.assignments = buildAssignmentsResponseFromConfig(
-      stageConfig?.config_json || null,
-      overrideTarget.selected_key
-    )
+    stageSnapshot.assignments = Array.isArray(payload.assignments)
+      ? payload.assignments
+      : []
     stageSnapshot.next_destination = {
       camunda_group_key: overrideTarget.camunda_group_key,
       organization_department_roles_id:
         overrideTarget.organization_department_roles_id,
-      label: overrideTarget.selected_label
+      organization_id: overrideTarget.organization_id,
+      department_id: overrideTarget.department_id,
+      role_id: overrideTarget.role_id
     }
   }
 

@@ -9,52 +9,21 @@ const {
   buildStrictFormPayloadSchema,
   formatStrictFormJoiError
 } = require('../services/unifiedFormPayloadService')
-const {
-  ORG_DEP_ROLE_ASSIGNMENT_WIDGET_ID
-} = require('../stageConfig/validations/stageConfigSchema')
 
-/** نفس هيكل config_json.assignments + value إلزامي */
-const completeAssignmentsSchema = Joi.object({
-  widget_type: Joi.string().valid('dropdown').required().messages({
-    'any.only': 'assignments.widget_type يجب أن يكون dropdown',
-    'any.required': 'assignments.widget_type مطلوب'
-  }),
-  data: Joi.object({
-    id: Joi.string()
-      .valid(ORG_DEP_ROLE_ASSIGNMENT_WIDGET_ID)
-      .required()
-      .messages({
-        'any.only': `assignments.data.id يجب أن يكون ${ORG_DEP_ROLE_ASSIGNMENT_WIDGET_ID}`,
-        'any.required': 'assignments.data.id مطلوب'
-      }),
-    label: Joi.string().trim().min(1).max(255).required().messages({
-      'any.required': 'assignments.data.label مطلوب'
-    }),
-    is_required: Joi.boolean().default(true),
-    options: Joi.array()
-      .items(
-        Joi.object({
-          key: Joi.string().trim().min(1).max(64).required(),
-          value: Joi.string().trim().min(1).max(255).required()
-        }).unknown(false)
-      )
-      .min(1)
-      .required()
-      .messages({
-        'any.required': 'assignments.data.options مطلوبة',
-        'array.min': 'assignments.data.options يجب أن تحتوي خياراً واحداً على الأقل'
-      })
-  })
-    .unknown(false)
-    .required()
-    .messages({
-      'any.required': 'assignments.data مطلوب'
-    }),
-  value: Joi.string().trim().min(1).max(64).required().messages({
-    'any.required': 'assignments.value مطلوب',
-    'string.empty': 'assignments.value مطلوب'
-  })
+const completeAssignmentItemSchema = Joi.object({
+  organization_id: Joi.number().integer().positive().required(),
+  department_id: Joi.number().integer().positive().required(),
+  role_id: Joi.number().integer().positive().required()
 }).unknown(false)
+
+const completeAssignmentsSchema = Joi.array()
+  .items(completeAssignmentItemSchema)
+  .min(1)
+  .max(1)
+  .messages({
+    'array.min': 'assignments يجب أن يحتوي عنصراً واحداً',
+    'array.max': 'assignments يقبل عنصراً واحداً فقط'
+  })
 
 const completeTaskPayloadSchema = buildStrictFormPayloadSchema({
   includeTemplates: true,
@@ -109,8 +78,42 @@ function validateCompleteTaskPayload (payload = {}) {
   return { value: normalized, error: null }
 }
 
+const {
+  stageRequiresAssignmentSelection
+} = require('../taskCamunda/services/taskAssignmentRoutingService')
+
+/**
+ * تحقق سياقي: إذا is_assignment=true و decision=approve → assignments إلزامي
+ * بصيغة [{ organization_id, department_id, role_id }] (أرقام موجبة).
+ */
+function validateCompleteTaskAssignmentsForStage ({
+  payload = {},
+  configJson = null,
+  isReject = false
+} = {}) {
+  if (isReject || !stageRequiresAssignmentSelection(configJson)) {
+    return null
+  }
+
+  if (payload.assignments == null) {
+    return 'assignments مطلوب (organization_id, department_id, role_id) لأن هذه المرحلة is_assignment=true'
+  }
+
+  const { error } = completeAssignmentsSchema.required().validate(payload.assignments, {
+    abortEarly: false
+  })
+
+  if (error) {
+    return formatStrictFormJoiError(error, 'assignments')
+  }
+
+  return null
+}
+
 module.exports = {
+  completeAssignmentItemSchema,
   completeAssignmentsSchema,
   completeTaskPayloadSchema,
-  validateCompleteTaskPayload
+  validateCompleteTaskPayload,
+  validateCompleteTaskAssignmentsForStage
 }
