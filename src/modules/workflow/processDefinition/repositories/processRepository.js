@@ -207,9 +207,15 @@ class ProcessRepository {
     )
   }
 
-  async findComplaintProcessesForAdmin () {
+  async findComplaintProcessesForAdmin ({ activeOnly = false } = {}) {
+    const where = { is_complaint: true }
+
+    if (activeOnly) {
+      where.is_active = true
+    }
+
     return ProcessDefinition.findAll({
-      where: { is_complaint: true },
+      where,
       attributes: [
         'id',
         'name',

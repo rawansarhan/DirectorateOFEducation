@@ -68,11 +68,23 @@ const {
 
  *     description: |
 
- *       المعاملات **بانتظار الاستلام** (`pending_pickup`) و**قيد التنفيذ** (`in_progress`) للموظف.
+ *       فلترة حسب حالة المهمة للموظف:
 
- *       الافتراضي: `status=active`. استخدم `completed` أو `rejected` للمعاملات المنتهية.
+ *       - `all` (افتراضي): الكل — بانتظار الاستلام + قيد التنفيذ + منجزة + مرفوضة
 
- *       الترتيب: process_priority ASC (1=عالي أولاً) ثم تاريخ إنشاء الطلب ASC.
+ *       - `pending_pickup`: بانتظار الاستلام (غير مقفولة على أي موظف)
+
+ *       - `in_progress`: قيد التنفيذ (مقفولة على موظف)
+
+ *       - `completed`: مهام أنجزها الموظف نفسه
+
+ *       - `rejected`: مهام رفضها الموظف نفسه
+
+ *       - `active`: بانتظار الاستلام + قيد التنفيذ فقط (للتوافق)
+
+ *
+
+ *       الترتيب: process_priority ASC للمهام النشطة. عند `status=all` يُرتّب حسب activity_at تنازلياً.
 
  *       **Response format (موحّد):**
 
@@ -96,9 +108,9 @@ const {
 
  *           type: string
 
- *           enum: [active, completed, rejected]
+ *           enum: [all, pending_pickup, in_progress, completed, rejected, active]
 
- *           default: active
+ *           default: all
 
  *       - in: query
 

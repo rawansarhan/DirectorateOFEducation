@@ -46,6 +46,7 @@ class EmployeeTaskOutputDTO {
     this.task_name = stageName
     this.process_name = processDefinitionName
     this.process_priority = normalizeProcessPriority(processDefinition?.priority)
+    this.activity_at = transaction?.created_at ?? null
   }
 }
 

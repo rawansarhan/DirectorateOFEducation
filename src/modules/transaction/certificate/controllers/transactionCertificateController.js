@@ -6,14 +6,6 @@ const {
   getFinalDocument
 } = require('../services/transactionCertificateService')
 const {
-  generateMergedFinalDocument
-} = require('../services/finalDocumentBuilderService')
-const {
-  assessFinalDocumentReadiness
-} = require('../services/finalDocumentReadinessService')
-const {
-  toGenerateResultDTO,
-  toReadinessDTO,
   parseQrPayloadFromBody
 } = require('../mappers/certificateMapper')
 const {
@@ -80,52 +72,14 @@ async function getFinalDocumentController (req, res) {
   }
 }
 
-async function generateFinalDocumentController (req, res) {
+async function getFinalDocumentGeneralController (req, res) {
   try {
-    const force =
-      req.query.force === 'true' ||
-      req.query.force === '1' ||
-      req.body?.force === true ||
-      req.body?.force === 'true' ||
-      req.body?.force === '1'
-
-    const result = await generateMergedFinalDocument(req.params.transactionId, {
-      userId: req.user.id,
-      force,
-      requireOwner: true
+    const data = await getFinalDocument(req.params.transactionId, {
+      userId: null
     })
-
-    const data = toGenerateResultDTO(result)
 
     return successResponse(res, {
-      message: data.already_exists
-        ? 'تم إنشاء الوثيقة النهائية (final_document) لهذه المعاملة مسبقاً'
-        : 'تم توليد الوثيقة النهائية المدمجة بنجاح',
-      data
-    })
-  } catch (err) {
-    return handleCertificateError(res, err)
-  }
-}
-
-async function getFinalDocumentReadinessController (req, res) {
-  try {
-    const flush =
-      req.query.flush === 'true' || req.query.flush === '1'
-
-    const result = await assessFinalDocumentReadiness(req.params.transactionId, {
-      userId: req.user.id,
-      requireCompleted: true,
-      flushGeneratePdf: flush,
-      requireOwner: true
-    })
-
-    const data = toReadinessDTO(result)
-
-    return successResponse(res, {
-      message: data.ready_for_merge
-        ? 'الوثيقة النهائية جاهزة للدمج'
-        : 'الوثيقة النهائية غير جاهزة بعد',
+      message: 'تم جلب الوثيقة النهائية بنجاح',
       data
     })
   } catch (err) {
@@ -137,6 +91,5 @@ module.exports = {
   getCertificateController,
   uploadFinalDocumentController,
   getFinalDocumentController,
-  generateFinalDocumentController,
-  getFinalDocumentReadinessController
+  getFinalDocumentGeneralController
 }
