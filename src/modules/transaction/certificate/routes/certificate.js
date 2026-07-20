@@ -83,6 +83,8 @@ router.get(
  *     description: |
  *       يُرجع checklist لحالة GENERATE_PDF والمرفقات وسلسلة التواقيع ومفاتيح السلطة.
  *       `flush=true` يعالج فوراً أحداث outbox المعلّقة/الفاشلة لهذه المعاملة قبل الفحص.
+ *
+ *       **Auth:** Bearer — **مالك المعاملة فقط**
  *     tags: [Certificate & Integrity Chain]
  *     security:
  *       - bearerAuth: []
@@ -100,6 +102,8 @@ router.get(
  *     responses:
  *       200:
  *         description: نتيجة فحص الجاهزية
+ *       403:
+ *         description: لست مالك هذه المعاملة
  */
 router.get(
   '/:transactionId/final-document/readiness',
@@ -122,7 +126,7 @@ router.get(
  *
  *       يُحفظ ويُسجَّل كـ final_document (يستبدل النسخة السابقة إن وُجدت) ويُحسب content_hash.
  *
- *       **Auth:** Bearer (تسجيل دخول فقط — بدون تقييد مالك داخل المنطق)
+ *       **Auth:** Bearer — **مالك المعاملة فقط**
  *       **الحالة:** completed فقط
  *     tags: [Certificate & Integrity Chain]
  *     security:
@@ -140,12 +144,14 @@ router.get(
  *         required: false
  *         schema:
  *           type: boolean
- *         description: عند true يعيد توليد الوثيقة المدمجة ويستبدل النسخة المحفوظة سابقاً (مفيد بعد تغيير الإعدادات/الترتيب)
+ *         description: عند true يعيد توليد الوثيقة المدمجة ويستبدل النسخة المحفوظة سابقاً
  *     responses:
  *       200:
  *         description: تم توليد الوثيقة النهائية المدمجة بنجاح
  *       400:
  *         description: لا توجد وثائق للدمج أو الحالة ليست completed
+ *       403:
+ *         description: لست مالك هذه المعاملة
  *       404:
  *         description: المعاملة غير موجودة
  */
