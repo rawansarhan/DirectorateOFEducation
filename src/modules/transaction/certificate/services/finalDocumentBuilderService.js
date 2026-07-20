@@ -128,7 +128,7 @@ function readUploadBytes (storedPath) {
   return fs.readFileSync(absolutePath)
 }
 
-/** يبني رمز QR النهائي مرتبطاً بآخر نسخة PDF مولّدة (المؤشّر الحيّ للسلسلة) */
+/** رابط QR النهائي — كل مسح يُصدر رمز تفاصيل جديد (6 أرقام، 5 دقائق) */
 function buildFinalQr ({ transaction, generatedInstances }) {
   if (
     !generatedInstances.length ||
@@ -272,7 +272,7 @@ async function drawCoverPage ({
   // ===== رمز QR النهائي أسفل بيانات الهوية (وسط الصفحة) =====
   cursorY -= 20
 
-  if (finalQr) {
+  if (finalQr?.verification_url) {
     const qrPng = await QRCode.toBuffer(finalQr.verification_url, {
       type: 'png',
       errorCorrectionLevel: 'M',
@@ -291,7 +291,7 @@ async function drawCoverPage ({
     })
 
     drawArabicCentered(page, {
-      text: 'امسح الرمز للتحقق من سلسلة التواقيع',
+      text: 'امسح الرمز للتحقق — سيظهر رمز تفاصيل صالح 5 دقائق',
       y: cursorY - qrSize - 22,
       size: 11,
       font: bodyFont,

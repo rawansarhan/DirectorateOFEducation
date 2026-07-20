@@ -110,6 +110,12 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: true
       },
 
+      verification_pin: {
+        type: DataTypes.STRING(6),
+        allowNull: true,
+        unique: true
+      },
+
       created_at: {
         type: DataTypes.DATE,
         allowNull: false,

@@ -1,17 +1,5 @@
 'use strict'
 
-/**
- * =============================================================================
- * transactionDocumentsService — تجميع كل وثائق المعاملة
- * =============================================================================
- *
- * يُرجِع لمعاملة واحدة:
- *   - generated_documents : كل ملفات GENERATE_PDF (document_instance.generated_pdf_path)
- *   - uploaded_files      : كل ملفات file_picker المرفوعة (document_signature)
- *   - final_qr            : رمز QR النهائي للمعاملة وفق الطريقة المعتمدة
- *                           (توقيع سلطة الإصدار على tx|genesis|doc — مؤشّر حيّ للسلسلة)
- */
-
 const transactionRepository = require('../../transaction/repositories/transactionRepository')
 const documentInstanceRepository = require('../repositories/documentInstanceRepository')
 const documentSignatureRepository =
@@ -27,10 +15,6 @@ const {
   toFinalQrDTO
 } = require('../mappers/documentMapper')
 
-/**
- * يبني رمز QR النهائي للمعاملة مرتبطاً بآخر نسخة PDF مولّدة (المؤشّر الحيّ للسلسلة).
- * يعيد available=false مع سبب واضح إذا تعذّر بناؤه.
- */
 function buildFinalQr ({ transaction, generatedInstances }) {
   if (!generatedInstances.length) {
     return toFinalQrDTO({

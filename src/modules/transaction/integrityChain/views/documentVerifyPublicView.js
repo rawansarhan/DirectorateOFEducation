@@ -93,13 +93,13 @@ function renderDocumentVerifyHtml (payload) {
     <div class="section">
       <h2 class="section-title">رمز التفاصيل</h2>
       <p class="code-hint">
-        للاطلاع على تفاصيل المعاملة (الموقّعون، السجل، الوثيقة النهائية)
-        استخدم هذا الرمز في واجهة التفاصيل أو API التفاصيل.
+        أدخل هذا الرمز في تطبيق التحقق (مع تسجيل الدخول) خلال 5 دقائق.
+        كل مسح جديد يُصدر رمزاً مختلفاً.
       </p>
-      <div class="code-box">${escapeHtml(detailsCode)}</div>
+      <div class="code-box code-box-pin">${escapeHtml(detailsCode)}</div>
       ${
         expiresIn
-          ? `<div class="code-meta">صالح لمدة ${escapeHtml(String(Math.round(expiresIn / 60)))} دقيقة تقريباً</div>`
+          ? `<div class="code-meta">صالح لمدة ${escapeHtml(String(Math.round(expiresIn / 60)))} دقيقة</div>`
           : ''
       }
     </div>`
@@ -231,6 +231,11 @@ function renderDocumentVerifyHtml (payload) {
       word-break: break-all;
       text-align: center;
       direction: ltr;
+    }
+    .code-box-pin {
+      font-size: 2rem;
+      letter-spacing: 0.35em;
+      font-weight: 700;
     }
     .code-meta {
       margin-top: 10px;
