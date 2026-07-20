@@ -7,8 +7,7 @@ const {
   getCertificateController,
   uploadFinalDocumentController,
   getFinalDocumentController,
-  generateFinalDocumentController,
-  getFinalDocumentReadinessController
+  getFinalDocumentGeneralController
 } = require('../controllers/transactionCertificateController')
 
 const {
@@ -17,9 +16,6 @@ const {
 } = require('../../../../core/middleware/upload')
 
 const { authMiddleware } = require('../../../../core/middleware/authMiddleware')
-const {
-  finalDocumentLimiter
-} = require('../../../../core/security/rateLimitMiddleware')
 
 /**
  * @swagger
@@ -73,93 +69,6 @@ router.get(
   '/:transactionId/certificate',
   authMiddleware,
   getCertificateController
-)
-
-/**
- * @swagger
- * /api/transaction/{transactionId}/final-document/readiness:
- *   get:
- *     summary: فحص جاهزية الوثيقة النهائية للدمج
- *     description: |
- *       يُرجع checklist لحالة GENERATE_PDF والمرفقات وسلسلة التواقيع ومفاتيح السلطة.
- *       `flush=true` يعالج فوراً أحداث outbox المعلّقة/الفاشلة لهذه المعاملة قبل الفحص.
- *
- *       **Auth:** Bearer — **مالك المعاملة فقط**
- *     tags: [Certificate & Integrity Chain]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: transactionId
- *         required: true
- *         schema:
- *           type: integer
- *       - in: query
- *         name: flush
- *         schema:
- *           type: boolean
- *         description: معالجة فورية لأحداث GENERATE_PDF في outbox قبل الفحص
- *     responses:
- *       200:
- *         description: نتيجة فحص الجاهزية
- *       403:
- *         description: لست مالك هذه المعاملة
- */
-router.get(
-  '/:transactionId/final-document/readiness',
-  authMiddleware,
-  getFinalDocumentReadinessController
-)
-
-/**
- * @swagger
- * /api/transaction/{transactionId}/final-document/generate:
- *   post:
- *     summary: توليد PDF نهائي مدمج (غلاف QR + كل GENERATE_PDF + كل file_picker)
- *     description: |
- *       يبني الخادم ملف PDF واحد:
- *       1) صفحة غلاف فيها رمز QR النهائي للمعاملة (الموقّع من سلطة الإصدار).
- *       2) كل ملفات GENERATE_PDF.
- *       3) كل ملفات file_picker المرفوعة (PDF تُنسخ صفحاتها، والصور تُدرج كصفحات).
- *
- *       **يفضّل أولاً:** GET /final-document/readiness — يُرفض الدمج إذا GENERATE_PDF أو المرفقات غير جاهزة.
- *
- *       يُحفظ ويُسجَّل كـ final_document (يستبدل النسخة السابقة إن وُجدت) ويُحسب content_hash.
- *
- *       **Auth:** Bearer — **مالك المعاملة فقط**
- *       **الحالة:** completed فقط
- *     tags: [Certificate & Integrity Chain]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: transactionId
- *         required: true
- *         schema:
- *           type: integer
- *           minimum: 1
- *         description: معرّف المعاملة
- *       - in: query
- *         name: force
- *         required: false
- *         schema:
- *           type: boolean
- *         description: عند true يعيد توليد الوثيقة المدمجة ويستبدل النسخة المحفوظة سابقاً
- *     responses:
- *       200:
- *         description: تم توليد الوثيقة النهائية المدمجة بنجاح
- *       400:
- *         description: لا توجد وثائق للدمج أو الحالة ليست completed
- *       403:
- *         description: لست مالك هذه المعاملة
- *       404:
- *         description: المعاملة غير موجودة
- */
-router.post(
-  '/:transactionId/final-document/generate',
-  authMiddleware,
-  finalDocumentLimiter,
-  generateFinalDocumentController
 )
 
 /**
@@ -265,6 +174,36 @@ router.get(
   '/:transactionId/final-document',
   authMiddleware,
   getFinalDocumentController
+)
+
+/**
+ * @swagger
+ * /api/transaction/{transactionId}/final-document/general:
+ *   get:
+ *     summary: جلب الوثيقة النهائية المحفوظة (بدون تقييد مالك)
+ *     description: |
+ *       يعيد نفس سجل الوثيقة النهائية، لكن بدون شرط أن يكون المستخدم مالك المعاملة.
+ *       يتطلب فقط مستخدم مسجّل الدخول.
+ *     tags: [Certificate & Integrity Chain]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: transactionId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *     responses:
+ *       200:
+ *         description: تم جلب الوثيقة النهائية بنجاح
+ *       404:
+ *         description: لا توجد وثيقة نهائية محفوظة
+ */
+router.get(
+  '/:transactionId/final-document/general',
+  authMiddleware,
+  getFinalDocumentGeneralController
 )
 
 module.exports = router

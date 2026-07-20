@@ -46,7 +46,8 @@ const KEYS = {
   authComplaintProcesses: () => 'process:auth:complaint:all',
   adminProcessesByType: (typeTransId) => `process:admin:typed:${typeTransId}`,
   adminProcessesAll: () => 'process:admin:all',
-  adminComplaintProcesses: () => 'process:admin:complaint:all',
+  adminComplaintProcessesActive: () => 'process:admin:complaint:active',
+  adminComplaintProcessesAllStatuses: () => 'process:admin:complaint:all-statuses',
   technicalOfficerUserIds: () => 'notification:technical-officer-user-ids',
   stageConfig: (processId) => `stage-config:process:${processId}`,
   currentStage: (processDefinitionId, taskDefinitionKey) =>
@@ -517,13 +518,16 @@ async function invalidateAllAuthProcessCaches () {
 
   const adminTypedCount = await deleteKeysByPattern('process:admin:typed:*')
   const adminAllDeleted = await deleteKey(KEYS.adminProcessesAll())
-  const adminComplaintDeleted = await deleteKey(KEYS.adminComplaintProcesses())
+  const adminComplaintActiveDeleted = await deleteKey(KEYS.adminComplaintProcessesActive())
+  const adminComplaintAllStatusesDeleted = await deleteKey(
+    KEYS.adminComplaintProcessesAllStatuses()
+  )
 
   console.log(
     `${LOG_PREFIX} invalidate all auth process caches — typed: ${typedCount} key(s), all: ${allDeleted} key(s), complaint: ${complaintDeleted} key(s) — redis: ${redisStatusLabel()}`
   )
   console.log(
-    `${LOG_PREFIX} invalidate all admin process caches — typed: ${adminTypedCount} key(s), all: ${adminAllDeleted} key(s), complaint: ${adminComplaintDeleted} key(s) — redis: ${redisStatusLabel()}`
+    `${LOG_PREFIX} invalidate all admin process caches — typed: ${adminTypedCount} key(s), all: ${adminAllDeleted} key(s), complaintActive: ${adminComplaintActiveDeleted} key(s), complaintAllStatuses: ${adminComplaintAllStatusesDeleted} key(s) — redis: ${redisStatusLabel()}`
   )
 }
 

@@ -40,7 +40,63 @@ const EMPLOYEE_STATUS_FILTERS = {
   IN_PROGRESS: 'in_progress',
   PENDING_PICKUP: 'pending_pickup'
 }
-//ا
+
+const TASK_LIST_STATUS = {
+  ALL: 'all',
+  PENDING_PICKUP: 'pending_pickup',
+  IN_PROGRESS: 'in_progress',
+  COMPLETED: 'completed',
+  REJECTED: 'rejected',
+  ACTIVE: 'active'
+}
+
+function normalizeTaskListStatus (status) {
+  const value = String(status || TASK_LIST_STATUS.ALL).trim().toLowerCase()
+  const allowed = new Set(Object.values(TASK_LIST_STATUS))
+
+  if (!allowed.has(value)) {
+    const error = new Error(
+      'status غير صالح — المسموح: all, pending_pickup, in_progress, completed, rejected, active'
+    )
+    error.code = 'VALIDATION_ERROR'
+    throw error
+  }
+
+  return value
+}
+
+function resolveStageStatusLabel (status) {
+  if (status === 'rejected') {
+    return 'مرفوض'
+  }
+
+  if (status === 'completed') {
+    return 'منجز'
+  }
+
+  return status
+}
+
+function parseItemActivityAt (item) {
+  if (item?.activity_at) {
+    return new Date(item.activity_at).getTime()
+  }
+
+  if (item?.completed_at) {
+    return new Date(item.completed_at).getTime()
+  }
+
+  return 0
+}
+
+function mergeTaskItemsByActivity ({ activeItems = [], completedItems = [], rejectedItems = [] }) {
+  return [
+    ...activeItems.map(item => ({ item, sortAt: parseItemActivityAt(item) })),
+    ...completedItems.map(item => ({ item, sortAt: parseItemActivityAt(item) })),
+    ...rejectedItems.map(item => ({ item, sortAt: parseItemActivityAt(item) }))
+  ].sort((a, b) => b.sortAt - a.sortAt)
+}
+
 async function buildProgressMaps (instances = []) {
   const transactionIds = instances
     .map(instance => instance.transaction?.id)
@@ -483,9 +539,11 @@ function mapUserStageToItem (row) {
     stage_code: row.stage_code ?? null,
     stage_name: row.stage_name ?? null,
     status: row.status,
+    status_label: resolveStageStatusLabel(row.status),
     decision,
     transaction_status: transaction?.status ?? null,
-    completed_at: formatTransactionDate(row.created_at)
+    completed_at: formatTransactionDate(row.created_at),
+    activity_at: row.created_at ?? null
   }
 }
 
@@ -838,23 +896,95 @@ async function getRejectedByDepartment ({
   }
 }
 
-async function getAllTasks ({ userId, cursor, limit, status = 'active' }) {
-  if (status === 'completed' || status === 'rejected') {
-    const cacheScope = `terminal:${status}`
+async function loadTerminalEmployeeTasks ({
+  userId,
+  cursor,
+  limit,
+  status,
+  useCache = true
+}) {
+  const loader = () =>
+    getUserCompletedStages({
+      userId,
+      status,
+      cursor,
+      decodedCursor: cursor ? decodeCursor(cursor) : null,
+      limit
+    })
 
-    const data = await loadCachedEmployeeTasks({
+  if (!useCache) {
+    return loader()
+  }
+
+  return loadCachedEmployeeTasks({
+    userId,
+    cursor,
+    limit,
+    cacheScope: `terminal:${status}`,
+    loader
+  })
+}
+
+async function getMergedAllEmployeeTasks ({ userId, cursor, limit }) {
+  const decoded = cursor ? decodeCursor(cursor) : null
+  const offset = decoded?.k === 'all' ? Number(decoded.o) || 0 : 0
+  const fetchSize = offset + limit + 1
+
+  const [activeData, completedData, rejectedData] = await Promise.all([
+    loadActiveEmployeeTasks({
+      userId,
+      page: 1,
+      limit: fetchSize,
+      offset: 0,
+      employeeStatusFilter: EMPLOYEE_STATUS_FILTERS.ALL_ACTIVE
+    }),
+    getUserCompletedStages({
+      userId,
+      status: 'completed',
+      limit: fetchSize
+    }),
+    getUserCompletedStages({
+      userId,
+      status: 'rejected',
+      limit: fetchSize
+    })
+  ])
+
+  const merged = mergeTaskItemsByActivity({
+    activeItems: activeData.items || [],
+    completedItems: completedData.items || [],
+    rejectedItems: rejectedData.items || []
+  })
+
+  const slice = merged.slice(offset, offset + limit + 1)
+  const hasNext = slice.length > limit
+  const pageEntries = hasNext ? slice.slice(0, limit) : slice
+  const nextOffset = offset + pageEntries.length
+  const nextCursor = hasNext
+    ? encodeCursor({ k: 'all', o: nextOffset })
+    : null
+
+  return {
+    items: pageEntries.map(entry => entry.item),
+    pagination: buildCursorPaginationMeta({
+      limit,
+      cursor,
+      nextCursor,
+      hasNext
+    })
+  }
+}
+
+async function getAllTasks ({ userId, cursor, limit, status = TASK_LIST_STATUS.ALL }) {
+  const normalizedStatus = normalizeTaskListStatus(status)
+
+  if (normalizedStatus === TASK_LIST_STATUS.COMPLETED ||
+    normalizedStatus === TASK_LIST_STATUS.REJECTED) {
+    const data = await loadTerminalEmployeeTasks({
       userId,
       cursor,
       limit,
-      cacheScope,
-      loader: () =>
-        getUserCompletedStages({
-          userId,
-          status,
-          cursor,
-          decodedCursor: cursor ? decodeCursor(cursor) : null,
-          limit
-        })
+      status: normalizedStatus
     })
 
     return {
@@ -863,12 +993,36 @@ async function getAllTasks ({ userId, cursor, limit, status = 'active' }) {
     }
   }
 
-  const data = await loadActiveEmployeeTasks({
-    userId,
-    cursor,
-    limit,
-    employeeStatusFilter: EMPLOYEE_STATUS_FILTERS.ALL_ACTIVE
-  })
+  if (normalizedStatus === TASK_LIST_STATUS.PENDING_PICKUP ||
+    normalizedStatus === TASK_LIST_STATUS.IN_PROGRESS) {
+    const data = await loadActiveEmployeeTasks({
+      userId,
+      cursor,
+      limit,
+      employeeStatusFilter: normalizedStatus
+    })
+
+    return {
+      message: 'تم جلب المهام بنجاح',
+      data
+    }
+  }
+
+  if (normalizedStatus === TASK_LIST_STATUS.ACTIVE) {
+    const data = await loadActiveEmployeeTasks({
+      userId,
+      cursor,
+      limit,
+      employeeStatusFilter: EMPLOYEE_STATUS_FILTERS.ALL_ACTIVE
+    })
+
+    return {
+      message: 'تم جلب المهام بنجاح',
+      data
+    }
+  }
+
+  const data = await getMergedAllEmployeeTasks({ userId, cursor, limit })
 
   return {
     message: 'تم جلب المهام بنجاح',
@@ -878,6 +1032,8 @@ async function getAllTasks ({ userId, cursor, limit, status = 'active' }) {
 
 module.exports = {
   EMPLOYEE_STATUS_FILTERS,
+  TASK_LIST_STATUS,
+  normalizeTaskListStatus,
   parseDepartmentIds,
   parseDateRange,
   getAllTasks,

@@ -103,7 +103,9 @@ async function completeTaskController (req, res) {
 async function getAllTasksController (req, res) {
   try {
     const { limit, cursor } = parseCursorPaginationQuery(req.query)
-    const status = String(req.query.status || 'active').trim()
+    const status = String(req.query.status || 'all').trim()
+    getAllTasksService.normalizeTaskListStatus(status)
+
     const result = await getAllTasksService.getAllTasks({
       userId: req.user.id,
       cursor,

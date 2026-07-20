@@ -7,6 +7,14 @@ function isLockExpired (processInstance, now = new Date()) {
   )
 }
 
+function hasActiveTaskLock (processInstance, now = new Date()) {
+  if (!processInstance?.task_lock_user_id) {
+    return false
+  }
+
+  return !isLockExpired(processInstance, now)
+}
+
 function isLockedByUser (processInstance, taskId, userId) {
   if (!processInstance?.task_lock_user_id || !taskId) {
     return false
@@ -44,7 +52,7 @@ function resolveEmployeeTaskStatus ({
     }
   }
 
-  if (isLockedByUser(processInstance, activeTask?.id, userId)) {
+  if (hasActiveTaskLock(processInstance)) {
     return {
       status: 'in_progress',
       status_label: 'قيد التنفيذ'
@@ -115,5 +123,6 @@ module.exports = {
   buildApplicantName,
   resolveDepartmentName,
   isLockedByUser,
-  isLockExpired
+  isLockExpired,
+  hasActiveTaskLock
 }

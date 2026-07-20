@@ -10,6 +10,7 @@ const {
   getProcessesWithMissingStageConfigController,
   getProcessesByTypeForAdminController,
   getComplaintProcessesForAdminController,
+  getAllComplaintProcessesForAdminController,
   getProcessDetails,
   reviewProcessController,
   processById,
@@ -303,9 +304,9 @@ router.get(
  * @swagger
  * /api/process_definitions/admin/complaints:
  *   get:
- *     summary: كل عمليات الشكاوى (is_complaint=true)
+ *     summary: عمليات الشكاوى النشطة فقط (is_complaint=true, is_active=true)
  *     description: |
- *       يعرض كل تعريفات العمليات حيث `is_complaint = true`.
+ *       يعرض تعريفات عمليات الشكاوى **النشطة فقط** حيث `is_complaint = true` و `is_active = true`.
  *       مع Redis cache (TTL = PROCESS_CACHE_TTL_SECONDS).
  *
  *       **Auth:** Bearer (تسجيل دخول فقط — بدون تقييد دور)
@@ -334,7 +335,7 @@ router.get(
  *             example:
  *               success: true
  *               status_code: 200
- *               message: تم جلب عمليات الشكاوى بنجاح
+ *               message: تم جلب عمليات الشكاوى النشطة بنجاح
  *               data:
  *                 items:
  *                   - process_id: 10
@@ -356,6 +357,46 @@ router.get(
   '/admin/complaints',
   authMiddleware,
   getComplaintProcessesForAdminController
+)
+
+/**
+ * @swagger
+ * /api/process_definitions/admin/complaints/all:
+ *   get:
+ *     summary: كل عمليات الشكاوى (نشطة + غير نشطة)
+ *     description: |
+ *       يعرض كل تعريفات عمليات الشكاوى حيث `is_complaint = true`
+ *       بما فيها `is_active = true` و `is_active = false`.
+ *       مع Redis cache (TTL = PROCESS_CACHE_TTL_SECONDS).
+ *
+ *       **Auth:** Bearer (تسجيل دخول فقط — بدون تقييد دور)
+ *     tags: [Process Definition]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 70
+ *           default: 20
+ *     responses:
+ *       200:
+ *         description: تم جلب كل عمليات الشكاوى بنجاح
+ *       401:
+ *         description: Unauthorized
+ */
+router.get(
+  '/admin/complaints/all',
+  authMiddleware,
+  getAllComplaintProcessesForAdminController
 )
 
 /**

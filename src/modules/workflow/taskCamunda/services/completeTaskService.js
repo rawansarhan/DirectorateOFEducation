@@ -42,6 +42,9 @@ const {
   assessFinalDocumentReadiness,
   assertReadyForWorkflowCompletion
 } = require('../../../transaction/certificate/services/finalDocumentReadinessService')
+const {
+  generateMergedFinalDocument
+} = require('../../../transaction/certificate/services/finalDocumentBuilderService')
 const securityGuardService = require('../../../../core/security/securityGuardService')
 const {
   invalidateEmployeeTasksForUser,
@@ -135,6 +138,28 @@ function logStep (step, meta = {}) {
     .join(' ')
 
   console.log(`${LOG_PREFIX} ${step}${details ? ` | ${details}` : ''}`)
+}
+
+function scheduleFinalDocumentAutoGeneration (transactionId) {
+  setImmediate(async () => {
+    try {
+      const result = await generateMergedFinalDocument(transactionId, {
+        force: false,
+        requireOwner: false
+      })
+
+      logStep('FINAL_DOCUMENT_AUTO_GENERATED', {
+        transactionId,
+        alreadyExists: Boolean(result?.already_exists),
+        filePath: result?.final_document?.file_path || ''
+      })
+    } catch (err) {
+      logStep('FINAL_DOCUMENT_AUTO_GENERATE_FAILED', {
+        transactionId,
+        error: err?.message || 'unknown'
+      })
+    }
+  })
 }
 
 /**
@@ -1294,6 +1319,8 @@ async function completeTaskCore ({
         transactionId: transaction.id,
         processInstanceId: processInstance.id
       })
+
+      scheduleFinalDocumentAutoGeneration(transaction.id)
     }
   }
 
