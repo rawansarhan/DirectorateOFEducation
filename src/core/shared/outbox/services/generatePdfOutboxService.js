@@ -8,7 +8,7 @@ const EVENTS = require('../../events/types')
 const { RETRY_MAX_ATTEMPTS } = require('../../../config/env')
 const {
   handleGeneratePdfFailure
-} = require('../../../../modules/transaction/notification/services/generatePdfFailureHandlerService')
+} = require('../../../../modules/notification/services/generatePdfFailureHandlerService')
 
 function payloadTransactionId (payload) {
   return Number(payload?.transaction_id)

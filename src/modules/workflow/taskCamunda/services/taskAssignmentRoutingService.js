@@ -1,6 +1,6 @@
 'use strict'
 
-const orgDeptRoleRepository = require('../../../organization/repositories/orgDeptRoleRepository')
+const orgDeptRoleRepository = require('../../../organization/role/repositories/orgDeptRoleRepository')
 const stageAssignmentRepository = require('../../stageConfig/repositories/stageAssignmentRepository')
 const camundaClient = require('../../../../core/shared/clients/camunda/camundaClient')
 const {

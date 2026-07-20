@@ -3,7 +3,6 @@
 const typeDocRepository = require('../../../requirements/typeDoc/repositories/typeDocRepository')
 const { buildStoredFileEntry } = require('../../../../core/utils/filePath')
 const { pickTypeDocIdFromObject } = require('../../../../core/utils/typeDocId')
-const { decodeMultipartFilename } = require('../../../../core/utils/uploadFilename')
 const {
   createUploadError,
   safeUnlinkUpload,
@@ -11,6 +10,10 @@ const {
   processStagedFileUpload,
   computeFileContentHash
 } = require('./stagedFileUploadService')
+const {
+  toUploadInput,
+  toUploadOutputDTO
+} = require('../mappers/documentMapper')
 
 async function resolveActiveTypeDoc (typeDocId) {
   if (!typeDocId) {
@@ -33,7 +36,6 @@ async function resolveActiveTypeDoc (typeDocId) {
 function buildUploadResponse ({
   pickerKey,
   staged,
-  file,
   typeDoc,
   userId
 }) {
@@ -47,7 +49,7 @@ function buildUploadResponse ({
     userId
   )
 
-  return {
+  return toUploadOutputDTO({
     key: pickerKey,
     path: stored.path,
     url: stored.url,
@@ -60,28 +62,26 @@ function buildUploadResponse ({
     },
     content_hash: staged.content_hash,
     already_exists: staged.already_exists
-  }
+  })
 }
 
-async function buildTransactionFileUploadResult ({
-  file,
-  key = null,
-  typeDocId,
-  userId
-}) {
-  const pickerKey = normalizePickerKey(key, { required: true })
-  const resolvedTypeDocId = pickTypeDocIdFromObject({ type_doc_id: typeDocId })
+async function buildTransactionFileUploadResult (payload) {
+  const input = toUploadInput(payload)
+  const pickerKey = normalizePickerKey(input.key, { required: true })
+  const resolvedTypeDocId = pickTypeDocIdFromObject({
+    type_doc_id: input.typeDocId
+  })
 
   if (!resolvedTypeDocId) {
-    safeUnlinkUpload(`/uploads/${file?.filename}`)
+    safeUnlinkUpload(`/uploads/${input.file?.filename}`)
     throw createUploadError('type_doc_id مطلوب ويجب أن يكون رقماً موجباً')
   }
 
   const typeDoc = await resolveActiveTypeDoc(resolvedTypeDocId)
 
   const staged = await processStagedFileUpload({
-    file,
-    userId,
+    file: input.file,
+    userId: input.userId,
     pickerKey,
     typeDocId: typeDoc.id
   })
@@ -89,12 +89,8 @@ async function buildTransactionFileUploadResult ({
   return buildUploadResponse({
     pickerKey,
     staged,
-    file: file || {
-      originalname: staged.original_name,
-      mimetype: staged.mime_type
-    },
     typeDoc,
-    userId
+    userId: input.userId
   })
 }
 

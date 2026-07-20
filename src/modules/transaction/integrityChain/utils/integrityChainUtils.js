@@ -1,7 +1,7 @@
 'use strict'
 
 const { createHash } = require('crypto')
-const { verifyChallengeSignature } = require('../../../auth/services/cryptoAuthService')
+const { verifyChallengeSignature } = require('../../../auth/shared/services/cryptoAuthService')
 
 const INTEGRITY_CHAIN_VERSION = '1.0'
 

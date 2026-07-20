@@ -26,15 +26,19 @@ setupSwagger(app)
 //==========================================================================
 //========================== auth services =================================
 
-const authRoutes = require('./modules/auth/routes/auth')
-const pinRoutes = require('./modules/auth/routes/pin')
+const registerRoutes = require('./modules/auth/register/routes/register')
+const sessionRoutes = require('./modules/auth/session/routes/session')
+const pinRoutes = require('./modules/auth/pin/routes/pin')
+const challengeRoutes = require('./modules/auth/challenge/routes/challenge')
 app.use('/api/auth', pinRoutes)
-app.use('/api/auth', authRoutes)
+app.use('/api/auth', registerRoutes)
+app.use('/api/auth', sessionRoutes)
+app.use('/api/auth', challengeRoutes)
 
 
 //auth client:
 const authClientRoutes =
-  require('./modules/auth/routes/internal/authClient')
+  require('./modules/auth/shared/routes/internal/authClient')
 
 app.use(
   '/internal/users',
@@ -74,25 +78,25 @@ app.use('/api/typeProcess', typeProcessRoutes)
 //==========================================================================
 //====================  organization services ==============================
 
-const organizationRoutes = require('./modules/organization/routes/organization')
+const organizationRoutes = require('./modules/organization/organization/routes/organization')
 app.use('/api/organization', organizationRoutes)
 
-const departmentRoutes = require('./modules/organization/routes/department')
+const departmentRoutes = require('./modules/organization/department/routes/department')
 app.use('/api/department', departmentRoutes)
 
-const roleRoutes = require('./modules/organization/routes/role')
+const roleRoutes = require('./modules/organization/role/routes/role')
 app.use('/api/role', roleRoutes)
 
-const locationRoutes = require('./modules/organization/routes/location')
+const locationRoutes = require('./modules/organization/location/routes/location')
 app.use('/api/location', locationRoutes)
 
-const employeeRoutes = require('./modules/organization/routes/employee')
+const employeeRoutes = require('./modules/organization/employee/routes/employee')
 app.use('/api/employees', employeeRoutes)
 
 // organization client 
 
 const organizationClientRoutes =
-  require('./modules/organization/routes/internal/Organization')
+  require('./modules/organization/organization/routes/internal/Organization')
 app.use(
   '/organizations',
   organizationClientRoutes
@@ -101,7 +105,7 @@ app.use(
 //  OrgDeptRole
 
 const OrgDeptRoleClientRoutes =
-  require('./modules/organization/routes/internal/OrgDeptRoles')
+  require('./modules/organization/role/routes/internal/OrgDeptRoles')
 app.use(
   '/internal/org-dept-roles',
   OrgDeptRoleClientRoutes
@@ -136,16 +140,28 @@ app.use(
 const transactionRoutes = require('./modules/transaction/transaction/routes/transaction')
 app.use('/api/transaction', transactionRoutes)
 
+const certificateRoutes =
+  require('./modules/transaction/certificate/routes/certificate')
+app.use('/api/transaction', certificateRoutes)
+
 const documentUploadRoutes =
   require('./modules/transaction/document/routes/documentUpload')
 app.use('/api/transaction/files', documentUploadRoutes)
 
-const notificationRoutes = require('./modules/transaction/notification/routes/notification')
+const transactionDocumentsRoutes =
+  require('./modules/transaction/document/routes/documentsTransaction')
+app.use('/api/transaction', transactionDocumentsRoutes)
+
+const notificationRoutes = require('./modules/notification/routes/notification')
 app.use('/api/notifications', notificationRoutes)
 
 const verifyDocumentRoutes =
   require('./modules/transaction/integrityChain/routes/verifyDocument')
 app.use('/api/verify', verifyDocumentRoutes)
+
+const integrityChainRoutes =
+  require('./modules/transaction/integrityChain/routes/integrityChain')
+app.use('/api/transaction', integrityChainRoutes)
 
 const internalTransactionRoutes =
   require('./modules/transaction/transaction/routes/transactionInternal')

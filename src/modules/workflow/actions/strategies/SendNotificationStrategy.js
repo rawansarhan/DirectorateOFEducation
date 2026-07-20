@@ -5,7 +5,7 @@ const {
   UserRoleAssignment,
   OrgDeptRole
 } = require('../../../../entities')
-const { deliverNotificationToUser } = require('../../../transaction/notification/services/notificationDeliveryService')
+const { deliverNotificationToUser } = require('../../../notification/services/notificationDeliveryService')
 
 function resolveCamundaGroupKey (payload) {
   return (

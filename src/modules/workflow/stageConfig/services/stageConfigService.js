@@ -1,7 +1,7 @@
 'use strict'
 
 const orgDeptRolesClient = require('../../../../core/shared/clients/organization/orgDeptRolesClient')
-const orgDeptRoleRepository = require('../../../organization/repositories/orgDeptRoleRepository')
+const orgDeptRoleRepository = require('../../../organization/role/repositories/orgDeptRoleRepository')
 
 const {
   createStageConfigSchema

@@ -7,10 +7,15 @@ const {
 } = require('../services/transactionCertificateService')
 const {
   generateMergedFinalDocument
-} = require('../../document/services/finalDocumentBuilderService')
+} = require('../services/finalDocumentBuilderService')
 const {
   assessFinalDocumentReadiness
-} = require('../../document/services/finalDocumentReadinessService')
+} = require('../services/finalDocumentReadinessService')
+const {
+  toGenerateResultDTO,
+  toReadinessDTO,
+  parseQrPayloadFromBody
+} = require('../mappers/certificateMapper')
 const {
   successResponse,
   errorResponse
@@ -44,21 +49,11 @@ async function getCertificateController (req, res) {
 
 async function uploadFinalDocumentController (req, res) {
   try {
-    let qrPayloadSnapshot = null
-
-    if (req.body?.qr_payload) {
-      try {
-        qrPayloadSnapshot = JSON.parse(req.body.qr_payload)
-      } catch {
-        qrPayloadSnapshot = null
-      }
-    }
-
     const data = await saveFinalDocument({
       transactionId: req.params.transactionId,
       userId: req.user.id,
       file: req.file,
-      qrPayloadSnapshot
+      qrPayloadSnapshot: parseQrPayloadFromBody(req.body)
     })
 
     return successResponse(res, {
@@ -90,10 +85,12 @@ async function generateFinalDocumentController (req, res) {
     const force =
       req.query.force === 'true' || req.query.force === '1'
 
-    const data = await generateMergedFinalDocument(req.params.transactionId, {
+    const result = await generateMergedFinalDocument(req.params.transactionId, {
       userId: req.user.id,
       force
     })
+
+    const data = toGenerateResultDTO(result)
 
     return successResponse(res, {
       message: data.already_exists
@@ -111,11 +108,13 @@ async function getFinalDocumentReadinessController (req, res) {
     const flush =
       req.query.flush === 'true' || req.query.flush === '1'
 
-    const data = await assessFinalDocumentReadiness(req.params.transactionId, {
+    const result = await assessFinalDocumentReadiness(req.params.transactionId, {
       userId: req.user.id,
       requireCompleted: true,
       flushGeneratePdf: flush
     })
+
+    const data = toReadinessDTO(result)
 
     return successResponse(res, {
       message: data.ready_for_merge
