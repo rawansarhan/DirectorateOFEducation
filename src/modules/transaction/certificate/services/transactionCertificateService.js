@@ -191,6 +191,7 @@ async function getFinalDocument (transactionId, { userId = null } = {}) {
 
 module.exports = {
   CERTIFICATE_AUDIENCE,
+  loadAuthorizedTransaction,
   getCertificateBundle,
   saveFinalDocument,
   getFinalDocument

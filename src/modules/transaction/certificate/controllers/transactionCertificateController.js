@@ -83,11 +83,16 @@ async function getFinalDocumentController (req, res) {
 async function generateFinalDocumentController (req, res) {
   try {
     const force =
-      req.query.force === 'true' || req.query.force === '1'
+      req.query.force === 'true' ||
+      req.query.force === '1' ||
+      req.body?.force === true ||
+      req.body?.force === 'true' ||
+      req.body?.force === '1'
 
     const result = await generateMergedFinalDocument(req.params.transactionId, {
       userId: req.user.id,
-      force
+      force,
+      requireOwner: true
     })
 
     const data = toGenerateResultDTO(result)
@@ -111,7 +116,8 @@ async function getFinalDocumentReadinessController (req, res) {
     const result = await assessFinalDocumentReadiness(req.params.transactionId, {
       userId: req.user.id,
       requireCompleted: true,
-      flushGeneratePdf: flush
+      flushGeneratePdf: flush,
+      requireOwner: true
     })
 
     const data = toReadinessDTO(result)

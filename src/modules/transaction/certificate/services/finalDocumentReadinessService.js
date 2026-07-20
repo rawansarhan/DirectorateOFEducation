@@ -22,6 +22,10 @@ const {
   resolveAbsoluteUploadPath,
   isSyntheticSignatureDocumentPath
 } = require('../../../../core/utils/filePath')
+const {
+  loadAuthorizedTransaction,
+  CERTIFICATE_AUDIENCE
+} = require('./transactionCertificateService')
 
 const COMPLETED_STATUS = 'completed'
 
@@ -92,7 +96,8 @@ async function assessFinalDocumentReadiness (
   {
     userId = null,
     requireCompleted = true,
-    flushGeneratePdf = false
+    flushGeneratePdf = false,
+    requireOwner = false
   } = {}
 ) {
   const numericTransactionId = Number.parseInt(transactionId, 10)
@@ -107,7 +112,11 @@ async function assessFinalDocumentReadiness (
     flushResults = await flushGeneratePdfForTransaction(numericTransactionId)
   }
 
-  const transaction = await transactionRepository.findById(numericTransactionId)
+  const transaction = requireOwner
+    ? await loadAuthorizedTransaction(numericTransactionId, userId, {
+      audience: CERTIFICATE_AUDIENCE.OWNER
+    })
+    : await transactionRepository.findById(numericTransactionId)
 
   if (!transaction) {
     throw createTransactionError('TRANSACTION_NOT_FOUND')

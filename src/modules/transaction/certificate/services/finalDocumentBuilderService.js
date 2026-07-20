@@ -54,6 +54,10 @@ const {
   assessFinalDocumentReadiness,
   assertReadyForMerge
 } = require('./finalDocumentReadinessService')
+const {
+  loadAuthorizedTransaction,
+  CERTIFICATE_AUDIENCE
+} = require('./transactionCertificateService')
 
 const A4 = { width: 595.28, height: 841.89 }
 const PAGE_MARGIN = 40
@@ -395,7 +399,7 @@ async function buildCoverPdfBytes ({
 
 async function generateMergedFinalDocument (
   transactionId,
-  { userId = null, force = false } = {}
+  { userId = null, force = false, requireOwner = false } = {}
 ) {
   const numericTransactionId = Number.parseInt(transactionId, 10)
 
@@ -403,7 +407,11 @@ async function generateMergedFinalDocument (
     throw createTransactionError('VALIDATION_ERROR', 'معرّف المعاملة غير صالح')
   }
 
-  const transaction = await transactionRepository.findById(numericTransactionId)
+  const transaction = requireOwner
+    ? await loadAuthorizedTransaction(numericTransactionId, userId, {
+      audience: CERTIFICATE_AUDIENCE.OWNER
+    })
+    : await transactionRepository.findById(numericTransactionId)
 
   if (!transaction) {
     throw createTransactionError('TRANSACTION_NOT_FOUND')
@@ -443,7 +451,8 @@ async function generateMergedFinalDocument (
   const readiness = await assessFinalDocumentReadiness(numericTransactionId, {
     userId,
     requireCompleted: true,
-    flushGeneratePdf: true
+    flushGeneratePdf: true,
+    requireOwner
   })
 
   assertReadyForMerge(readiness)
