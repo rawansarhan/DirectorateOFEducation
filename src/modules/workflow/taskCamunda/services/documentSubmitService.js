@@ -3,10 +3,12 @@
 const { createSigningChallenge, createDraftSubmitSigningChallenge } = require('./transactionSigningService')
 const completeTaskService = require('./completeTaskService')
 const { resolveDocumentSubmitTask } = require('./resolveDocumentSubmitTaskService')
-const transactionRepository = require('../../../transaction/transaction/repositories/transactionRepository')
-const { submitTransaction } = require('../../../transaction/transaction/services/transactionSubmitService')
-const { ensureDraftForProcess } = require('../../../transaction/transaction/services/transactionDraftService')
-const { parsePositiveInt } = require('../../../transaction/transaction/validations/transactionValidations')
+const {
+  transactionRepository,
+  submitTransaction,
+  ensureDraftForProcess,
+  parsePositiveInt
+} = require('../../../transaction/public')
 const { retryWithBackoff } = require('../../../../core/utils/retryWithBackoff')
 const {
   validateDocumentSubmitSigningChallenge,

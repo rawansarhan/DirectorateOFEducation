@@ -1,6 +1,9 @@
 'use strict'
 
-const orgDeptRolesClient = require('../../../../core/shared/clients/organization/orgDeptRolesClient')
+const {
+  findOrgDeptRole,
+  getCitizenRole
+} = require('../../../organization/public')
 
 const bcrypt = require('bcryptjs')
 
@@ -79,7 +82,7 @@ async function registerEmployee (userData) {
   }
 
   const orgDeptRole =
-    await orgDeptRolesClient.findOrgDeptRole({
+    await findOrgDeptRole({
       organization_id: data.organization_id,
       department_id: data.department_id,
       role_id: data.role_id
@@ -289,7 +292,7 @@ async function registerCitizen (userData) {
     }
 
     const orgDeptRole =
-      await orgDeptRolesClient.getCitizenRole()
+      await getCitizenRole()
 
     if (!orgDeptRole) {
       throw new Error(

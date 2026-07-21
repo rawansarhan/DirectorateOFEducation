@@ -24,10 +24,11 @@ const QRCode = require('qrcode')
 const { getArabicTextShaper } = require('../../../../core/utils/arabicText')
 
 const transactionRepository = require('../../transaction/repositories/transactionRepository')
-const processRepository = require('../../../workflow/processDefinition/repositories/processRepository')
+const {
+  processRepository,
+  documentSignatureRepository
+} = require('../../../workflow/public')
 const documentInstanceRepository = require('../../document/repositories/documentInstanceRepository')
-const documentSignatureRepository =
-  require('../../../workflow/taskCamunda/repositories/documentSignatureRepository')
 const documentFinalTransactionRepository =
   require('../repositories/documentFinalTransactionRepository')
 const { createTransactionError } = require('../../transaction/utils/transactionErrors')

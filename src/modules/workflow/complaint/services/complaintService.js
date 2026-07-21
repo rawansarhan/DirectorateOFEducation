@@ -7,8 +7,7 @@ const {
   filterAuthProcessesByRoleIds
 } = require('../../processDefinition/utils/processAuthFilter')
 
-const authClient =
-  require('../../../../core/shared/clients/auth/authClient')
+const { getUserRoles } = require('../../../auth/public')
 
 const {
   getOrLoad,
@@ -35,7 +34,7 @@ async function getAuthProcessesCompaint (userId, paginationInput) {
   validateComplaintUserId(userId)
 
   const roleIds =
-    await authClient.getUserRoles(userId)
+    await getUserRoles(userId)
 
   if (!roleIds || roleIds.length === 0) {
     return {

@@ -6,10 +6,10 @@ const transactionSignatureLinkRepository =
   require('../repositories/transactionSignatureLinkRepository')
 const documentInstanceRepository =
   require('../../document/repositories/documentInstanceRepository')
-const digitalSignatureRepository =
-  require('../../../workflow/taskCamunda/repositories/digitalSignatureRepository')
-const transactionSigningChallengeRepository =
-  require('../../../workflow/taskCamunda/repositories/transactionSigningChallengeRepository')
+const {
+  digitalSignatureRepository,
+  transactionSigningChallengeRepository
+} = require('../../../workflow/public')
 const {
   verifyDocumentBinding
 } = require('./authoritySignatureService')

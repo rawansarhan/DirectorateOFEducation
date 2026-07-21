@@ -3,7 +3,7 @@
 const { v4: uuidv4 } = require('uuid')
 
 const camundaClient = require('../../../../core/shared/clients/camunda/camundaClient')
-const transactionClient = require('../../../../core/shared/clients/transaction/transactionClient')
+const { getTransactionById } = require('../../../transaction/public')
 const securityGuardService = require('../../../../core/security/securityGuardService')
 
 const processInstanceRepository = require('../repositories/processInstanceRepository')
@@ -54,7 +54,7 @@ async function loadTaskContext (taskId) {
     throw new Error('Process instance not found')
   }
 
-  const transaction = await transactionClient.getTransactionById(
+  const transaction = await getTransactionById(
     processInstance.transaction_id
   )
 
@@ -299,7 +299,7 @@ async function createDraftSubmitSigningChallenge ({
     throw new Error('معرّف المعاملة غير صالح')
   }
 
-  const transaction = await transactionClient.getTransactionById(numericTransactionId)
+  const transaction = await getTransactionById(numericTransactionId)
 
   if (!transaction) {
     const error = new Error('المعاملة غير موجودة')

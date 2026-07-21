@@ -18,7 +18,7 @@ const {
   createDocumentSubmitSigningChallengeByProcessController,
   createDocumentSubmitSigningChallengeByTransactionController,
   completeDocumentSubmitByTransactionController
-} = require('../../../workflow/taskCamunda/controllers/taskController')
+} = require('../controllers/documentSubmitController')
 
 /**
  * @swagger

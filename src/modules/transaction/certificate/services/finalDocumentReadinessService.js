@@ -6,7 +6,7 @@ const path = require('path')
 const transactionRepository = require('../../transaction/repositories/transactionRepository')
 const documentInstanceRepository = require('../../document/repositories/documentInstanceRepository')
 const documentSignatureRepository =
-  require('../../../workflow/taskCamunda/repositories/documentSignatureRepository')
+  require('../../../workflow/public').documentSignatureRepository
 const transactionSignatureLinkRepository =
   require('../../integrityChain/repositories/transactionSignatureLinkRepository')
 const {

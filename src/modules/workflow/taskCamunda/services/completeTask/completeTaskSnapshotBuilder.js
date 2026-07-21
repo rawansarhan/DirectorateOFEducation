@@ -2,11 +2,9 @@
 
 const { buildStoredStageData } = require('../../../services/stageSubmissionService')
 const {
-  registerTransactionFiles
-} = require('../../../../transaction/document/services/documentFileService')
-const {
+  registerTransactionFiles,
   registerTemplatesForTransaction
-} = require('../../../../transaction/document/services/documentInstanceService')
+} = require('../../../../transaction/public')
 const {
   shouldPersistAuthSubmissionAtRoot,
   logStep

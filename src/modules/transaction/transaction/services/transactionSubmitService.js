@@ -16,25 +16,22 @@ const {
 const {
   registerTemplatesForTransaction
 } = require('../../document/services/documentInstanceService')
-const { startWorkflow } = require('../../../workflow/taskCamunda/services/startWorkflowService')
+const {
+  startWorkflow,
+  validateSubmitTransactionRequest,
+  buildStoredSubmissionData,
+  loadAuthStageByProcessCode,
+  verifySignatureForComplete,
+  persistVerifiedSignature,
+  buildDraftSubmitTaskId
+} = require('../../../workflow/public')
 const db = require('../../../../entities')
 const { formatClientErrorMessage } = require('../../../../core/utils/errorMessageHelper')
 const { v4: uuidv4 } = require('uuid')
 
-const {
-  validateSubmitTransactionRequest,
-  buildStoredSubmissionData,
-  loadAuthStageByProcessCode
-} = require('../../../workflow/services/stageSubmissionService')
-
 const operationGuardService = require('../../../../core/security/operationGuardService')
 const userRepository = require('../../../auth/shared/repositories/userRepository')
 const userRoleAssignmentRepository = require('../../../auth/shared/repositories/userRoleAssignmentRepository')
-const {
-  verifySignatureForComplete,
-  persistVerifiedSignature,
-  buildDraftSubmitTaskId
-} = require('../../../workflow/taskCamunda/services/transactionSigningService')
 const { ensureGenesisHash, appendIntegrityLink } =
   require('../../integrityChain/services/integrityChainService')
 const { ensureTransactionIdProcess } =

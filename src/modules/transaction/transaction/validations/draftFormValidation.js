@@ -3,11 +3,9 @@
 const Joi = require('joi')
 const {
   WIDGET_TYPES,
-  validateWidgetsBusinessRules
-} = require('../../../workflow/stageConfig/validations/stageConfigSchema')
-const {
+  validateWidgetsBusinessRules,
   buildStageFormSnapshot
-} = require('../../../workflow/services/stageFormSnapshotBuilder')
+} = require('../../../workflow/public')
 
 const FILE_WIDGET_TYPES = new Set(['file_picker'])
 

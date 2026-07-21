@@ -1,20 +1,18 @@
 'use strict'
 
 const transactionRepository = require('../../transaction/repositories/transactionRepository')
-const processRepository = require('../../../workflow/processDefinition/repositories/processRepository')
+const {
+  processRepository,
+  employeeTaskRepository,
+  formatTransactionHistoryForDisplay,
+  enrichHistoryTemplatesWithDocumentInstances,
+  normalizeProcessPriority,
+  formatTransactionDate
+} = require('../../../workflow/public')
 const documentInstanceRepository = require('../../document/repositories/documentInstanceRepository')
 const documentFinalTransactionRepository = require('../repositories/documentFinalTransactionRepository')
 const { getIntegrityChain } = require('../../integrityChain/services/integrityChainService')
-const {
-  formatTransactionHistoryForDisplay,
-  enrichHistoryTemplatesWithDocumentInstances
-} = require('../../../workflow/taskCamunda/utils/transactionHistoryDisplay')
-const {
-  normalizeProcessPriority,
-  formatTransactionDate
-} = require('../../../workflow/taskCamunda/utils/employeeTaskFormatters')
 const { createTransactionError } = require('../../transaction/utils/transactionErrors')
-const employeeTaskRepository = require('../../../workflow/taskCamunda/repositories/employeeTaskRepository')
 const {
   toFinalDocumentDTO,
   toCertificateBundleDTO,

@@ -1,6 +1,6 @@
 'use strict'
 
-const processRepository = require('../../../workflow/processDefinition/repositories/processRepository')
+const { processRepository } = require('../../../workflow/public')
 const { buildTransactionIdProcess } = require('../utils/transactionIdProcess')
 
 async function ensureTransactionIdProcess (transaction, { transaction: dbTransaction } = {}) {

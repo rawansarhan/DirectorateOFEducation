@@ -1,16 +1,15 @@
 'use strict'
 
 const processInstanceRepository = require('../../repositories/processInstanceRepository')
-const transactionRepository =
-  require('../../../../transaction/transaction/repositories/transactionRepository')
+const {
+  transactionRepository,
+  appendIntegrityLink,
+  createProcessStage
+} = require('../../../../transaction/public')
 const {
   persistVerifiedSignature,
   appendSignatureToTransactionData
 } = require('../transactionSigningService')
-const { appendIntegrityLink } =
-  require('../../../../transaction/integrityChain/services/integrityChainService')
-const { createProcessStage } =
-  require('../../../../transaction/process_instance_stage/services/processInstanceStageService')
 const { toPublicSignatureRecord } = require('../../mappers/completeTaskMapper')
 const securityGuardService = require('../../../../../core/security/securityGuardService')
 const {

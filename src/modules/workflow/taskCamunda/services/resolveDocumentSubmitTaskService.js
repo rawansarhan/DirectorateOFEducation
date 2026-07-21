@@ -1,13 +1,12 @@
 'use strict'
 
 const camundaClient = require('../../../../core/shared/clients/camunda/camundaClient')
-const transactionRepository = require('../../../transaction/transaction/repositories/transactionRepository')
+const { transactionRepository, parsePositiveInt } = require('../../../transaction/public')
 const processInstanceRepository = require('../repositories/processInstanceRepository')
 const employeeTaskRepository = require('../repositories/employeeTaskRepository')
 const stageRepository = require('../../processDefinition/repositories/stageRepository')
 const { acquireTaskLock } = require('./taskLockService')
 const { retryWithBackoff } = require('../../../../core/utils/retryWithBackoff')
-const { parsePositiveInt } = require('../../../transaction/transaction/validations/transactionValidations')
 
 function createResolveError (code, message) {
   const error = new Error(message)

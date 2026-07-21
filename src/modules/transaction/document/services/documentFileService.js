@@ -19,7 +19,7 @@
 
 const fs = require('fs')
 const path = require('path')
-const documentSignatureRepository = require('../../../workflow/taskCamunda/repositories/documentSignatureRepository')
+const { documentSignatureRepository } = require('../../../workflow/public')
 const typeDocRepository = require('../../../requirements/typeDoc/repositories/typeDocRepository')
 const pendingFileUploadRepository = require('../repositories/pendingFileUploadRepository')
 const { buildStoredFileEntry, normalizeStoredFilePath, resolveAbsoluteUploadPath } = require('../../../../core/utils/filePath')

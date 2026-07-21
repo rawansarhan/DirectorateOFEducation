@@ -10,7 +10,7 @@
  */
 
 const documentTemplateRepository = require('../../../requirements/DocTemp/repositories/documentTemplateRepository')
-const documentInstanceRepository = require('../../../transaction/document/repositories/documentInstanceRepository')
+const { documentInstanceRepository } = require('../../../transaction/public')
 const { enqueueOutboxEvent } = require('../../../../core/shared/outbox/services/outboxEnqueueService')
 const {
   executeGeneratePdfJob

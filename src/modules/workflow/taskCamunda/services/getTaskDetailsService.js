@@ -4,7 +4,10 @@ const camundaClient = require('../../../../core/shared/clients/camunda/camundaCl
 const processInstanceRepository = require('../repositories/processInstanceRepository')
 const stageRepository = require('../../processDefinition/repositories/stageRepository')
 const stageConfigRepository = require('../../stageConfig/repositories/stageConfigRepository')
-const transactionClient = require('../../../../core/shared/clients/transaction/transactionClient')
+const {
+  documentInstanceRepository,
+  getTransactionById
+} = require('../../../transaction/public')
 const {
   acquireTaskLock,
   releaseTaskLockStrict,
@@ -16,7 +19,6 @@ const {
   formatTransactionHistoryForDisplay,
   enrichHistoryTemplatesWithDocumentInstances
 } = require('../utils/transactionHistoryDisplay')
-const documentInstanceRepository = require('../../../transaction/document/repositories/documentInstanceRepository')
 const { enrichCamundaTaskNotFoundError } = require('../../../../core/utils/errorMessageHelper')
 const {
   KEYS,
@@ -95,7 +97,7 @@ async function resolveTransaction (processInstance) {
     )
   }
 
-  const transaction = await transactionClient.getTransactionById(
+  const transaction = await getTransactionById(
     processInstance.transaction_id
   )
 

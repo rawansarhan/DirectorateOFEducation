@@ -143,6 +143,20 @@ function decodeCursor (rawValue) {
       }
     }
 
+    // Merged employee task list (status=all) — offset-based cursor
+    if (kind === 'all') {
+      const offset = Number(parsed.o)
+
+      if (!Number.isFinite(offset) || offset < 0) {
+        throw new Error('invalid all-list cursor fields')
+      }
+
+      return {
+        k: 'all',
+        o: Math.floor(offset)
+      }
+    }
+
     const priority = Number(parsed.p)
 
     if (
@@ -198,10 +212,19 @@ function parseCursorPaginationQuery (query = {}, options = {}) {
   }
 
   const cursorRaw = query.cursor
-  const cursor =
+  let cursor =
     cursorRaw != null && String(cursorRaw).trim() !== ''
       ? String(cursorRaw).trim()
       : null
+
+  // Swagger UI often auto-fills string params with the literal "string"
+  if (
+    cursor &&
+    ['string', 'cursor', 'null', 'undefined'].includes(cursor.toLowerCase())
+  ) {
+    cursor = null
+  }
+
   const decodedCursor = decodeCursor(cursor)
 
   return { limit, cursor, decodedCursor }

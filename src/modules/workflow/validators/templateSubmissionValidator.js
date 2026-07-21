@@ -26,7 +26,7 @@ const documentTemplateRepository =
   require('../../requirements/DocTemp/repositories/documentTemplateRepository')
 const {
   validateWidgetValue
-} = require('../../transaction/transaction/validations/draftFormValidation')
+} = require('../../transaction/public')
 const {
   validateWidgetsBusinessRules
 } = require('../stageConfig/validations/stageConfigSchema')

@@ -3,24 +3,18 @@
 const ApiResponder = require('../../../../core/utils/apiResponder')
 const {
   getIntegrityChain,
-  verifyIntegrityChain,
-  verifyDocumentQr
+  verifyIntegrityChain
 } = require('../services/integrityChainService')
 const {
   wantsHtmlResponse,
-  buildPublicVerifyResult,
   renderDocumentVerifyHtml,
   renderDocumentVerifyErrorHtml
 } = require('../views/documentVerifyPublicView')
-const transactionRepository =
-  require('../../transaction/repositories/transactionRepository')
 const {
-  buildDocumentQrScanBundle
-} = require('../services/documentQrScanBundleService')
-const {
-  issueDocumentDetailsCode,
-  resolveDocumentDetailsCode
-} = require('../services/documentDetailsCodeService')
+  verifyDocumentPublicScan,
+  getDocumentVerifyDetailsByTransactionId,
+  getDocumentVerifyDetailsByCode
+} = require('../services/documentVerifyAppService')
 
 async function getIntegrityChainController (req, res) {
   try {
@@ -82,31 +76,13 @@ async function verifyIntegrityChainController (req, res) {
 /**
  * تحقق عام من رمز QR المضمّن في وثيقة PDF (مسح بدون مصادقة).
  * يقرأ المعطيات من query: tx, g (genesis), doc, s (signature).
- * الشاشة العامة بسيطة؛ التفاصيل عبر details_code + /document/details.
  */
 async function verifyDocumentController (req, res) {
   const asHtml = wantsHtmlResponse(req)
 
   try {
     const source = { ...req.query, ...(req.body || {}) }
-
-    const result = await verifyDocumentQr({
-      transactionId: source.tx,
-      genesisHash: source.g,
-      documentInstanceId: source.doc,
-      signatureBase64Url: source.s
-    })
-
-    const transaction = result.transaction_id
-      ? await transactionRepository.findById(result.transaction_id)
-      : null
-
-    const detailsMeta =
-      result.valid && transaction
-        ? await issueDocumentDetailsCode(transaction.id)
-        : null
-
-    const publicResult = buildPublicVerifyResult(result, transaction, detailsMeta)
+    const publicResult = await verifyDocumentPublicScan(source)
 
     if (asHtml) {
       return res
@@ -138,46 +114,25 @@ async function verifyDocumentController (req, res) {
   }
 }
 
-async function respondWithDocumentVerifyDetails (res, transactionId) {
-  const numericId = Number.parseInt(transactionId, 10)
-
-  if (!Number.isInteger(numericId) || numericId < 1) {
-    return ApiResponder.badRequestResponse(res, 'معرّف المعاملة غير صالح')
-  }
-
-  const transaction = await transactionRepository.findById(numericId)
-
-  if (!transaction) {
-    return ApiResponder.errorResponse(res, 'المعاملة غير موجودة', 404)
-  }
-
-  const bundle = await buildDocumentQrScanBundle(transaction)
-
-  return ApiResponder.okResponse(
-    res,
-    bundle,
-    'تم جلب تفاصيل التحقق من الوثيقة بنجاح'
-  )
-}
-
-/**
- * جلب تفاصيل المعاملة باستخدام رمز QR (6 أرقام) — يتطلب Bearer token.
- */
 async function getDocumentVerifyDetailsController (req, res) {
   try {
     const code = req.query.code || req.body?.code || req.body?.details_code
-    const { transactionId } = await resolveDocumentDetailsCode(code)
+    const bundle = await getDocumentVerifyDetailsByCode(code)
 
-    return respondWithDocumentVerifyDetails(res, transactionId)
+    return ApiResponder.okResponse(
+      res,
+      bundle,
+      'تم جلب تفاصيل التحقق من الوثيقة بنجاح'
+    )
   } catch (error) {
-    const statusCode = error.message === 'Transaction not found' ? 404 : 400
+    const statusCode =
+      error.statusCode ||
+      (error.message === 'Transaction not found' ? 404 : 400)
+
     return ApiResponder.errorResponse(res, error.message, statusCode)
   }
 }
 
-/**
- * جلب تفاصيل المعاملة عبر transaction_id — يتطلب Bearer token.
- */
 async function getDocumentVerifyDetailsByTransactionController (req, res) {
   try {
     const transactionId =
@@ -185,9 +140,18 @@ async function getDocumentVerifyDetailsByTransactionController (req, res) {
       req.params.transactionId ||
       req.body?.transaction_id
 
-    return respondWithDocumentVerifyDetails(res, transactionId)
+    const bundle = await getDocumentVerifyDetailsByTransactionId(transactionId)
+
+    return ApiResponder.okResponse(
+      res,
+      bundle,
+      'تم جلب تفاصيل التحقق من الوثيقة بنجاح'
+    )
   } catch (error) {
-    const statusCode = error.message === 'Transaction not found' ? 404 : 400
+    const statusCode =
+      error.statusCode ||
+      (error.message === 'Transaction not found' ? 404 : 400)
+
     return ApiResponder.errorResponse(res, error.message, statusCode)
   }
 }

@@ -1,11 +1,12 @@
 'use strict'
 
 const camundaClient = require('../../../../../core/shared/clients/camunda/camundaClient')
-const transactionClient = require('../../../../../core/shared/clients/transaction/transactionClient')
+const {
+  transactionRepository,
+  getTransactionById
+} = require('../../../../transaction/public')
 const processInstanceRepository = require('../../repositories/processInstanceRepository')
 const stageRepository = require('../../../processDefinition/repositories/stageRepository')
-const transactionRepository =
-  require('../../../../transaction/transaction/repositories/transactionRepository')
 const { assertTaskLockHolder } = require('../taskLockService')
 const { enrichCamundaTaskNotFoundError } = require('../../../../../core/utils/errorMessageHelper')
 const { logStep } = require('./completeTaskHelpers')
@@ -64,7 +65,7 @@ async function loadCompleteTaskContext ({
 
   const transaction = dbTransaction
     ? await transactionRepository.findById(processInstance.transaction_id, dbTransaction)
-    : await transactionClient.getTransactionById(processInstance.transaction_id)
+    : await getTransactionById(processInstance.transaction_id)
 
   if (!transaction) {
     throw new Error('Transaction not found')

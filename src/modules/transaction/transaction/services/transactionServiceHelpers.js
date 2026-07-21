@@ -1,6 +1,6 @@
 'use strict'
 
-const workflowClient = require('../../../../core/shared/clients/workflow/workflowClient')
+const { getProcessById } = require('../../../workflow/public')
 const { TransactionIdentityInputDTO } = require('../dto/TransactionDraftInputDTO')
 const {
   parsePositiveInt,
@@ -13,11 +13,11 @@ const {
 const { createTransactionError } = require('../utils/transactionErrors')
 const {
   loadAuthStageConfigByProcessCode
-} = require('../../../workflow/services/stageSubmissionService')
+} = require('../../../workflow/public')
 
 async function fetchActiveProcess (processId) {
   const numericProcessId = parsePositiveInt(processId, 'معرّف العملية')
-  const process = await workflowClient.getProcessById(numericProcessId)
+  const process = await getProcessById(numericProcessId)
 
   if (!process) {
     throw createTransactionError('PROCESS_NOT_FOUND')

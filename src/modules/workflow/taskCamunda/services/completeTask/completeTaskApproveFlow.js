@@ -4,15 +4,14 @@ const camundaClient = require('../../../../../core/shared/clients/camunda/camund
 const processInstanceRepository = require('../../repositories/processInstanceRepository')
 const employeeTaskRepository = require('../../repositories/employeeTaskRepository')
 const stageRepository = require('../../../processDefinition/repositories/stageRepository')
-const transactionRepository =
-  require('../../../../transaction/transaction/repositories/transactionRepository')
+const {
+  transactionRepository,
+  assessFinalDocumentReadiness,
+  assertReadyForWorkflowCompletion
+} = require('../../../../transaction/public')
 const {
   buildTransactionSignatureLedger
 } = require('../transactionSigningService')
-const {
-  assessFinalDocumentReadiness,
-  assertReadyForWorkflowCompletion
-} = require('../../../../transaction/certificate/services/finalDocumentReadinessService')
 const {
   routeNextUserTaskAssignments
 } = require('../taskAssignmentRoutingService')

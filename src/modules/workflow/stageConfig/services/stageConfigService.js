@@ -1,6 +1,6 @@
 'use strict'
 
-const orgDeptRolesClient = require('../../../../core/shared/clients/organization/orgDeptRolesClient')
+const { findOrgDeptRole } = require('../../../organization/public')
 const orgDeptRoleRepository = require('../../../organization/role/repositories/orgDeptRoleRepository')
 
 const {
@@ -43,7 +43,6 @@ const {
   createHttpError
 } = require('../../../../core/middleware/httpStatusCodes')
 
-const transactionRepository = require('../../../transaction/transaction/repositories/transactionRepository')
 const { retryWithBackoff } = require('../../../../core/utils/retryWithBackoff')
 
 function formatJoiError (error) {
@@ -257,7 +256,7 @@ async function createStageConfigService (data) {
           const payload = action.payload || {}
 
           if (payload.role_id != null) {
-            const orgDeptRole = await orgDeptRolesClient.findOrgDeptRole({
+            const orgDeptRole = await findOrgDeptRole({
               organization_id: normalizeOrgId(payload.organization_id),
               department_id: normalizeOrgId(payload.department_id),
               role_id: payload.role_id
@@ -339,7 +338,7 @@ async function createStageConfigService (data) {
             continue
           }
 
-          const orgDeptRole = await orgDeptRolesClient.findOrgDeptRole({
+          const orgDeptRole = await findOrgDeptRole({
             organization_id: normalizeOrgId(a.organization_id),
             department_id: normalizeOrgId(a.department_id),
             role_id: a.role_id

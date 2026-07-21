@@ -4,7 +4,7 @@ const Joi = require('joi')
 const { WIDGET_TYPES } = require('../stageConfig/validations/stageConfigSchema')
 const {
   validateDraftFormAgainstConfig
-} = require('../../transaction/transaction/validations/draftFormValidation')
+} = require('../../transaction/public')
 const {
   extractFieldsFilesFromWidgets
 } = require('./stageFormSnapshotBuilder')

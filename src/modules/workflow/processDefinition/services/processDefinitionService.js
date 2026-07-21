@@ -2,8 +2,9 @@ const {
   createProcessDefinitionSchema,
   validateProcess
 } = require('../validations/processDefValidation')
-const organizationClient =
-  require('../../../../core/shared/clients/organization/organizationClient')
+const {
+  getOrganizationById
+} = require('../../../organization/public')
 const {
   toAuthProcessResponse,
   toUnapprovedOrInactiveProcessItem,
@@ -24,9 +25,10 @@ const stageRepository =
   const {
   mapTasksToStages
 } = require('../mappers/stageMapper')
-const authClient =
-  require('../../../../core/shared/clients/auth/authClient')
-const orgDeptRolesClient = require('../../../../core/shared/clients/organization/orgDeptRolesClient')
+const { getUserRoles } = require('../../../auth/public')
+const {
+  findAllOrgDeptRole
+} = require('../../../organization/public')
 
 const {
   isProcessActiveBySchedule
@@ -97,7 +99,7 @@ async function createProcessDefinitionService (data) {
     organization,
     typeProcess
   ] = await Promise.all([
-    organizationClient.getOrganizationById(
+    getOrganizationById(
       data.organization_id
     ),
     isComplaint
@@ -222,7 +224,7 @@ async function getAuthProcesses (
   }
 
   const roleIds =
-    await authClient.getUserRoles(userId)
+    await getUserRoles(userId)
 
   if (!roleIds || roleIds.length === 0) {
     return {
@@ -430,7 +432,7 @@ async function loadProcessDetailsWithValidation (processId) {
   // جلب roles من organization-service
 
   const roles =
-    await orgDeptRolesClient.findAllOrgDeptRole({
+    await findAllOrgDeptRole({
       ids: roleIds
     })
 

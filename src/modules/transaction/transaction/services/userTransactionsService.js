@@ -1,9 +1,11 @@
 'use strict'
 
 const repo = require('../repositories/transactionRepository')
-const processRepository = require('../../../workflow/processDefinition/repositories/processRepository')
-const employeeTaskRepository = require('../../../workflow/taskCamunda/repositories/employeeTaskRepository')
-const { calculateProgressPercent } = require('../../../workflow/taskCamunda/utils/employeeTaskStatus')
+const {
+  processRepository,
+  employeeTaskRepository,
+  calculateProgressPercent
+} = require('../../../workflow/public')
 const { UserTransactionListItemDTO } = require('../dto/UserTransactionListItemDTO')
 const { createTransactionError, MESSAGES } = require('../utils/transactionErrors')
 const {

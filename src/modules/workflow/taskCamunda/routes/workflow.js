@@ -108,13 +108,25 @@ const {
 
  *         name: cursor
 
- *         schema: { type: string }
+ *         required: false
+
+ *         allowEmptyValue: true
+
+ *         schema:
+
+ *           type: string
+
+ *           nullable: true
+
+ *         example: ''
 
  *         description: |
 
  *           مؤشر الصفحة التالية (Cursor Pagination). اتركه فارغاً للصفحة الأولى؛
 
  *           للصفحة التالية استخدم قيمة pagination.next_cursor من الاستجابة السابقة.
+
+ *           لا تضع قيمة مثل string من Swagger — احذف الحقل أو اتركه فارغاً.
 
  *       - in: query
 
@@ -240,13 +252,25 @@ router.get('/tasks', authMiddleware, getAllTasksController)
 
  *         name: cursor
 
- *         schema: { type: string }
+ *         required: false
+
+ *         allowEmptyValue: true
+
+ *         schema:
+
+ *           type: string
+
+ *           nullable: true
+
+ *         example: ''
 
  *         description: |
 
  *           مؤشر الصفحة التالية (Cursor Pagination). اتركه فارغاً للصفحة الأولى؛
 
  *           للصفحة التالية استخدم قيمة pagination.next_cursor من الاستجابة السابقة.
+
+ *           لا تضع قيمة مثل string من Swagger — احذف الحقل أو اتركه فارغاً.
 
  *       - in: query
 
@@ -332,13 +356,25 @@ router.get(
 
  *         name: cursor
 
- *         schema: { type: string }
+ *         required: false
+
+ *         allowEmptyValue: true
+
+ *         schema:
+
+ *           type: string
+
+ *           nullable: true
+
+ *         example: ''
 
  *         description: |
 
  *           مؤشر الصفحة التالية (Cursor Pagination). اتركه فارغاً للصفحة الأولى؛
 
  *           للصفحة التالية استخدم قيمة pagination.next_cursor من الاستجابة السابقة.
+
+ *           لا تضع قيمة مثل string من Swagger — احذف الحقل أو اتركه فارغاً.
 
  *       - in: query
 

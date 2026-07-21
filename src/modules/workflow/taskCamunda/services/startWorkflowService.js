@@ -1,8 +1,8 @@
-const transactionClient =
-  require('../../../../core/shared/clients/transaction/transactionClient')
-
-const transactionRepository =
-  require('../../../transaction/transaction/repositories/transactionRepository')
+const {
+  transactionRepository,
+  getTransactionById,
+  updateTransactionStatus
+} = require('../../../transaction/public')
 
 const processRepository =
   require('../../processDefinition/repositories/processRepository')
@@ -48,7 +48,7 @@ async function startWorkflow ({
       : (
         dbTransaction
           ? transactionRepository.findById(transactionId, dbTransaction)
-          : transactionClient.getTransactionById(transactionId)
+          : getTransactionById(transactionId)
       ),
     processRepository.findByCode(processCode)
   ])
@@ -119,7 +119,7 @@ async function startWorkflow ({
         dbTransaction
       )
     } else {
-      await transactionClient.updateStatus(transaction.id, 'in_progress')
+      await updateTransactionStatus(transaction.id, 'in_progress')
     }
 
     const transactionPlain = typeof transaction.get === 'function'

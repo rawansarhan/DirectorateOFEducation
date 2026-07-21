@@ -5,20 +5,18 @@
  * موقّعون + طالب المعاملة + تواريخ + final_document + transaction_history
  */
 
-const processRepository = require('../../../workflow/processDefinition/repositories/processRepository')
+const {
+  processRepository,
+  formatTransactionHistoryForDisplay,
+  enrichHistoryTemplatesWithDocumentInstances,
+  normalizeProcessPriority,
+  formatTransactionDate
+} = require('../../../workflow/public')
 const documentInstanceRepository = require('../../document/repositories/documentInstanceRepository')
 const documentFinalTransactionRepository =
   require('../../certificate/repositories/documentFinalTransactionRepository')
 const transactionSignatureLinkRepository =
   require('../repositories/transactionSignatureLinkRepository')
-const {
-  formatTransactionHistoryForDisplay,
-  enrichHistoryTemplatesWithDocumentInstances
-} = require('../../../workflow/taskCamunda/utils/transactionHistoryDisplay')
-const {
-  normalizeProcessPriority,
-  formatTransactionDate
-} = require('../../../workflow/taskCamunda/utils/employeeTaskFormatters')
 const {
   toIdentityPersonDTO,
   toSignerDTO,

@@ -5,11 +5,10 @@ const {
 } = require('../../mappers/completeTaskMapper')
 const documentTemplateRepository =
   require('../../../../requirements/DocTemp/repositories/documentTemplateRepository')
-const documentInstanceRepository =
-  require('../../../../transaction/document/repositories/documentInstanceRepository')
 const {
+  documentInstanceRepository,
   generateMergedFinalDocument
-} = require('../../../../transaction/certificate/services/finalDocumentBuilderService')
+} = require('../../../../transaction/public')
 
 const LOG_PREFIX = '[CompleteTask]'
 

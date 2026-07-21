@@ -1,15 +1,13 @@
 'use strict'
 
-const documentInstanceRepository = require('../../../transaction/document/repositories/documentInstanceRepository')
 const documentTemplateRepository = require('../../../requirements/DocTemp/repositories/documentTemplateRepository')
-const transactionRepository = require('../../../transaction/transaction/repositories/transactionRepository')
 const {
+  documentInstanceRepository,
+  transactionRepository,
   fillTemplatePdfDocument,
-  persistFilledPdfDocument
-} = require('../../../transaction/document/services/pdfGenerationService')
-const {
+  persistFilledPdfDocument,
   ensureGenesisHash
-} = require('../../../transaction/integrityChain/services/integrityChainService')
+} = require('../../../transaction/public')
 
 function extractTemplateValuesFromList (templates, templateId) {
   for (const item of templates || []) {

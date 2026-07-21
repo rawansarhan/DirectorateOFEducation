@@ -5,7 +5,7 @@ const processInstanceRepository = require('../repositories/processInstanceReposi
 const employeeTaskRepository = require('../repositories/employeeTaskRepository')
 const stageRepository = require('../../processDefinition/repositories/stageRepository')
 const transactionRepository =
-  require('../../../transaction/transaction/repositories/transactionRepository')
+  require('../../../transaction/public').transactionRepository
 const {
   invalidateEmployeeTasksForUser,
   invalidateEmployeeTaskStats

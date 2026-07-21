@@ -3,7 +3,7 @@
 const camundaClient = require('../../../../../core/shared/clients/camunda/camundaClient')
 const processInstanceRepository = require('../../repositories/processInstanceRepository')
 const transactionRepository =
-  require('../../../../transaction/transaction/repositories/transactionRepository')
+  require('../../../../transaction/public').transactionRepository
 const {
   buildTransactionSignatureLedger
 } = require('../transactionSigningService')

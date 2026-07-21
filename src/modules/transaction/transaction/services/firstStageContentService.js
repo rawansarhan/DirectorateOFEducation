@@ -1,17 +1,17 @@
 'use strict'
 
 const transactionRepository = require('../repositories/transactionRepository')
-const processRepository = require('../../../workflow/processDefinition/repositories/processRepository')
-const stageRepository = require('../../../workflow/processDefinition/repositories/stageRepository')
+const {
+  processRepository,
+  stageRepository,
+  buildHistoryStageEntry
+} = require('../../../workflow/public')
 const {
   parsePositiveInt
 } = require('../validations/transactionValidations')
 const {
   createTransactionError
 } = require('../utils/transactionErrors')
-const {
-  buildHistoryStageEntry
-} = require('../../../workflow/taskCamunda/utils/transactionHistoryDisplay')
 
 const APPLICANT_STAGE_KEYS = new Set([
   'stage_name',
