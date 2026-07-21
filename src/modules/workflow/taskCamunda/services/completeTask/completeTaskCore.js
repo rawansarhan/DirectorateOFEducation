@@ -13,11 +13,19 @@ const { runRejectFlow } = require('./completeTaskRejectFlow')
 const { runApproveFlow } = require('./completeTaskApproveFlow')
 const { releaseLockAndInvalidateCaches } = require('./completeTaskPostComplete')
 const {
-  buildCompleteResponse
+  buildCompleteResponse,
+  logStep
 } = require('./completeTaskHelpers')
+const {
+  persistVerifiedSignature
+} = require('../transactionSigningService')
+const { toPublicSignatureRecord } = require('../../mappers/completeTaskMapper')
 
 /**
  * Core complete-task pipeline (orchestration only).
+ *
+ * ترتيب مهم: حفظ التوقيع في DB قبل completeCamunda
+ * حتى لا تُنجَز المهمة في Camunda ثم يفشل حفظ التوقيع.
  */
 async function completeTaskCore ({
   taskId,
@@ -90,6 +98,30 @@ async function completeTaskCore ({
     userId
   })
 
+  let digitalSignatureRecord = null
+
+  // حفظ التوقيع قبل Camunda — إن فشل يبقى الـ task نشطاً
+  if (signingRequest) {
+    logStep('PHASE_10_PERSIST_SIGNATURE_BEFORE_CAMUNDA', {
+      challengeId: signingRequest.challengeId
+    })
+
+    digitalSignatureRecord = await persistVerifiedSignature({
+      challengeId: signingRequest.challengeId,
+      signature: signingRequest.signature,
+      userId,
+      clientMeta,
+      dbTransaction
+    })
+
+    stageSnapshot.digital_signature =
+      toPublicSignatureRecord(digitalSignatureRecord)
+
+    logStep('SIGNATURE_PERSISTED_BEFORE_CAMUNDA', {
+      digitalSignatureId: digitalSignatureRecord.digital_signature_id
+    })
+  }
+
   const { routingValue } = await completeCamundaTaskWithVariables({
     task,
     stage,
@@ -118,6 +150,7 @@ async function completeTaskCore ({
     sequelize
   } = await persistCompleteTaskSideEffects({
     signingRequest,
+    digitalSignatureRecord,
     clientMeta,
     userId,
     task,

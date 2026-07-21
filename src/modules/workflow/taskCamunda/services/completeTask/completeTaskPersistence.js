@@ -21,6 +21,7 @@ const {
 
 async function persistCompleteTaskSideEffects ({
   signingRequest,
+  digitalSignatureRecord: prePersistedSignature = null,
   clientMeta,
   userId,
   task,
@@ -33,7 +34,7 @@ async function persistCompleteTaskSideEffects ({
   stageSnapshot,
   dbTransaction = null
 }) {
-  let digitalSignatureRecord = null
+  let digitalSignatureRecord = prePersistedSignature
   let nextVersion = currentVersion
   const sequelize = processInstanceRepository.getSequelize()
   const stagePersistenceStatus = isReject ? 'rejected' : 'completed'
@@ -45,7 +46,8 @@ async function persistCompleteTaskSideEffects ({
   })
 
   await withDbTransaction(sequelize, dbTransaction, async (dbTx) => {
-    if (signingRequest) {
+    // إن حُفظ التوقيع قبل Camunda — لا نعيد الحفظ هنا
+    if (signingRequest && !digitalSignatureRecord) {
       logStep('PHASE_12_PERSIST_SIGNATURE', {
         challengeId: signingRequest.challengeId
       })
@@ -66,6 +68,17 @@ async function persistCompleteTaskSideEffects ({
       logStep('SIGNATURE_PERSISTED', {
         digitalSignatureId: digitalSignatureRecord.digital_signature_id
       })
+    } else if (signingRequest && digitalSignatureRecord) {
+      logStep('PHASE_12_SIGNATURE_ALREADY_PERSISTED', {
+        digitalSignatureId: digitalSignatureRecord.digital_signature_id
+      })
+
+      if (!stageSnapshot.digital_signature) {
+        stageSnapshot.digital_signature =
+          toPublicSignatureRecord(digitalSignatureRecord)
+      }
+
+      appendSignatureToTransactionData(transactionData, digitalSignatureRecord)
     } else {
       logStep('PHASE_12_SKIP_SIGNATURE_PERSIST', { reason: 'no_signing_request' })
     }

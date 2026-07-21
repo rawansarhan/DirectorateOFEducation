@@ -550,7 +550,8 @@ async function verifySignatureForComplete ({
 }
 
 /**
- * حفظ التوقيع بعد نجاح Camunda — ضمن transaction DB واحدة.
+ * حفظ التوقيع بعد التحقق — يُستدعى قبل completeCamunda
+ * حتى لا تُنجَز المهمة ثم يفشل الإدراج في document_signature.
  */
 async function persistVerifiedSignature ({
   challengeId,
