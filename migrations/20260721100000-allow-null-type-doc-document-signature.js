@@ -2,16 +2,17 @@
 
 /**
  * سجلات التوقيع الرقمي الاصطناعي (transaction://…) ليست ملفات مرفوعة —
- * type_doc_id يجب أن يكون NULL لها. الملفات الحقيقية من file_picker تبقى لها type_doc_id.
+ * type_doc_id يجب أن يكون NULL لها.
+ *
+ * ملاحظة PostgreSQL: لا نستخدم changeColumn مع references هنا
+ * لأنه يحاول إعادة إنشاء الـ FK ويفشل غالباً.
  */
 module.exports = {
-  up: async (queryInterface, Sequelize) => {
-    await queryInterface.changeColumn('document_signature', 'type_doc_id', {
-      type: Sequelize.INTEGER,
-      allowNull: true,
-      references: { model: 'type_docs', key: 'id' },
-      onDelete: 'RESTRICT'
-    })
+  up: async (queryInterface) => {
+    await queryInterface.sequelize.query(`
+      ALTER TABLE document_signature
+      ALTER COLUMN type_doc_id DROP NOT NULL
+    `)
 
     await queryInterface.sequelize.query(`
       UPDATE document_signature
@@ -20,7 +21,7 @@ module.exports = {
     `)
   },
 
-  down: async (queryInterface, Sequelize) => {
+  down: async (queryInterface) => {
     await queryInterface.sequelize.query(`
       UPDATE document_signature
       SET type_doc_id = (
@@ -33,18 +34,16 @@ module.exports = {
     `)
 
     await queryInterface.sequelize.query(`
-      UPDATE document_signature ds
+      UPDATE document_signature
       SET type_doc_id = (
         SELECT id FROM type_docs ORDER BY id ASC LIMIT 1
       )
-      WHERE ds.type_doc_id IS NULL
+      WHERE type_doc_id IS NULL
     `)
 
-    await queryInterface.changeColumn('document_signature', 'type_doc_id', {
-      type: Sequelize.INTEGER,
-      allowNull: false,
-      references: { model: 'type_docs', key: 'id' },
-      onDelete: 'RESTRICT'
-    })
+    await queryInterface.sequelize.query(`
+      ALTER TABLE document_signature
+      ALTER COLUMN type_doc_id SET NOT NULL
+    `)
   }
 }
