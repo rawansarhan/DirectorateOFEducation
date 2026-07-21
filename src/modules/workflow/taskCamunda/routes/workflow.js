@@ -660,6 +660,8 @@ router.get(
 
  *       - `id_task` — استخدمه في مسار POST `/tasks/{taskId}/...`
 
+ *       - `expected_version` — أرسله كما هو في POST `/complete` (تجنّب VERSION_CONFLICT)
+
  *       - `process_definition_name`, `name_task`, `applicant`, `submitted_at`
 
  *       - `transaction_history`: `{ process_name, priority, data }`

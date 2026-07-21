@@ -34,6 +34,9 @@ class TaskDetailsOutputDTO {
 
     this.submitted_at = formatTransactionDate(transaction?.created_at)
 
+    // يُستخدم في POST /complete كـ expected_version لتجنّب VERSION_CONFLICT
+    this.expected_version = transaction?.version ?? null
+
     this.transaction_history = {
       process_name: processDef?.name ?? null,
       priority: normalizeProcessPriority(processDef?.priority),

@@ -639,6 +639,12 @@ module.exports = {
                 "example": "978bbc76-6650-11f1-ade6-2e8996ed1457",
                 "description": "معرّف مهمة Camunda — يُستخدم في POST /tasks/{taskId}/complete و signing-challenge"
               },
+              "expected_version": {
+                "type": "integer",
+                "nullable": true,
+                "example": 3,
+                "description": "transaction.version — أرسله في POST /complete كـ expected_version"
+              },
               "name_task": {
                 "type": "string",
                 "example": "التشيك على المعلومات المدخلة"
