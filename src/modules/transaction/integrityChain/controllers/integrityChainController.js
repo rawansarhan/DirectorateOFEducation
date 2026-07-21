@@ -114,6 +114,9 @@ async function verifyDocumentController (req, res) {
   }
 }
 
+/**
+ * جلب تفاصيل المعاملة باستخدام رمز QR (6 أرقام) — يتطلب Bearer token.
+ */
 async function getDocumentVerifyDetailsController (req, res) {
   try {
     const code = req.query.code || req.body?.code || req.body?.details_code
@@ -133,6 +136,9 @@ async function getDocumentVerifyDetailsController (req, res) {
   }
 }
 
+/**
+ * جلب تفاصيل المعاملة عبر transaction_id — يتطلب Bearer token.
+ */
 async function getDocumentVerifyDetailsByTransactionController (req, res) {
   try {
     const transactionId =
