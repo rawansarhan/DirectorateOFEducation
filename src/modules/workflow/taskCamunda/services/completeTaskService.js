@@ -13,6 +13,9 @@ const { v4: uuidv4 } = require('uuid')
 const securityGuardService = require('../../../../core/security/securityGuardService')
 const operationGuardService = require('../../../../core/security/operationGuardService')
 const {
+  handleWorkflowTechnicalFailure
+} = require('../../../notification/services/workflowTechnicalFailureHandlerService')
+const {
   buildAutoCompleteAuthPayload,
   buildCompleteTaskGuardKey,
   logStep
@@ -119,6 +122,19 @@ async function completeTask ({
     })
 
     operationGuardService.release(guardContext)
+
+    // فشل تقني → رفض المعاملة + إشعار صاحبها / الموظف / المسؤول التقني
+    handleWorkflowTechnicalFailure({
+      taskId,
+      actorUserId: userId,
+      error
+    }).catch(handlerError => {
+      console.error(
+        '[WorkflowTechnicalFailure] handler error:',
+        handlerError?.message || handlerError
+      )
+    })
+
     throw error
   }
 }

@@ -18,6 +18,9 @@ const {
   buildAutoCompleteAuthPayload
 } = require('./completeTaskService')
 const { toStartWorkflow } = require('../mappers/startWorkflowMapper')
+const {
+  handleWorkflowTechnicalFailure
+} = require('../../../notification/services/workflowTechnicalFailureHandlerService')
 
 async function rollbackCamundaProcess (camundaProcessInstanceId) {
   if (!camundaProcessInstanceId) {
@@ -74,6 +77,7 @@ async function startWorkflow ({
   }
 
   let camundaProcess = null
+  let processInstance = null
 
   try {
     camundaProcess = await camundaClient.startProcess(
@@ -81,7 +85,7 @@ async function startWorkflow ({
       transaction.id
     )
 
-    const processInstance = await processInstanceRepository.create({
+    processInstance = await processInstanceRepository.create({
       process_definition_id: process.id,
       transaction_id: transaction.id,
       camunda_process_instance_id: camundaProcess.id,
@@ -137,6 +141,19 @@ async function startWorkflow ({
     }
   } catch (error) {
     await rollbackCamundaProcess(camundaProcess?.id)
+
+    handleWorkflowTechnicalFailure({
+      actorUserId: transaction.user_id,
+      error,
+      transaction,
+      processInstance
+    }).catch(handlerError => {
+      console.error(
+        '[WorkflowTechnicalFailure] startWorkflow handler error:',
+        handlerError?.message || handlerError
+      )
+    })
+
     throw error
   }
 }
