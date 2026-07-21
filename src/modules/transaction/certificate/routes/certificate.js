@@ -6,8 +6,7 @@ const router = express.Router()
 const {
   getCertificateController,
   uploadFinalDocumentController,
-  getFinalDocumentController,
-  getFinalDocumentGeneralController
+  getFinalDocumentController
 } = require('../controllers/transactionCertificateController')
 
 const {
@@ -174,36 +173,6 @@ router.get(
   '/:transactionId/final-document',
   authMiddleware,
   getFinalDocumentController
-)
-
-/**
- * @swagger
- * /api/transaction/{transactionId}/final-document/general:
- *   get:
- *     summary: جلب الوثيقة النهائية المحفوظة (بدون تقييد مالك)
- *     description: |
- *       يعيد نفس سجل الوثيقة النهائية، لكن بدون شرط أن يكون المستخدم مالك المعاملة.
- *       يتطلب فقط مستخدم مسجّل الدخول.
- *     tags: [Certificate & Integrity Chain]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: transactionId
- *         required: true
- *         schema:
- *           type: integer
- *           minimum: 1
- *     responses:
- *       200:
- *         description: تم جلب الوثيقة النهائية بنجاح
- *       404:
- *         description: لا توجد وثيقة نهائية محفوظة
- */
-router.get(
-  '/:transactionId/final-document/general',
-  authMiddleware,
-  getFinalDocumentGeneralController
 )
 
 module.exports = router

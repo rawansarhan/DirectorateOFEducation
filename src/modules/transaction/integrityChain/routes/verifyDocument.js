@@ -6,7 +6,8 @@ const router = express.Router()
 const { authMiddleware } = require('../../../../core/middleware/authMiddleware')
 const {
   verifyDocumentController,
-  getDocumentVerifyDetailsController
+  getDocumentVerifyDetailsController,
+  getDocumentVerifyDetailsByTransactionController
 } = require('../controllers/integrityChainController')
 
 /**
@@ -130,5 +131,74 @@ router.get('/document', verifyDocumentController)
  *         description: المعاملة غير موجودة
  */
 router.get('/document/details', authMiddleware, getDocumentVerifyDetailsController)
+
+/**
+ * @swagger
+ * /api/verify/document/details/by-transaction:
+ *   get:
+ *     summary: تفاصيل المعاملة عبر transaction_id
+ *     description: |
+ *       نفس بيانات `GET /api/verify/document/details` لكن عبر `transaction_id`
+ *       بدل رمز التفاصيل المؤقت.
+ *
+ *       يعيد: الموقّعين، طالب المعاملة، transaction_history، final_document،
+ *       تاريخ الطلب وتاريخ الإكمال/الرفض.
+ *     tags: [IntegrityChain]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: transaction_id
+ *         required: true
+ *         schema: { type: integer, minimum: 1 }
+ *         description: معرّف المعاملة
+ *         example: 42
+ *     responses:
+ *       200:
+ *         description: تفاصيل التحقق
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: true
+ *               status_code: 200
+ *               message: تم جلب تفاصيل التحقق من الوثيقة بنجاح
+ *               data:
+ *                 applicant:
+ *                   first_name: أحمد
+ *                   last_name: علي
+ *                   father_name: محمد
+ *                   mother_name: فاطمة
+ *                   national_id: "01234567890"
+ *                 signers:
+ *                   - signature_order: 1
+ *                     first_name: سلى
+ *                     last_name: أحمد
+ *                     father_name: خالد
+ *                     mother_name: مريم
+ *                     national_id: "09876543210"
+ *                 transaction:
+ *                   id: 42
+ *                   status: completed
+ *                   request_date: 01/07/2026
+ *                   completed_at: 18/07/2026
+ *                   rejected_at: null
+ *                 transaction_history:
+ *                   id_process: TX-2026-00042
+ *                   data: {}
+ *                 final_document:
+ *                   available: true
+ *                   file_url: https://host/uploads/final/tx-42.pdf
+ *       401:
+ *         description: Bearer token مطلوب أو غير صالح
+ *       400:
+ *         description: معرّف المعاملة غير صالح
+ *       404:
+ *         description: المعاملة غير موجودة
+ */
+router.get(
+  '/document/details/by-transaction',
+  authMiddleware,
+  getDocumentVerifyDetailsByTransactionController
+)
 
 module.exports = router

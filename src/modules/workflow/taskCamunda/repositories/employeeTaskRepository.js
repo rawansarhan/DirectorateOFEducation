@@ -308,47 +308,6 @@ async function getRunningInstancesForProcessDefinitions ({
   })
 }
 
-async function getRunningInstancesForStages ({
-  stageIds,
-  processDefinitionIds
-}) {
-  if (!stageIds.length || !processDefinitionIds.length) {
-    return []
-  }
-
-  return db.ProcessInstance.findAll({
-    where: {
-      status: 'running',
-      current_stage_id: {
-        [Op.in]: stageIds
-      },
-      process_definition_id: {
-        [Op.in]: processDefinitionIds
-      }
-    },
-    attributes: [
-      'id',
-      'process_definition_id',
-      'camunda_process_instance_id',
-      'current_stage_id',
-      'task_lock_user_id',
-      'task_lock_task_id',
-      'task_lock_expires_at',
-      'created_at'
-    ],
-    include: buildRunningListIncludes(),
-    order: [
-      [
-        { model: db.ProcessDefinition, as: 'process_definition' },
-        'priority',
-        'DESC'
-      ],
-      ['created_at', 'ASC']
-    ],
-    limit: MAX_RUNNING_FETCH
-  })
-}
-
 const TERMINAL_INCLUDES = [
   {
     model: db.Stage,
@@ -650,44 +609,6 @@ async function getRunningInstancesForDepartmentTransactions ({
   })
 }
 
-async function getTerminalInstancesForStages ({
-  processDefinitionIds,
-  transactionStatus,
-  limit,
-  offset
-}) {
-  if (!processDefinitionIds.length) {
-    return { rows: [], count: 0 }
-  }
-
-  return db.ProcessInstance.findAndCountAll({
-    where: {
-      status: 'completed',
-      process_definition_id: {
-        [Op.in]: processDefinitionIds
-      }
-    },
-    attributes: ['id', 'process_definition_id', 'current_stage_id', 'created_at', 'updated_at'],
-    include: [
-      TERMINAL_INCLUDES[0],
-      TERMINAL_INCLUDES[1],
-      {
-        ...TERMINAL_INCLUDES[2],
-        where: {
-          status: transactionStatus
-        }
-      }
-    ],
-    order: [
-      [{ model: db.ProcessDefinition, as: 'process_definition' }, 'priority', 'DESC'],
-      [{ model: db.Transaction, as: 'transaction' }, 'created_at', 'ASC']
-    ],
-    limit,
-    offset,
-    distinct: true
-  })
-}
-
 const USER_STAGE_INCLUDES = [
   {
     model: db.Transaction,
@@ -954,8 +875,6 @@ module.exports = {
   getUserIdsForOrgDeptRoleIds,
   getRunningInstancesForAssigneeRoute,
   getRunningInstancesForProcessDefinitions,
-  getRunningInstancesForStages,
-  getTerminalInstancesForStages,
   getStagesCompletedByUser,
   getTerminalInstancesByDepartments,
   countTerminalTransactionsByDepartments,
@@ -964,6 +883,5 @@ module.exports = {
   userHasDepartmentsAccess,
   countStagesByProcessDefinitionIds,
   countCompletedStagesByTransactionIds,
-  getCompletedStageCodesByTransactionIds,
-  MAX_RUNNING_FETCH
+  getCompletedStageCodesByTransactionIds
 }

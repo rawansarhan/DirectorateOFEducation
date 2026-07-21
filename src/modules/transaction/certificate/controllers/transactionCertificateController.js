@@ -72,24 +72,8 @@ async function getFinalDocumentController (req, res) {
   }
 }
 
-async function getFinalDocumentGeneralController (req, res) {
-  try {
-    const data = await getFinalDocument(req.params.transactionId, {
-      userId: null
-    })
-
-    return successResponse(res, {
-      message: 'تم جلب الوثيقة النهائية بنجاح',
-      data
-    })
-  } catch (err) {
-    return handleCertificateError(res, err)
-  }
-}
-
 module.exports = {
   getCertificateController,
   uploadFinalDocumentController,
-  getFinalDocumentController,
-  getFinalDocumentGeneralController
+  getFinalDocumentController
 }

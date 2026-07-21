@@ -148,10 +148,6 @@ const documentUploadRoutes =
   require('./modules/transaction/document/routes/documentUpload')
 app.use('/api/transaction/files', documentUploadRoutes)
 
-const transactionDocumentsRoutes =
-  require('./modules/transaction/document/routes/documentsTransaction')
-app.use('/api/transaction', transactionDocumentsRoutes)
-
 const notificationRoutes = require('./modules/notification/routes/notification')
 app.use('/api/notifications', notificationRoutes)
 
