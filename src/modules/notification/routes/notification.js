@@ -166,4 +166,10 @@ router.patch(
   markNotificationReadController
 )
 
+router.put(
+  '/:notificationId/read',
+  authMiddleware,
+  markNotificationReadController
+)
+
 module.exports = router

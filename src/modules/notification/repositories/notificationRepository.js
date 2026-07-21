@@ -110,17 +110,29 @@ class NotificationRepository {
   }
 
   async markAsRead (notificationId, userId) {
-    const row = await this.findByIdForUser(notificationId, userId)
+    const id = Number(notificationId)
+    const uid = Number(userId)
 
-    if (!row) {
+    if (!Number.isInteger(id) || id < 1 || !Number.isInteger(uid) || uid < 1) {
       return null
     }
 
-    if (!row.read_at) {
-      await row.update({ read_at: new Date() })
+    // كتابة مباشرة على الجدول — بدون الاعتماد على حالة الـ instance بالذاكرة
+    const [affected] = await Notification.update(
+      { read_at: new Date() },
+      {
+        where: {
+          id,
+          user_id: uid
+        }
+      }
+    )
+
+    if (!affected) {
+      return null
     }
 
-    return row
+    return this.findByIdForUser(id, uid)
   }
 }
 

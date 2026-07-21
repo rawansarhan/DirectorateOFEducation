@@ -19,8 +19,8 @@ class NotificationListItemDTO {
     this.metadata = row.metadata || null
     this.sent_count = row.sent_count
     this.failed_count = row.failed_count
-    this.is_read = Boolean(row.read_at)
-    this.read_at = row.read_at
+    this.is_read = row.read_at != null
+    this.read_at = row.read_at ?? null
     this.created_at = row.created_at
   }
 }

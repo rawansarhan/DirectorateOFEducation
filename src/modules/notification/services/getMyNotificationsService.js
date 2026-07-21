@@ -115,9 +115,17 @@ async function markNotificationAsRead ({ userId, notificationId }) {
     )
   }
 
+  const unreadCount = await retryWithBackoff(
+    () => notificationRepository.countUnreadByUserId(userId),
+    { label: 'notification.countUnreadByUserId' }
+  )
+
   return {
     message: MESSAGES.MARKED_READ,
-    data: toListItemDTO(row)
+    data: {
+      ...toListItemDTO(row),
+      unread_count: unreadCount
+    }
   }
 }
 
