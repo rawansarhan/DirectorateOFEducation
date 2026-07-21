@@ -34,7 +34,7 @@ module.exports = (sequelize, DataTypes) => {
       },
       type_doc_id: {
         type: DataTypes.INTEGER,
-        allowNull: false
+        allowNull: true
       },
       created_at: {
         type: DataTypes.DATE,

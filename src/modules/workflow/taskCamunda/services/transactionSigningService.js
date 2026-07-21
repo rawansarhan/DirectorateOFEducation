@@ -19,8 +19,6 @@ const documentSignatureRepository =
   require('../repositories/documentSignatureRepository')
 const digitalSignatureRepository =
   require('../repositories/digitalSignatureRepository')
-const { findOrCreateTypeDocByName } = require('../../../requirements/typeDoc/services/typeDocService')
-const { DIGITAL_SIGNED_DOCUMENT_TYPE } = require('../../../requirements/typeDoc/constants/typeDocDefaults')
 
 const {
   buildTransactionSignMessage,
@@ -598,12 +596,12 @@ async function persistVerifiedSignature ({
     }
 
     const stage = await stageRepository.findById(challenge.stage_id)
-    const signedTypeDoc = await findOrCreateTypeDocByName(DIGITAL_SIGNED_DOCUMENT_TYPE)
 
+    // مسار اصطناعي — ليس ملفًا مرفوعًا، فلا يُربط type_doc_id
     const document = await documentSignatureRepository.create({
       transaction_id: challenge.transaction_id,
       file_path: `transaction://${challenge.transaction_id}/stage/${challenge.stage_id}`,
-      type_doc_id: signedTypeDoc.id
+      type_doc_id: null
     }, { transaction })
 
     const previousSignature =
