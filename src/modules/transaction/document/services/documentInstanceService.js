@@ -15,7 +15,6 @@
  *       POST /workflow/tasks/{id}/submit-documents/complete
  */
 
-const documentInstanceRepository = require('../repositories/documentInstanceRepository')
 const documentTemplateRepository = require('../../../requirements/DocTemp/repositories/documentTemplateRepository')
 
 function createDocumentInstanceError (message) {
@@ -44,22 +43,10 @@ async function registerTemplateForTransaction ({
     )
   }
 
-  // لا نُنشئ document_instance هنا — فقط إن وُجدت نسخة ناجحة مسبقاً نربط معرّفها
-  const existing = await documentInstanceRepository.findByTransactionAndTemplate(
-    transactionId,
-    numericTemplateId
-  )
-
-  const existingId =
-    existing?.generated_pdf_path
-      ? existing.id
-      : null
-
+  // لا نُنشئ document_instance هنا — يُنشأ لاحقاً عند نجاح GENERATE_PDF
   return {
     id: numericTemplateId,
     id_template: numericTemplateId,
-    document_instance_id: existingId,
-    id_document_instance: existingId,
     values,
     value: values
   }

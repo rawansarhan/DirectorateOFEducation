@@ -54,10 +54,7 @@ function resolveStoredDecision (payload = {}) {
 function mapTemplatesForStorage (templates = []) {
   return (templates || []).map(item => ({
     id_template: item.id_template ?? item.id ?? item.template_id ?? null,
-    id_document_instance:
-      item.id_document_instance ?? item.document_instance_id ?? null,
-    value: item.values ?? item.value ?? {},
-    generated_pdf_path: item.generated_pdf_path ?? null
+    value: item.values ?? item.value ?? {}
   }))
 }
 

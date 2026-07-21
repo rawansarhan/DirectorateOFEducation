@@ -593,7 +593,7 @@ router.get(
 
  *       **Auth:** Bearer (تسجيل دخول فقط — بدون تقييد دور داخل المنطق)
 
- *       **متاح فقط للمعاملات completed**
+ *       متاح لأي حالة معاملة — يعرض transaction_history حتى لو لم تكتمل.
 
  *     tags: [Workflow]
 
@@ -621,7 +621,7 @@ router.get(
 
  *       400:
 
- *         description: المعاملة ليست completed
+ *         description: خطأ في الطلب
 
  *       404:
 
@@ -662,7 +662,7 @@ router.get(
 
  *       - `process_definition_name`, `name_task`, `applicant`, `submitted_at`
 
- *       - `transaction_history`: `{ id_process, priority, data }`
+ *       - `transaction_history`: `{ process_name, priority, data }`
 
  *       - `currentStage`: المرحلة الحالية + `config` (استمارة الإكمال)
 

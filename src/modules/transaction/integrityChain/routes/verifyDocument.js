@@ -86,8 +86,14 @@ router.get('/document', verifyDocumentController)
  *       - in: query
  *         name: code
  *         required: true
- *         schema: { type: string, pattern: '^\\d{6}$' }
- *         description: رمز التحقق من QR (6 أرقام)
+ *         schema:
+ *           type: string
+ *           minLength: 6
+ *           maxLength: 6
+ *           pattern: '^[0-9]{6}$'
+ *           example: '482913'
+ *         description: رمز التحقق من QR (6 أرقام إنجليزية 0-9)
+ *         example: '482913'
  *     responses:
  *       200:
  *         description: تفاصيل التحقق

@@ -8,6 +8,7 @@ const {
   normalizeActionPayload,
   resolveActionsForStage
 } = require('../../../actions/actionHelpers')
+const { extractPdfFieldsFromActionResults } = require('../../utils/generatedPdfHistory')
 const { logStep } = require('./completeTaskHelpers')
 
 async function executeActions (actions, context) {
@@ -118,18 +119,22 @@ async function runServiceTaskActions ({
       userId
     })
 
+    const pdfFields = extractPdfFieldsFromActionResults(actionResults) || {}
+
     transactionData[serviceStage.code] = {
       ...(transactionData[serviceStage.code] || {}),
       stage_name: serviceStage.name,
-      form_id: stageConfig?.config_json?.form_id ?? null,
-      form_name: stageConfig?.config_json?.form_name ?? null,
+      form_id: stageConfig?.config_json?.form_id ?? serviceStage.code,
+      form_name: stageConfig?.config_json?.form_name ?? serviceStage.name,
       actions: [
         ...(transactionData[serviceStage.code]?.actions || []),
         ...actionResults
       ],
       executed_at: new Date(),
       executed_by: 'system',
-      completed_at: new Date()
+      completed_by: null,
+      completed_at: new Date(),
+      ...pdfFields
     }
 
     executedServiceTasks.add(taskKey)

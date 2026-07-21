@@ -12,7 +12,10 @@ eventBus.subscribe(EVENTS.GENERATE_PDF, async payload => {
     templateId: payload?.template_id
   })
 
-  const result = await executeGeneratePdfJob(payload)
+  const result = await executeGeneratePdfJob({
+    ...payload,
+    persist_history: true
+  })
 
   console.log('[GeneratePDF] outbox job done', {
     transactionId: result.transaction_id,

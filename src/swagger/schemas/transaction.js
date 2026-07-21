@@ -282,16 +282,6 @@ module.exports = {
               "nullable": true,
               "example": 1
             },
-            "id_document_instance": {
-              "type": "integer",
-              "nullable": true,
-              "example": 55
-            },
-            "generated_pdf_path": {
-              "type": "string",
-              "nullable": true,
-              "example": "/uploads/final/tx-42-template.pdf"
-            },
             "value": {
               "type": "object",
               "example": {
@@ -1478,6 +1468,19 @@ module.exports = {
             "completed_at": {
               "type": "string",
               "nullable": true
+            },
+            "id_document_instance": {
+              "type": "integer",
+              "nullable": true,
+              "description": "يُملأ على مرحلة GENERATE_PDF بعد نجاح التوليد"
+            },
+            "generated_pdf_path": {
+              "type": "string",
+              "nullable": true
+            },
+            "generated_pdf_url": {
+              "type": "string",
+              "nullable": true
             }
           }
         }
@@ -1487,10 +1490,10 @@ module.exports = {
   "CertificateTransactionHistoryBlock": {
     "type": "object",
     "properties": {
-      "id_process": {
+      "process_name": {
         "type": "string",
         "nullable": true,
-        "example": "STUTR-2026-001"
+        "example": "توكيل تربوي"
       },
       "priority": {
         "type": "integer",

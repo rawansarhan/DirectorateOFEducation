@@ -77,7 +77,7 @@ async function buildDocumentQrScanBundle (transaction) {
     applicant: toIdentityPersonDTO(transaction),
     signers: (signerLinks || []).map(toSignerDTO),
     transaction_history: {
-      id_process: transaction.id_process ?? null,
+      process_name: process?.name ?? null,
       priority: normalizeProcessPriority(process?.priority),
       data: historyData
     },

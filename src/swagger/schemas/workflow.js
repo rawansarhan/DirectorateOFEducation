@@ -676,10 +676,10 @@ module.exports = {
               "transaction_history": {
                 "type": "object",
                 "properties": {
-                  "id_process": {
+                  "process_name": {
                     "type": "string",
                     "nullable": true,
-                    "example": "STUTR-2026-001"
+                    "example": "توكيل تربوي"
                   },
                   "priority": {
                     "type": "integer",
@@ -876,7 +876,7 @@ module.exports = {
         },
         "submitted_at": "12/06/2026",
         "transaction_history": {
-          "id_process": "STUTR-2026-001",
+          "process_name": "توكيل تربوي",
           "priority": 1,
           "data": {
             "applicant": {

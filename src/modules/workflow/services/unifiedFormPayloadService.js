@@ -11,7 +11,6 @@ const {
 const {
   validateAndNormalizeTemplates
 } = require('../validators/templateSubmissionValidator')
-const { toPublicFileUrl } = require('../../../core/utils/filePath')
 
 const formWidgetWithValueSchema = Joi.object({
   widget_type: Joi.string()
@@ -222,21 +221,10 @@ function extractGatewayValue (configJson = {}, widgets = []) {
 }
 
 function mapTemplatesForHistory (templates = []) {
-  return (templates || []).map(item => {
-    const generatedPdfPath = item.generated_pdf_path ?? null
-
-    return {
-      id_template:
-        item.id_template ?? item.id ?? item.template_id ?? null,
-      id_document_instance:
-        item.id_document_instance ?? item.document_instance_id ?? null,
-      generated_pdf_path: generatedPdfPath,
-      generated_pdf_url: generatedPdfPath
-        ? toPublicFileUrl(generatedPdfPath)
-        : null,
-      value: item.values ?? item.value ?? {}
-    }
-  })
+  return (templates || []).map(item => ({
+    id_template: item.id_template ?? item.id ?? item.template_id ?? null,
+    value: item.values ?? item.value ?? {}
+  }))
 }
 
 // يستخرج معرّفات القوالب المطلوبة من stage_config.config_json.template

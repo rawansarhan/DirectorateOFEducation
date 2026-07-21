@@ -68,7 +68,10 @@ class GeneratePdfStrategy {
     }
 
     try {
-      const result = await executeGeneratePdfJob(jobPayload)
+      const result = await executeGeneratePdfJob({
+        ...jobPayload,
+        persist_history: false
+      })
 
       return {
         type: 'pdf',

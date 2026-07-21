@@ -67,7 +67,9 @@ async function buildStageSnapshot ({
       stage?.auth_type === 'AUTH' &&
       Array.isArray(transaction.data?.templates) &&
       transaction.data.templates.some(
-        item => item?.id_document_instance != null || item?.document_instance_id != null
+        item =>
+          (item?.id_template ?? item?.id ?? item?.template_id) != null &&
+          (item?.values != null || item?.value != null)
       )
 
     if (skipTemplateRegistration) {

@@ -35,7 +35,7 @@ class TaskDetailsOutputDTO {
     this.submitted_at = formatTransactionDate(transaction?.created_at)
 
     this.transaction_history = {
-      id_process: transaction?.id_process ?? null,
+      process_name: processDef?.name ?? null,
       priority: normalizeProcessPriority(processDef?.priority),
       data: previousStagesData || {}
     }

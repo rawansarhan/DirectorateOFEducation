@@ -91,13 +91,6 @@ async function getCertificateBundle (
     throw createTransactionError('TRANSACTION_NOT_FOUND')
   }
 
-  if (!COMPLETED_STATUSES.has(transaction.status)) {
-    throw createTransactionError(
-      'VALIDATION_ERROR',
-      'الشهادة متاحة فقط للمعاملات المكتملة (completed)'
-    )
-  }
-
   const [process, documentInstances, finalDocument] =
     await Promise.all([
       transaction.code
@@ -112,15 +105,19 @@ async function getCertificateBundle (
     documentInstances
   )
 
+  const isCompleted = COMPLETED_STATUSES.has(transaction.status)
+
   return toCertificateBundleDTO({
     transaction_id: transaction.id,
     status: transaction.status,
     process_name: process?.name ?? null,
     process_priority: normalizeProcessPriority(process?.priority),
     submitted_at: formatTransactionDate(transaction.created_at),
-    completed_at: formatTransactionDate(transaction.updated_at),
+    completed_at: isCompleted
+      ? formatTransactionDate(transaction.updated_at)
+      : null,
     transaction_history: {
-      id_process: transaction.id_process ?? null,
+      process_name: process?.name ?? null,
       priority: normalizeProcessPriority(process?.priority),
       data: historyData
     },

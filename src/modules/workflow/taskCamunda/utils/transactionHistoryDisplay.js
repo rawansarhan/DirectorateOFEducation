@@ -3,13 +3,15 @@
 const {
   enrichFilePickerWidget,
   enrichStageSnapshot,
-  isStageFormSnapshot
+  isStageFormSnapshot,
+  toPublicFileUrl
 } = require('../../../../core/utils/filePath')
 const { mapTemplatesForHistory } = require('../../services/unifiedFormPayloadService')
 const {
   formatTransactionDate,
   parseTransactionDate
 } = require('./employeeTaskFormatters')
+const { resolveStagePdfFields } = require('./generatedPdfHistory')
 
 const ACTIVITY_STAGE_KEY_PATTERN = /^Activity_[A-Za-z0-9_]+$/
 
@@ -114,6 +116,14 @@ function buildHistoryStageEntry (stageData = {}) {
     entry.templates = mapTemplatesForHistory(stageData.templates)
   }
 
+  const pdfFields = resolveStagePdfFields(stageData)
+
+  if (pdfFields) {
+    entry.id_document_instance = pdfFields.id_document_instance
+    entry.generated_pdf_path = pdfFields.generated_pdf_path
+    entry.generated_pdf_url = pdfFields.generated_pdf_url
+  }
+
   return entry
 }
 
@@ -206,41 +216,75 @@ function formatTransactionHistoryForDisplay (rawData = {}, transaction = null) {
 }
 
 /**
- * Fills templates[].generated_pdf_path from document_instance rows
- * when transaction.data snapshot still has null (PDF generated later).
+ * يملأ حقول PDF على مراحل GENERATE_PDF عند غيابها في الـ snapshot
+ * (مثلاً معاملات قديمة أو نجاح outbox متأخر).
+ * قوالب USER_TASK تبقى id_template + value فقط.
  */
 function enrichHistoryTemplatesWithDocumentInstances (
   historyData = {},
   documentInstances = []
 ) {
-  const pathByInstanceId = new Map(
-    (documentInstances || [])
-      .filter(doc => doc?.id && doc.generated_pdf_path)
-      .map(doc => [doc.id, doc.generated_pdf_path])
-  )
+  const instances = (documentInstances || [])
+    .map(doc => (typeof doc.get === 'function' ? doc.get({ plain: true }) : doc))
+    .filter(doc => doc?.id && doc.generated_pdf_path)
 
-  if (!Array.isArray(historyData?.stages) || !pathByInstanceId.size) {
+  if (!Array.isArray(historyData?.stages) || !instances.length) {
     return historyData
   }
 
+  const byTemplateId = new Map()
+  const unused = new Set(instances.map(doc => Number(doc.id)))
+
+  for (const doc of instances) {
+    const templateId = Number(doc.document_template_id)
+
+    if (Number.isInteger(templateId) && templateId > 0) {
+      byTemplateId.set(templateId, doc)
+    }
+  }
+
   for (const stage of historyData.stages) {
-    if (!Array.isArray(stage.templates)) {
+    if (stage.id_document_instance && stage.generated_pdf_path) {
+      unused.delete(Number(stage.id_document_instance))
       continue
     }
 
-    for (const template of stage.templates) {
-      const instanceId = template.id_document_instance
+    const stageName = String(stage.stage_name || stage.form_name || '')
+      .toUpperCase()
+    const looksLikeGeneratePdf =
+      stageName.includes('GENERATE_PDF') ||
+      stage.id_document_instance != null ||
+      stage.generated_pdf_path != null
 
-      if (!instanceId || template.generated_pdf_path) {
-        continue
-      }
-
-      const path = pathByInstanceId.get(instanceId)
-
-      if (path) {
-        template.generated_pdf_path = path
-      }
+    if (!looksLikeGeneratePdf) {
+      continue
     }
+
+    let matched = null
+
+    if (stage.id_document_instance) {
+      matched = instances.find(
+        doc => Number(doc.id) === Number(stage.id_document_instance)
+      )
+    }
+
+    if (!matched && byTemplateId.size === 1) {
+      matched = [...byTemplateId.values()][0]
+    }
+
+    if (!matched && unused.size === 1) {
+      const onlyId = [...unused][0]
+      matched = instances.find(doc => Number(doc.id) === onlyId)
+    }
+
+    if (!matched) {
+      continue
+    }
+
+    stage.id_document_instance = Number(matched.id)
+    stage.generated_pdf_path = matched.generated_pdf_path
+    stage.generated_pdf_url = toPublicFileUrl(matched.generated_pdf_path)
+    unused.delete(Number(matched.id))
   }
 
   return historyData

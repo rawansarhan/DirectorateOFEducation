@@ -8,6 +8,10 @@ const {
   persistFilledPdfDocument,
   ensureGenesisHash
 } = require('../../../transaction/public')
+const {
+  buildGeneratedPdfHistoryFields,
+  findGeneratePdfStageKey
+} = require('../../taskCamunda/utils/generatedPdfHistory')
 
 function extractTemplateValuesFromList (templates, templateId) {
   for (const item of templates || []) {
@@ -98,6 +102,49 @@ async function resolveTemplateValues ({
   return null
 }
 
+async function applyGeneratedPdfToTransactionHistory ({
+  transactionId,
+  stageCode = null,
+  templateId = null,
+  documentInstanceId = null,
+  generatedPdfPath = null
+}) {
+  const pdfFields = buildGeneratedPdfHistoryFields({
+    documentInstanceId,
+    generatedPdfPath
+  })
+
+  if (!pdfFields) {
+    return null
+  }
+
+  const transaction = await transactionRepository.findById(transactionId)
+
+  if (!transaction) {
+    return null
+  }
+
+  const transactionData = { ...(transaction.data || {}) }
+  const stageKey =
+    (stageCode && transactionData[stageCode] ? stageCode : null) ||
+    findGeneratePdfStageKey(transactionData, templateId)
+
+  if (!stageKey) {
+    return null
+  }
+
+  transactionData[stageKey] = {
+    ...transactionData[stageKey],
+    ...pdfFields
+  }
+
+  return transactionRepository.updateDataOptimistic(
+    transactionId,
+    transactionData,
+    transaction.version
+  )
+}
+
 /**
  * Generates PDF for a transaction template (used by strategy + outbox worker).
  * لا يُنشئ document_instance إلا بعد نجاح ملء القالب وحفظ الملف.
@@ -105,7 +152,10 @@ async function resolveTemplateValues ({
 async function executeGeneratePdfJob ({
   transaction_id: transactionId,
   template_id: templateId,
-  document_instance_id: documentInstanceId = null
+  document_instance_id: documentInstanceId = null,
+  stage_code: stageCode = null,
+  // true للـ outbox فقط — مسار الـ sync يكتب الحقول عبر runServiceTaskActions
+  persist_history: persistHistory = false
 }) {
   const numericTransactionId = Number(transactionId)
   const numericTemplateId = Number(templateId)
@@ -125,6 +175,16 @@ async function executeGeneratePdfJob ({
   })
 
   if (documentInstance?.generated_pdf_path) {
+    if (persistHistory) {
+      await applyGeneratedPdfToTransactionHistory({
+        transactionId: numericTransactionId,
+        stageCode,
+        templateId: numericTemplateId,
+        documentInstanceId: documentInstance.id,
+        generatedPdfPath: documentInstance.generated_pdf_path
+      }).catch(() => null)
+    }
+
     return {
       type: 'pdf',
       status: 'generated',
@@ -203,6 +263,16 @@ async function executeGeneratePdfJob ({
       data_json: values
     })
 
+    if (persistHistory) {
+      await applyGeneratedPdfToTransactionHistory({
+        transactionId: numericTransactionId,
+        stageCode,
+        templateId: numericTemplateId,
+        documentInstanceId: documentInstance.id,
+        generatedPdfPath: generation.generated_pdf_path
+      }).catch(() => null)
+    }
+
     return {
       type: 'pdf',
       status: 'generated',
@@ -228,5 +298,6 @@ async function executeGeneratePdfJob ({
 
 module.exports = {
   executeGeneratePdfJob,
-  findTemplateValuesInTransactionData
+  findTemplateValuesInTransactionData,
+  applyGeneratedPdfToTransactionHistory
 }

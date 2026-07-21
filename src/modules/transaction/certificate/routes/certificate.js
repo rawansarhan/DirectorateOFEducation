@@ -25,13 +25,15 @@ const { authMiddleware } = require('../../../../core/middleware/authMiddleware')
  *       **الترتيب المقترح:** 1) هذا الـ API → 2) الفرونت يبني PDF → 3) POST final-document
  *
  *       يجمع كل ما يحتاجه الفرونت:
- *       - `transaction_history` (id_process + applicant + stages + templates.generated_pdf_path)
+ *       - `transaction_history` (process_name + applicant + stages؛ PDF على مرحلة GENERATE_PDF)
  *       - `final_document` إن وُجدت
  *
  *       ملاحظة: لا يتضمّن هذا الرد أي بيانات QR / سلسلة نزاهة.
  *
  *       **Auth:** Bearer (تسجيل دخول فقط — بدون تقييد مالك/دور داخل المنطق)
- *       **الحالة:** completed فقط
+ *       **الحالة:** أي حالة (draft / submitted / in_progress / completed / rejected)
+ *       — يعرض `transaction_history` المتاح حتى لو لم تكتمل المعاملة.
+ *       `completed_at` يكون `null` إن لم تكن completed؛ `final_document` إن وُجدت فقط.
  *     tags: [Certificate & Integrity Chain]
  *     security:
  *       - bearerAuth: []
@@ -55,12 +57,6 @@ const { authMiddleware } = require('../../../../core/middleware/authMiddleware')
  *                   properties:
  *                     data:
  *                       $ref: '#/components/schemas/CertificateBundleResponse'
- *       400:
- *         description: المعاملة ليست completed
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ApiErrorResponse'
  *       404:
  *         description: المعاملة غير موجودة
  */
