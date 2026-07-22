@@ -6,7 +6,10 @@ const {
   buildStageSnapshot,
   mergeStageSnapshotIntoTransactionData
 } = require('./completeTaskSnapshotBuilder')
-const { runCurrentStageActions } = require('./completeTaskActionsRunner')
+const {
+  runCurrentStageActions,
+  runServiceTaskActions
+} = require('./completeTaskActionsRunner')
 const { completeCamundaTaskWithVariables } = require('./completeTaskCamunda')
 const { persistCompleteTaskSideEffects } = require('./completeTaskPersistence')
 const { runRejectFlow } = require('./completeTaskRejectFlow')
@@ -17,15 +20,21 @@ const {
   logStep
 } = require('./completeTaskHelpers')
 const {
-  persistVerifiedSignature
+  persistVerifiedSignature,
+  appendSignatureToTransactionData
 } = require('../transactionSigningService')
 const { toPublicSignatureRecord } = require('../../mappers/completeTaskMapper')
+const {
+  transactionRepository
+} = require('../../../../transaction/public')
 
 /**
  * Core complete-task pipeline (orchestration only).
  *
- * ترتيب مهم: حفظ التوقيع في DB قبل completeCamunda
- * حتى لا تُنجَز المهمة في Camunda ثم يفشل حفظ التوقيع.
+ * الترتيب:
+ * 1) توقيع + بيانات المرحلة في DB
+ * 2) completeCamunda آخراً لمسار USER_TASK
+ * 3) SERVICE_TASK (GENERATE_PDF…) بعد Camunda ثم حفظ نتائجها
  */
 async function completeTaskCore ({
   taskId,
@@ -100,9 +109,8 @@ async function completeTaskCore ({
 
   let digitalSignatureRecord = null
 
-  // حفظ التوقيع قبل Camunda — إن فشل يبقى الـ task نشطاً
   if (signingRequest) {
-    logStep('PHASE_10_PERSIST_SIGNATURE_BEFORE_CAMUNDA', {
+    logStep('PHASE_10_PERSIST_SIGNATURE_BEFORE_DATA', {
       challengeId: signingRequest.challengeId
     })
 
@@ -117,20 +125,13 @@ async function completeTaskCore ({
     stageSnapshot.digital_signature =
       toPublicSignatureRecord(digitalSignatureRecord)
 
-    logStep('SIGNATURE_PERSISTED_BEFORE_CAMUNDA', {
+    logStep('SIGNATURE_PERSISTED', {
       digitalSignatureId: digitalSignatureRecord.digital_signature_id
     })
   }
 
-  const { routingValue } = await completeCamundaTaskWithVariables({
-    task,
-    stage,
-    isReject,
-    normalizedPayload,
-    signingDecision
-  })
-
-  const {
+  // دمج بيانات المرحلة فقط — بدون SERVICE_TASK قبل Camunda
+  let {
     transactionData,
     persistAuthSubmissionAtRoot
   } = await mergeStageSnapshotIntoTransactionData({
@@ -141,7 +142,18 @@ async function completeTaskCore ({
     isAutoComplete,
     isReject,
     processInstance,
-    task
+    task,
+    skipServiceTasks: true
+  })
+
+  if (digitalSignatureRecord) {
+    appendSignatureToTransactionData(transactionData, digitalSignatureRecord)
+  }
+
+  // حفظ الداتا قبل Camunda — إن فشل يبقى الـ task نشطاً
+  logStep('PHASE_11_PERSIST_DATA_BEFORE_CAMUNDA', {
+    transactionId: transaction.id,
+    version: currentVersion
   })
 
   const {
@@ -165,6 +177,49 @@ async function completeTaskCore ({
   })
 
   currentVersion = persistedVersion
+
+  // آخر خطوة لمسار USER_TASK: إكمال Camunda
+  const { routingValue } = await completeCamundaTaskWithVariables({
+    task,
+    stage,
+    isReject,
+    normalizedPayload,
+    signingDecision
+  })
+
+  // بعد Camunda: SERVICE_TASK المكتملة (مثل GENERATE_PDF)
+  if (!isReject) {
+    const beforeServiceTasks = JSON.stringify(
+      transactionData._executedServiceTasks || []
+    )
+
+    transactionData = await runServiceTaskActions({
+      processInstance,
+      transaction,
+      transactionData,
+      task,
+      userId
+    })
+
+    const afterServiceTasks = JSON.stringify(
+      transactionData._executedServiceTasks || []
+    )
+
+    if (beforeServiceTasks !== afterServiceTasks) {
+      logStep('PHASE_12_PERSIST_SERVICE_TASK_RESULTS', {
+        transactionId: transaction.id,
+        version: currentVersion
+      })
+
+      const updated = await transactionRepository.updateDataOptimistic(
+        transaction.id,
+        transactionData,
+        currentVersion,
+        dbTransaction
+      )
+      currentVersion = updated.version
+    }
+  }
 
   let workflowStatus = 'running'
   let nextStageId = null

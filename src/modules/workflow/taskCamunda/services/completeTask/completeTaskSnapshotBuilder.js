@@ -156,9 +156,14 @@ async function mergeStageSnapshotIntoTransactionData ({
   isAutoComplete,
   isReject,
   processInstance,
-  task
+  task,
+  // SERVICE_TASK يعتمد على اكتمال Camunda — يُشغَّل بعد completeCamunda
+  skipServiceTasks = false
 }) {
-  logStep('PHASE_13_MERGE_TRANSACTION_DATA', { stageCode: stage.code })
+  logStep('PHASE_13_MERGE_TRANSACTION_DATA', {
+    stageCode: stage.code,
+    skipServiceTasks
+  })
 
   let transactionData = {
     ...(transaction.data || {})
@@ -190,7 +195,7 @@ async function mergeStageSnapshotIntoTransactionData ({
     }
   }
 
-  if (!isReject) {
+  if (!isReject && !skipServiceTasks) {
     transactionData = await runServiceTaskActions({
       processInstance,
       transaction,
@@ -198,8 +203,10 @@ async function mergeStageSnapshotIntoTransactionData ({
       task,
       userId
     })
-  } else {
+  } else if (isReject) {
     logStep('SERVICE_TASKS_SKIP', { reason: 'reject_path' })
+  } else {
+    logStep('SERVICE_TASKS_DEFER', { reason: 'awaiting_camunda_complete' })
   }
 
   return {
