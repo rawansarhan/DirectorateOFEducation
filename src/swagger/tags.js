@@ -70,5 +70,9 @@ module.exports = [
   {
     "name": "Location",
     "description": "إدارة المواقع الجغرافية (Locations)"
+  },
+  {
+    "name": "App Updates",
+    "description": "التحديث الذاتي داخل التطبيقات (citizen / employee / technical_team) — فحص الإصدار وإدارة الإصدارات"
   }
 ]

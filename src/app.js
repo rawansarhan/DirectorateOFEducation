@@ -166,6 +166,9 @@ app.use(
   internalTransactionRoutes
 )
 
+const appUpdatesRoutes = require('./modules/appUpdates/routes/appUpdates')
+app.use('/api/app-updates', appUpdatesRoutes)
+
 
 
 // ====================== ERROR HANDLER ======================
