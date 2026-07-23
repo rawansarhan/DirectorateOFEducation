@@ -237,6 +237,22 @@ module.exports = {
       },
       {
         organization_department_roles_id: roleMap.TECHNICAL_OFFICER,
+        permission_id: permMap.PERMISSION_READ
+      },
+      {
+        organization_department_roles_id: roleMap.TECHNICAL_OFFICER,
+        permission_id: permMap.ROLE_PERMISSION_READ
+      },
+      {
+        organization_department_roles_id: roleMap.TECHNICAL_OFFICER,
+        permission_id: permMap.ROLE_PERMISSION_CREATE
+      },
+      {
+        organization_department_roles_id: roleMap.TECHNICAL_OFFICER,
+        permission_id: permMap.ROLE_PERMISSION_UPDATE
+      },
+      {
+        organization_department_roles_id: roleMap.TECHNICAL_OFFICER,
         permission_id: permMap.LOCATION_VIEW
       },
       {

@@ -30,10 +30,12 @@ const registerRoutes = require('./modules/auth/register/routes/register')
 const sessionRoutes = require('./modules/auth/session/routes/session')
 const pinRoutes = require('./modules/auth/pin/routes/pin')
 const challengeRoutes = require('./modules/auth/challenge/routes/challenge')
+const permissionRoleRoutes = require('./modules/auth/permissionRole/routes/permissionRole')
 app.use('/api/auth', pinRoutes)
 app.use('/api/auth', registerRoutes)
 app.use('/api/auth', sessionRoutes)
 app.use('/api/auth', challengeRoutes)
+app.use('/api/auth', permissionRoleRoutes)
 
 
 //auth client:
