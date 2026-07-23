@@ -4,6 +4,10 @@ module.exports = [
     "description": "المصادقة وإدارة الحسابات (Authentication)"
   },
   {
+    "name": "Permissions",
+    "description": "الصلاحيات وربطها بالأدوار (Permissions & Role Permissions)"
+  },
+  {
     "name": "App PIN",
     "description": "قفل التطبيق — إنشاء، تحقق، تغيير، وحذف رمز PIN (Application Lock PIN)"
   },

@@ -1,13 +1,16 @@
 const jwt = require('jsonwebtoken')
-const { Op } = require('sequelize')
 const {
   UserRoleAssignment,
   RolePermission,
   Permission
 } = require('../../entities')
 const ApiResponder = require('../utils/apiResponder')
+const { KEYS, getOrLoad } = require('../cache/apiCacheService')
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your_very_secret_key'
+
+// TTL قصير: مساعدة سريعة لـ authorize دون إبقاء صلاحيات قديمة طويلاً بعد التعديل
+const USER_PERMISSIONS_TTL_SECONDS = 90
 
 /* ================= AUTH MIDDLEWARE ================= */
 const authMiddleware = async (req, res, next) => {
@@ -51,8 +54,57 @@ const authMiddleware = async (req, res, next) => {
   }
 }
 
+async function loadUserPermissionNames (userId, roleIds = []) {
+  return getOrLoad(
+    KEYS.userPermissions(userId),
+    async () => {
+      let orgDeptRoleIds = Array.isArray(roleIds) ? roleIds.filter(Boolean) : []
+
+      if (!orgDeptRoleIds.length) {
+        const assignments = await UserRoleAssignment.findAll({
+          where: { user_id: userId },
+          attributes: ['organization_department_roles_id']
+        })
+        orgDeptRoleIds = assignments.map(
+          row => row.organization_department_roles_id
+        )
+      }
+
+      if (!orgDeptRoleIds.length) {
+        return []
+      }
+
+      const rolePermissions = await RolePermission.findAll({
+        where: {
+          organization_department_roles_id: orgDeptRoleIds
+        },
+        include: [
+          {
+            model: Permission,
+            as: 'permissions',
+            attributes: ['name'],
+            required: true
+          }
+        ]
+      })
+
+      return [
+        ...new Set(
+          rolePermissions
+            .map(row => row.permissions?.name)
+            .filter(Boolean)
+        )
+      ]
+    },
+    {
+      label: `auth.user-permissions:${userId}`,
+      ttlSeconds: USER_PERMISSIONS_TTL_SECONDS
+    }
+  )
+}
+
 /* ================= AUTHORIZE MIDDLEWARE ================= */
-function authorize(requiredPermission) {
+function authorize (requiredPermission) {
   return async (req, res, next) => {
     try {
       const user = req.user
@@ -61,62 +113,32 @@ function authorize(requiredPermission) {
         return ApiResponder.unauthorizedResponse(res, 'Unauthorized')
       }
 
-      // ================= STEP 2 =================
-      const userAssignments = await UserRoleAssignment.findAll({
-        where: { user_id: user.id }
-      })
-
-      if (!userAssignments.length) {
-        return ApiResponder.forbiddenResponse(res, 'User has no roles')
-      }
-
-      // ================= STEP 3 =================
-      const roleIds = userAssignments.map(
-        r => r.organization_department_roles_id
+      const permissionNames = await loadUserPermissionNames(
+        user.id,
+        user.roles
       )
 
-      if (!roleIds.length) {
-        return ApiResponder.forbiddenResponse(res, 'No role IDs found')
-      }
-
-      // ================= STEP 4 =================
-      const rolePermissions = await RolePermission.findAll({
-        where: {
-          organization_department_roles_id: {
-            [Op.in]: roleIds
-          }
-        },
-        include: [
-          {
-            model: Permission,
-            as: 'permissions',
-            attributes: ['name']
-          }
-        ]
-      })
-
-      if (!rolePermissions.length) {
-        return ApiResponder.forbiddenResponse(res, 'No permissions found')
-      }
-
-      // ================= STEP 5 =================
-      const permissionNames = rolePermissions
-        .map(r => r.permissions?.name)
-        .filter(Boolean)
-
       if (!permissionNames.includes(requiredPermission)) {
-        return ApiResponder.forbiddenResponse(res, 'Forbidden - missing permission')
+        return ApiResponder.forbiddenResponse(
+          res,
+          'Forbidden - missing permission'
+        )
       }
 
       next()
     } catch (err) {
       console.error('AUTH ERROR:', err)
-      return ApiResponder.errorResponse(res, err.message || 'Authorization error', 500)
+      return ApiResponder.errorResponse(
+        res,
+        err.message || 'Authorization error',
+        500
+      )
     }
   }
 }
 
 module.exports = {
   authMiddleware,
-  authorize
+  authorize,
+  loadUserPermissionNames
 }

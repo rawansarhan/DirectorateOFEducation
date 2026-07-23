@@ -77,7 +77,12 @@ const KEYS = {
     `process:departments:${processDefinitionId}`,
   processDefinitionsWithType: () => 'process:definitions:with-type',
   processDefinitionDetails: (processId) => `process:details:${processId}`,
-  userAccessibleDepartments: (userId) => `user:accessible-departments:${userId}`
+  userAccessibleDepartments: (userId) => `user:accessible-departments:${userId}`,
+  // صلاحيات المستخدم كاملة — مفتاح واحد لكل user (أفضل من كاش لكل permission)
+  userPermissions: (userId) => `auth:user-permissions:${userId}`,
+  permissionsAll: () => 'auth:permissions:all',
+  rolePermissionsByOrgDeptRole: (orgDeptRoleId) =>
+    `auth:role-permissions:odr:${orgDeptRoleId}`
 }
 
 let redisClient = null
@@ -736,6 +741,47 @@ async function invalidateAllUserAccessibleDepartments () {
   )
 }
 
+async function invalidateUserPermissions (userId = null) {
+  if (userId != null) {
+    const deleted = await deleteKey(KEYS.userPermissions(userId))
+    console.log(
+      `${LOG_PREFIX} invalidate user permissions — user ${userId} (${deleted ? 1 : 0} key)`
+    )
+    return
+  }
+
+  const count = await deleteKeysByPattern('auth:user-permissions:*')
+  console.log(
+    `${LOG_PREFIX} invalidate all user permissions (${count} key(s)) — redis: ${redisStatusLabel()}`
+  )
+}
+
+async function invalidateUserPermissionCaches () {
+  return invalidateUserPermissions(null)
+}
+
+async function invalidatePermissionsAll () {
+  const deleted = await deleteKey(KEYS.permissionsAll())
+  console.log(
+    `${LOG_PREFIX} invalidate permissions all (${deleted ? 1 : 0} key)`
+  )
+}
+
+async function invalidateRolePermissionsByOrgDeptRole (orgDeptRoleId = null) {
+  if (orgDeptRoleId != null) {
+    const deleted = await deleteKey(KEYS.rolePermissionsByOrgDeptRole(orgDeptRoleId))
+    console.log(
+      `${LOG_PREFIX} invalidate role-permissions — odr ${orgDeptRoleId} (${deleted ? 1 : 0} key)`
+    )
+    return
+  }
+
+  const count = await deleteKeysByPattern('auth:role-permissions:odr:*')
+  console.log(
+    `${LOG_PREFIX} invalidate all role-permissions (${count} key(s)) — redis: ${redisStatusLabel()}`
+  )
+}
+
 module.exports = {
   KEYS,
   deleteKeysByPattern,
@@ -777,5 +823,9 @@ module.exports = {
   invalidateProcessDefinitionsWithType,
   invalidateProcessDefinitionDetails,
   invalidateUserAccessibleDepartments,
-  invalidateAllUserAccessibleDepartments
+  invalidateAllUserAccessibleDepartments,
+  invalidateUserPermissions,
+  invalidateUserPermissionCaches,
+  invalidatePermissionsAll,
+  invalidateRolePermissionsByOrgDeptRole
 }
