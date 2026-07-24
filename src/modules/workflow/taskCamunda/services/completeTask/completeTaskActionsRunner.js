@@ -48,6 +48,10 @@ async function executeActions (actions, context) {
   return results
 }
 
+/**
+ * ينفّذ actions لكل SERVICE_TASK مكتملة في Camunda ولم تُعالج بعد.
+ * التتبّع بـ activityInstanceId حتى يتكرر مسار التايمر (R/PT5M) بشكل صحيح.
+ */
 async function runServiceTaskActions ({
   processInstance,
   transaction,
@@ -60,37 +64,60 @@ async function runServiceTaskActions ({
     transactionId: transaction.id
   })
 
-  const executedServiceTasks = new Set(
-    transactionData._executedServiceTasks || []
-  )
-
-  const completedServiceTaskKeys =
-    await camundaClient.getCompletedServiceTaskKeys(
+  const completedServiceTasks =
+    await camundaClient.getCompletedServiceTasks(
       processInstance.camunda_process_instance_id
     )
 
-  const newServiceTaskKeys = completedServiceTaskKeys.filter(
-    key => !executedServiceTasks.has(key)
+  const executedInstances = new Set(
+    transactionData._executedServiceTaskInstances || []
+  )
+  const legacyActivityIds = new Set(
+    transactionData._executedServiceTasks || []
   )
 
-  if (!newServiceTaskKeys.length) {
+  // ترحيل آمن من التتبّع القديم (activityId) → instances بدون إعادة تنفيذ
+  if (!transactionData._serviceTaskInstanceTracking) {
+    for (const item of completedServiceTasks) {
+      if (legacyActivityIds.has(item.activityId)) {
+        executedInstances.add(item.id)
+      }
+    }
+    transactionData._serviceTaskInstanceTracking = true
+  }
+
+  const pending = completedServiceTasks.filter(
+    item => !executedInstances.has(item.id)
+  )
+
+  if (!pending.length) {
+    transactionData._executedServiceTaskInstances = [...executedInstances]
+    transactionData._executedServiceTasks = [...legacyActivityIds]
     logStep('SERVICE_TASKS_NONE')
     return transactionData
   }
 
   logStep('SERVICE_TASKS_FOUND', {
-    keys: newServiceTaskKeys.join(',')
+    keys: pending.map(item => `${item.activityId}:${item.id}`).join(',')
   })
 
-  for (const taskKey of newServiceTaskKeys) {
+  for (const item of pending) {
+    const taskKey = item.activityId
+    const activityInstanceId = item.id
+
     const serviceStage = await stageRepository.findByCodeAndProcess(
       processInstance.process_definition_id,
       taskKey
     )
 
     if (!serviceStage || serviceStage.type !== 'SERVICE_TASK') {
-      logStep('SERVICE_TASK_SKIP', { taskKey, reason: 'not_service_task' })
-      executedServiceTasks.add(taskKey)
+      logStep('SERVICE_TASK_SKIP', {
+        taskKey,
+        activityInstanceId,
+        reason: 'not_service_task'
+      })
+      executedInstances.add(activityInstanceId)
+      legacyActivityIds.add(taskKey)
       continue
     }
 
@@ -100,13 +127,19 @@ async function runServiceTaskActions ({
     const actions = resolveActionsForStage(serviceStage, stageConfig)
 
     if (!actions.length) {
-      logStep('SERVICE_TASK_SKIP', { taskKey, reason: 'no_actions' })
-      executedServiceTasks.add(taskKey)
+      logStep('SERVICE_TASK_SKIP', {
+        taskKey,
+        activityInstanceId,
+        reason: 'no_actions'
+      })
+      executedInstances.add(activityInstanceId)
+      legacyActivityIds.add(taskKey)
       continue
     }
 
     logStep('SERVICE_TASK_RUN', {
       taskKey,
+      activityInstanceId,
       stageCode: serviceStage.code,
       actionCount: actions.length
     })
@@ -134,13 +167,16 @@ async function runServiceTaskActions ({
       executed_by: 'system',
       completed_by: null,
       completed_at: new Date(),
+      last_activity_instance_id: activityInstanceId,
       ...pdfFields
     }
 
-    executedServiceTasks.add(taskKey)
+    executedInstances.add(activityInstanceId)
+    legacyActivityIds.add(taskKey)
   }
 
-  transactionData._executedServiceTasks = [...executedServiceTasks]
+  transactionData._executedServiceTaskInstances = [...executedInstances]
+  transactionData._executedServiceTasks = [...legacyActivityIds]
 
   logStep('SERVICE_TASKS_DONE')
 

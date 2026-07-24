@@ -221,7 +221,11 @@ class CamundaClient {
     return taskMap
   }
 
-  async getCompletedServiceTaskKeys (processInstanceId) {
+  async getCompletedServiceTasks (processInstanceId) {
+    if (!processInstanceId) {
+      return []
+    }
+
     const res = await camundaHttp.get(`${CAMUNDA_URL}/history/activity-instance`, {
       params: {
         processInstanceId,
@@ -232,7 +236,18 @@ class CamundaClient {
       }
     })
 
-    return (res.data || []).map(item => item.activityId)
+    return (res.data || [])
+      .filter(item => item?.id && item?.activityId)
+      .map(item => ({
+        id: item.id,
+        activityId: item.activityId,
+        endTime: item.endTime || null
+      }))
+  }
+
+  async getCompletedServiceTaskKeys (processInstanceId) {
+    const tasks = await this.getCompletedServiceTasks(processInstanceId)
+    return tasks.map(item => item.activityId)
   }
 
   async getTaskById (taskId) {

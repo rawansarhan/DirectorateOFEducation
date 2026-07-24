@@ -13,9 +13,12 @@ require('./core/jobs/processActivationJob');
 const registerListeners = require('./core/shared/events/registerListeners')
 const { startOutboxWorker } =
   require('./core/shared/outbox/workers/outboxWorker')
+const { startServiceTaskSyncJob } =
+  require('./core/jobs/serviceTaskSyncJob')
 
 registerListeners()
 startOutboxWorker()
+startServiceTaskSyncJob()
 
 // نلفّ تطبيق Express داخل خادم HTTP صريح كي نُركّب عليه خادم إشعارات الـ
 // WebSocket على نفس المنفذ (لا منفذ ثانٍ، ويعمل خلف Nginx على المسار /ws).
