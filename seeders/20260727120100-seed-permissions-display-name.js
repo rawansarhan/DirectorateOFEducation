@@ -18,11 +18,13 @@ const DISPLAY_NAMES = {
   // ===== أنواع العمليات =====
   TYPETPROCESS_CREATE: 'إنشاء نوع عملية',
   TYPETPROCESS_UPDATE: 'تعديل نوع عملية',
+  TYPETPROCESS_VIEW: 'عرض أنواع العمليات',
   TYPETPROCESS_VIEW_ONLY_ACTIVE: 'عرض أنواع العمليات المفعّلة',
   TYPETPROCESS_VIEW_ALL: 'عرض جميع أنواع العمليات',
 
   // ===== العمليات =====
   PROCESS_CREATE: 'إنشاء عملية',
+  PROCESS_SETUP: 'إعداد عملية',
   PROCESS_READ_AUTH: 'عرض العمليات المصرّح بها',
   PROCESS_START: 'بدء عملية',
   PROCESS_REVIEW: 'مراجعة العمليات',
@@ -53,6 +55,18 @@ const DISPLAY_NAMES = {
   TYPE_DOC_UPDATE: 'تعديل نوع مستند',
   TYPE_DOC_READ_ALL: 'عرض جميع أنواع المستندات',
   TYPE_DOC_READ_ONE: 'عرض نوع مستند واحد',
+
+  // ===== الحقول =====
+  FIELD_CREATE: 'إنشاء حقل',
+  FIELD_UPDATE: 'تعديل حقل',
+  FIELD_READ: 'عرض الحقول',
+  GET_ONE_FIELD: 'عرض حقل واحد',
+
+  // ===== الملفات =====
+  FILE_CREATE: 'إنشاء ملف',
+  FILE_UPDATE: 'تعديل ملف',
+  FILE_READ: 'عرض الملفات',
+  GET_ONE_FILE: 'عرض ملف واحد',
 
   // ===== القوالب =====
   CREATE_TEMPLATE: 'إنشاء قالب',
