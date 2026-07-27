@@ -11,7 +11,7 @@ async function findByOrgDeptRoleId (organizationDepartmentRolesId) {
       {
         model: Permission,
         as: 'permissions',
-        attributes: ['id', 'name']
+        attributes: ['id', 'name', 'display_name']
       }
     ],
     order: [['permission_id', 'ASC']]

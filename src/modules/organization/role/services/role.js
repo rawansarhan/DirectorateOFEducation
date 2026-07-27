@@ -25,8 +25,12 @@ const {
   invalidateAllUserAccessibleDepartments,
   invalidateRolesByDepartment,
   invalidateEmployeesByDepartments,
-  invalidateDepartmentOverview
+  invalidateDepartmentOverview,
+  invalidateUserPermissions
 } = require('../../../../core/cache/apiCacheService')
+const {
+  findUserIdsByOrgDeptRoleId
+} = require('../../../../core/repositories/userAccessRepository')
 const { API_CACHE_TTL_SECONDS } = require('../../../../core/config/env')
 const { retryWithBackoff } = require('../../../../core/utils/retryWithBackoff')
 
@@ -45,6 +49,20 @@ async function invalidateDepartmentRoleCaches (departmentId, { includeOverview =
   if (includeOverview) {
     await invalidateDepartmentOverview(departmentId)
   }
+}
+
+/**
+ * يبطل كاش صلاحيات كل مستخدم معيّن على هذا الـ ODR.
+ * يجب استدعاؤها قبل الحذف، لأن CASCADE يمسح user_role_assignments.
+ */
+async function invalidatePermissionCachesForOrgDeptRole (orgDeptRoleId) {
+  const userIds = await findUserIdsByOrgDeptRoleId(orgDeptRoleId)
+
+  if (!userIds.length) {
+    return
+  }
+
+  await Promise.all(userIds.map(userId => invalidateUserPermissions(userId)))
 }
 
 function buildCamundaGroupKey (roleCode, organizationId, departmentId) {
@@ -245,6 +263,7 @@ async function updateRoleService (data, id) {
 
   await invalidateAllUserAccessibleDepartments()
   await invalidateDepartmentRoleCaches(previousDepartmentId)
+  await invalidatePermissionCachesForOrgDeptRole(orgDeptRoleId)
 
   if (input.department_id !== undefined && input.department_id !== previousDepartmentId) {
     await invalidateDepartmentRoleCaches(input.department_id)
@@ -278,6 +297,7 @@ async function toggleRoleStatusService (id) {
 
   await invalidateAllUserAccessibleDepartments()
   await invalidateDepartmentRoleCaches(orgDeptRole.department_id)
+  await invalidatePermissionCachesForOrgDeptRole(orgDeptRoleId)
 
   const updated = await orgDeptRoleRepository.findByIdWithRelations(orgDeptRoleId)
   return toDTO(updated)
@@ -303,10 +323,14 @@ async function deleteRoleService (id) {
 
   const departmentId = orgDeptRole.department_id
 
+  // يجب جلب المستخدمين قبل الحذف: CASCADE سيمسح user_role_assignments
+  const affectedUserIds = await findUserIdsByOrgDeptRoleId(orgDeptRoleId)
+
   await orgDeptRoleRepository.destroyInstance(orgDeptRole)
 
   await invalidateAllUserAccessibleDepartments()
   await invalidateDepartmentRoleCaches(departmentId)
+  await Promise.all(affectedUserIds.map(userId => invalidateUserPermissions(userId)))
 
   return { id: orgDeptRoleId }
 }

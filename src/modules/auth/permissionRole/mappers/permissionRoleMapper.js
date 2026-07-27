@@ -27,7 +27,8 @@ function toRolePermissionDTO ({
     const permission = plain?.permissions || plain
     return {
       id: permission?.id ?? plain?.permission_id ?? null,
-      name: permission?.name ?? null
+      name: permission?.name ?? null,
+      display_name: permission?.display_name ?? permission?.name ?? null
     }
   })
 
