@@ -1,9 +1,8 @@
 const jwt = require('jsonwebtoken')
 const {
-  UserRoleAssignment,
-  RolePermission,
-  Permission
-} = require('../../entities')
+  findActiveOrgDeptRoleIdsByUserId,
+  findPermissionNamesByOrgDeptRoleIds
+} = require('../repositories/userAccessRepository')
 const ApiResponder = require('../utils/apiResponder')
 const { KEYS, getOrLoad } = require('../cache/apiCacheService')
 
@@ -25,19 +24,15 @@ const authMiddleware = async (req, res, next) => {
 
     const decoded = jwt.verify(token, JWT_SECRET)
 
-    // جلب كل الـ roles الخاصة بالمستخدم
-    const userAssignments = await UserRoleAssignment.findAll({
-      where: { user_id: decoded.id },
-      attributes: ['organization_department_roles_id']
-    })
+    // جلب الـ ODRs الفعّالة فقط: تعيين مفعّل + دور مفعّل
+    const roleIds = await findActiveOrgDeptRoleIdsByUserId(decoded.id)
 
-    if (!userAssignments.length) {
-      return ApiResponder.forbiddenResponse(res, 'User has no roles')
+    if (!roleIds.length) {
+      return ApiResponder.forbiddenResponse(
+        res,
+        'لا يوجد دور فعّال لهذا المستخدم — قد يكون دورك معطّلاً، يرجى مراجعة الإدارة'
+      )
     }
-
-    const roleIds = userAssignments.map(
-      r => r.organization_department_roles_id
-    )
 
     req.user = {
       id: decoded.id,
@@ -61,40 +56,15 @@ async function loadUserPermissionNames (userId, roleIds = []) {
       let orgDeptRoleIds = Array.isArray(roleIds) ? roleIds.filter(Boolean) : []
 
       if (!orgDeptRoleIds.length) {
-        const assignments = await UserRoleAssignment.findAll({
-          where: { user_id: userId },
-          attributes: ['organization_department_roles_id']
-        })
-        orgDeptRoleIds = assignments.map(
-          row => row.organization_department_roles_id
-        )
+        orgDeptRoleIds = await findActiveOrgDeptRoleIdsByUserId(userId)
       }
 
       if (!orgDeptRoleIds.length) {
         return []
       }
 
-      const rolePermissions = await RolePermission.findAll({
-        where: {
-          organization_department_roles_id: orgDeptRoleIds
-        },
-        include: [
-          {
-            model: Permission,
-            as: 'permissions',
-            attributes: ['name'],
-            required: true
-          }
-        ]
-      })
-
-      return [
-        ...new Set(
-          rolePermissions
-            .map(row => row.permissions?.name)
-            .filter(Boolean)
-        )
-      ]
+      // يفلتر على is_active مجدداً: المعرّفات قد تصل من مستدعٍ خارجي غير مفلتر
+      return findPermissionNamesByOrgDeptRoleIds(orgDeptRoleIds)
     },
     {
       label: `auth.user-permissions:${userId}`,
