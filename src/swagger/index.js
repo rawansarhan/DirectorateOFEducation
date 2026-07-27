@@ -6,6 +6,7 @@ const swaggerUi = require('swagger-ui-express')
 const tags = require('./tags')
 const schemas = require('./schemas')
 const examples = require('./examples')
+const { API_PUBLIC_URL, PORT } = require('../core/config/env')
 
 const swaggerOptions = {
   definition: {
@@ -21,8 +22,14 @@ const swaggerOptions = {
         description: 'Same origin (current host) — يتجنّب مشاكل CORS عند التجربة'
       },
       {
-        url: process.env.API_PUBLIC_URL || `http://localhost:${process.env.PORT || 4000}`,
-        description: process.env.API_PUBLIC_URL ? 'Public server' : 'Local server'
+        url: API_PUBLIC_URL,
+        description: API_PUBLIC_URL.includes('localhost')
+          ? 'Local server'
+          : 'Public server'
+      },
+      {
+        url: `http://localhost:${PORT}`,
+        description: 'Local fallback'
       }
     ],
     tags,

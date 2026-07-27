@@ -123,7 +123,17 @@ async function getRunningTasks ({
       b.instance.transaction?.created_at || b.instance.created_at
     )
 
-    return dateA - dateB
+    if (dateA - dateB !== 0) {
+      return dateA - dateB
+    }
+
+    if (a.instance.id !== b.instance.id) {
+      return a.instance.id - b.instance.id
+    }
+
+    return String(a.activeTask?.id || '').localeCompare(
+      String(b.activeTask?.id || '')
+    )
   })
 
   const sortedInstances = sortedPairs.map(pair => pair.instance)
@@ -137,6 +147,7 @@ async function getRunningTasks ({
     item: mapInstanceToTask({
       instance: pair.instance,
       activeTask: pair.activeTask,
+      activeStage: pair.activeStage,
       userId,
       stageCountMap,
       completedStageCountMap,

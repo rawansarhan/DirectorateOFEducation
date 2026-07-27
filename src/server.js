@@ -1,12 +1,12 @@
-const dotenv = require('dotenv');
-dotenv.config(); // ✔ لازم أول سطر
+const dotenv = require('dotenv')
+dotenv.config()
 
-const http = require('http');
-const app = require('./app');
-const sequelize = require('../src/core/config/database');
+const http = require('http')
+const app = require('./app')
+const sequelize = require('../src/core/config/database')
 const { attach: attachNotificationsWs } =
-  require('./core/notifications/wsNotificationServer');
-const PORT = process.env.PORT || 4000;
+  require('./core/notifications/wsNotificationServer')
+const { PORT } = require('./core/config/env')
 
 // 🔥 الأفضل تشغّل الـ jobs بعد ما تتأكد السيرفر شغال أو DB جاهز
 require('./core/jobs/processActivationJob');

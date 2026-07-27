@@ -18,6 +18,7 @@
 
 const reshaper = require('arabic-reshaper')
 const bidiFactory = require('bidi-js')
+const { PDF_ARABIC_SHAPING } = require('../config/env')
 
 const bidi = bidiFactory()
 
@@ -40,7 +41,7 @@ function shapeArabicText (text) {
 
 /** يعيد دالة التجهيز المناسبة حسب الإعداد (الافتراضي logical) */
 function getArabicTextShaper () {
-  const mode = String(process.env.PDF_ARABIC_SHAPING || 'logical').toLowerCase()
+  const mode = String(PDF_ARABIC_SHAPING).toLowerCase()
   return mode === 'visual' ? shapeArabicText : rawArabicText
 }
 

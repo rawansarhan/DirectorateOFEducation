@@ -2,6 +2,22 @@
 
 const { getClientIp } = require('./securityConfig')
 const ApiResponder = require('../utils/apiResponder')
+const {
+  RATE_LIMIT_AUTH_WINDOW_MS,
+  RATE_LIMIT_AUTH_MAX,
+  RATE_LIMIT_AUTH_BRUTE_WINDOW_MS,
+  RATE_LIMIT_AUTH_BRUTE_MAX,
+  RATE_LIMIT_SIGN_WINDOW_MS,
+  RATE_LIMIT_SIGN_MAX,
+  RATE_LIMIT_COMPLETE_WINDOW_MS,
+  RATE_LIMIT_COMPLETE_MAX,
+  RATE_LIMIT_SUBMIT_WINDOW_MS,
+  RATE_LIMIT_SUBMIT_MAX,
+  RATE_LIMIT_FINAL_DOC_WINDOW_MS,
+  RATE_LIMIT_FINAL_DOC_MAX,
+  RATE_LIMIT_UPLOAD_WINDOW_MS,
+  RATE_LIMIT_UPLOAD_MAX
+} = require('../config/env')
 
 function createRateLimiter ({
   windowMs = 60 * 1000,
@@ -73,51 +89,50 @@ function ipOnlyKey (req) {
 }
 
 const authSensitiveLimiter = createRateLimiter({
-  windowMs: Number(process.env.RATE_LIMIT_AUTH_WINDOW_MS || 60 * 1000),
-  max: Number(process.env.RATE_LIMIT_AUTH_MAX || 20),
+  windowMs: RATE_LIMIT_AUTH_WINDOW_MS,
+  max: RATE_LIMIT_AUTH_MAX,
   keyPrefix: 'auth',
   keyGenerator: userAwareKey
 })
 
 const authBruteForceLimiter = createRateLimiter({
-  windowMs: Number(process.env.RATE_LIMIT_AUTH_BRUTE_WINDOW_MS || 15 * 60 * 1000),
-  max: Number(process.env.RATE_LIMIT_AUTH_BRUTE_MAX || 10),
+  windowMs: RATE_LIMIT_AUTH_BRUTE_WINDOW_MS,
+  max: RATE_LIMIT_AUTH_BRUTE_MAX,
   keyPrefix: 'auth-brute',
   keyGenerator: ipOnlyKey
 })
 
 const signingChallengeLimiter = createRateLimiter({
-  windowMs: Number(process.env.RATE_LIMIT_SIGN_WINDOW_MS || 60 * 1000),
-  max: Number(process.env.RATE_LIMIT_SIGN_MAX || 10),
+  windowMs: RATE_LIMIT_SIGN_WINDOW_MS,
+  max: RATE_LIMIT_SIGN_MAX,
   keyPrefix: 'sign-challenge',
   keyGenerator: userAwareKey
 })
 
 const completeTaskLimiter = createRateLimiter({
-  windowMs: Number(process.env.RATE_LIMIT_COMPLETE_WINDOW_MS || 60 * 1000),
-  max: Number(process.env.RATE_LIMIT_COMPLETE_MAX || 15),
+  windowMs: RATE_LIMIT_COMPLETE_WINDOW_MS,
+  max: RATE_LIMIT_COMPLETE_MAX,
   keyPrefix: 'complete-task',
   keyGenerator: userAwareKey
 })
 
 const submitTransactionLimiter = createRateLimiter({
-  windowMs: Number(process.env.RATE_LIMIT_SUBMIT_WINDOW_MS || 60 * 1000),
-  max: Number(process.env.RATE_LIMIT_SUBMIT_MAX || 10),
+  windowMs: RATE_LIMIT_SUBMIT_WINDOW_MS,
+  max: RATE_LIMIT_SUBMIT_MAX,
   keyPrefix: 'submit-transaction',
   keyGenerator: userAwareKey
 })
 
-// توليد الوثيقة النهائية المدمجة عملية ثقيلة (دمج PDF) — نحدّ معدّل الطلبات بشدّة.
 const finalDocumentLimiter = createRateLimiter({
-  windowMs: Number(process.env.RATE_LIMIT_FINAL_DOC_WINDOW_MS || 10 * 1000),
-  max: Number(process.env.RATE_LIMIT_FINAL_DOC_MAX || 3),
+  windowMs: RATE_LIMIT_FINAL_DOC_WINDOW_MS,
+  max: RATE_LIMIT_FINAL_DOC_MAX,
   keyPrefix: 'final-document',
   keyGenerator: userAwareKey
 })
 
 const uploadFileLimiter = createRateLimiter({
-  windowMs: Number(process.env.RATE_LIMIT_UPLOAD_WINDOW_MS || 60 * 1000),
-  max: Number(process.env.RATE_LIMIT_UPLOAD_MAX || 15),
+  windowMs: RATE_LIMIT_UPLOAD_WINDOW_MS,
+  max: RATE_LIMIT_UPLOAD_MAX,
   keyPrefix: 'upload-file',
   keyGenerator: userAwareKey
 })

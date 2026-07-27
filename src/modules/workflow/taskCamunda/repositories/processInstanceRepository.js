@@ -98,7 +98,22 @@ class ProcessInstanceRepository {
         task_lock_user_id: null,
         task_lock_task_id: null,
         task_locked_at: null,
-        task_lock_expires_at: null
+        task_lock_expires_at: null,
+        task_locks: {}
+      },
+      { transaction }
+    )
+  }
+
+  async updateTaskLocks (instance, taskLocks, transaction) {
+    const {
+      syncLegacyLockColumns
+    } = require('../utils/processInstanceTaskLocks')
+
+    return instance.update(
+      {
+        task_locks: taskLocks,
+        ...syncLegacyLockColumns(taskLocks)
       },
       { transaction }
     )

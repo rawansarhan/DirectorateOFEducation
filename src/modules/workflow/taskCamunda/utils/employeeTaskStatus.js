@@ -1,33 +1,23 @@
 'use strict'
 
-function isLockExpired (processInstance, now = new Date()) {
-  return (
-    processInstance?.task_lock_expires_at &&
-    now >= new Date(processInstance.task_lock_expires_at)
-  )
-}
+const {
+  getTaskLockEntry,
+  isTaskLockExpired
+} = require('./processInstanceTaskLocks')
 
-function hasActiveTaskLock (processInstance, now = new Date()) {
-  if (!processInstance?.task_lock_user_id) {
-    return false
-  }
-
-  return !isLockExpired(processInstance, now)
+function isLockExpired (processInstance, taskId, now = new Date()) {
+  const entry = getTaskLockEntry(processInstance, taskId)
+  return isTaskLockExpired(entry, now)
 }
 
 function isLockedByUser (processInstance, taskId, userId) {
-  if (!processInstance?.task_lock_user_id || !taskId) {
+  const entry = getTaskLockEntry(processInstance, taskId)
+
+  if (!entry?.user_id || isTaskLockExpired(entry)) {
     return false
   }
 
-  if (isLockExpired(processInstance)) {
-    return false
-  }
-
-  return (
-    processInstance.task_lock_user_id === userId &&
-    processInstance.task_lock_task_id === taskId
-  )
+  return Number(entry.user_id) === Number(userId)
 }
 
 function resolveEmployeeTaskStatus ({
@@ -52,10 +42,23 @@ function resolveEmployeeTaskStatus ({
     }
   }
 
-  if (hasActiveTaskLock(processInstance)) {
+  const taskId = activeTask?.id
+
+  if (taskId && isLockedByUser(processInstance, taskId, userId)) {
     return {
       status: 'in_progress',
       status_label: 'قيد التنفيذ'
+    }
+  }
+
+  if (taskId) {
+    const entry = getTaskLockEntry(processInstance, taskId)
+
+    if (entry?.user_id && !isTaskLockExpired(entry)) {
+      return {
+        status: 'in_progress',
+        status_label: 'قيد التنفيذ'
+      }
     }
   }
 
@@ -123,6 +126,5 @@ module.exports = {
   buildApplicantName,
   resolveDepartmentName,
   isLockedByUser,
-  isLockExpired,
-  hasActiveTaskLock
+  isLockExpired
 }

@@ -35,7 +35,7 @@ const {
   resolveAbsoluteUploadPath
 } = require('../../../../core/utils/filePath')
 const { injectIntegrityQr } = require('./qrStampService')
-const { API_PUBLIC_URL } = require('../../../../core/config/env')
+const { API_PUBLIC_URL, PDF_UNICODE_FONT_PATH } = require('../../../../core/config/env')
 
 const DEFAULT_UNICODE_FONT_PATH = path.join(
   process.cwd(),
@@ -43,7 +43,7 @@ const DEFAULT_UNICODE_FONT_PATH = path.join(
 )
 
 function resolveUnicodeFontPath () {
-  const configured = process.env.PDF_UNICODE_FONT_PATH
+  const configured = PDF_UNICODE_FONT_PATH
 
   if (configured && String(configured).trim()) {
     return path.isAbsolute(configured)

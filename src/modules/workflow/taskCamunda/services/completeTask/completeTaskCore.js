@@ -27,14 +27,41 @@ const { toPublicSignatureRecord } = require('../../mappers/completeTaskMapper')
 const {
   transactionRepository
 } = require('../../../../transaction/public')
+const {
+  initCompleteSideEffects,
+  attachCompleteSideEffects,
+  markCompleteSideEffectStep,
+  markCompleteSideEffectsDone,
+  markCompleteSideEffectsFailed
+} = require('./completeSideEffectsState')
+
+async function persistCompleteCheckpoint ({
+  transactionId,
+  transactionData,
+  sideEffects,
+  expectedVersion,
+  dbTransaction = null
+}) {
+  const payload = attachCompleteSideEffects(transactionData, sideEffects)
+  const updated = await transactionRepository.updateDataOptimistic(
+    transactionId,
+    payload,
+    expectedVersion,
+    dbTransaction
+  )
+
+  return {
+    version: updated.version,
+    transactionData: updated.data || payload
+  }
+}
 
 /**
  * Core complete-task pipeline (orchestration only).
  *
- * الترتيب:
- * 1) توقيع + بيانات المرحلة في DB
- * 2) completeCamunda آخراً لمسار USER_TASK
- * 3) SERVICE_TASK (GENERATE_PDF…) بعد Camunda ثم حفظ نتائجها
+ * Forward recovery:
+ * - local_saved → camunda_done → service_tasks_done → workflow_synced → lock_released
+ * - عند الفشل بعد Camunda يُحفظ _complete_side_effects ويُستأنف عبر completeRecoveryService
  */
 async function completeTaskCore ({
   taskId,
@@ -84,6 +111,15 @@ async function completeTaskCore ({
     acquireOperationGuard
   })
 
+  let sideEffects = initCompleteSideEffects({
+    taskId: task.id,
+    stageCode: stage.code,
+    userId,
+    isReject,
+    isAutoComplete,
+    overrideTarget
+  })
+
   const stageSnapshot = await buildStageSnapshot({
     payload,
     normalizedPayload,
@@ -130,7 +166,6 @@ async function completeTaskCore ({
     })
   }
 
-  // دمج بيانات المرحلة فقط — بدون SERVICE_TASK قبل Camunda
   let {
     transactionData,
     persistAuthSubmissionAtRoot
@@ -150,7 +185,9 @@ async function completeTaskCore ({
     appendSignatureToTransactionData(transactionData, digitalSignatureRecord)
   }
 
-  // حفظ الداتا قبل Camunda — إن فشل يبقى الـ task نشطاً
+  sideEffects = markCompleteSideEffectStep(sideEffects, 'local_saved')
+  transactionData = attachCompleteSideEffects(transactionData, sideEffects)
+
   logStep('PHASE_11_PERSIST_DATA_BEFORE_CAMUNDA', {
     transactionId: transaction.id,
     version: currentVersion
@@ -177,112 +214,187 @@ async function completeTaskCore ({
   })
 
   currentVersion = persistedVersion
+  transactionData = attachCompleteSideEffects(transactionData, sideEffects)
 
-  // آخر خطوة لمسار USER_TASK: إكمال Camunda
-  const { routingValue } = await completeCamundaTaskWithVariables({
-    task,
-    stage,
-    isReject,
-    normalizedPayload,
-    signingDecision
-  })
+  try {
+    const { routingValue } = await completeCamundaTaskWithVariables({
+      task,
+      stage,
+      isReject,
+      normalizedPayload,
+      signingDecision
+    })
 
-  // بعد Camunda: SERVICE_TASK المكتملة (مثل GENERATE_PDF)
-  if (!isReject) {
-    const beforeServiceTasks = JSON.stringify(
-      transactionData._executedServiceTasks || []
-    )
+    sideEffects = markCompleteSideEffectStep(sideEffects, 'camunda_done')
+    transactionData = attachCompleteSideEffects(transactionData, sideEffects)
 
+    const checkpoint = await persistCompleteCheckpoint({
+      transactionId: transaction.id,
+      transactionData,
+      sideEffects,
+      expectedVersion: currentVersion,
+      dbTransaction
+    })
+
+    currentVersion = checkpoint.version
+    transactionData = checkpoint.transactionData
+
+    if (!isReject) {
     transactionData = await runServiceTaskActions({
       processInstance,
       transaction,
       transactionData,
       task,
-      userId
+      userId,
+      source: 'complete'
     })
 
-    const afterServiceTasks = JSON.stringify(
-      transactionData._executedServiceTasks || []
-    )
+      sideEffects = markCompleteSideEffectStep(sideEffects, 'service_tasks_done')
+      transactionData = attachCompleteSideEffects(transactionData, sideEffects)
 
-    if (beforeServiceTasks !== afterServiceTasks) {
-      logStep('PHASE_12_PERSIST_SERVICE_TASK_RESULTS', {
+      const saved = await persistCompleteCheckpoint({
         transactionId: transaction.id,
-        version: currentVersion
+        transactionData,
+        sideEffects,
+        expectedVersion: currentVersion,
+        dbTransaction
       })
 
-      const updated = await transactionRepository.updateDataOptimistic(
-        transaction.id,
-        transactionData,
-        currentVersion,
-        dbTransaction
-      )
-      currentVersion = updated.version
+      currentVersion = saved.version
+      transactionData = saved.transactionData
+    } else {
+      sideEffects = markCompleteSideEffectStep(sideEffects, 'service_tasks_done')
+      transactionData = attachCompleteSideEffects(transactionData, sideEffects)
     }
-  }
 
-  let workflowStatus = 'running'
-  let nextStageId = null
-  let latestTransactionData = transactionData
+    let workflowStatus = 'running'
+    let nextStageId = null
+    let latestTransactionData = transactionData
 
-  if (isReject) {
-    const rejectResult = await runRejectFlow({
-      processInstance,
-      transaction,
+    if (isReject) {
+      const rejectResult = await runRejectFlow({
+        processInstance,
+        transaction,
+        transactionData: latestTransactionData,
+        currentVersion,
+        stage,
+        stageSnapshot,
+        userId,
+        sequelize,
+        dbTransaction
+      })
+
+      workflowStatus = rejectResult.workflowStatus
+      nextStageId = rejectResult.nextStageId
+      currentVersion = rejectResult.currentVersion
+      latestTransactionData = rejectResult.transactionData
+    } else {
+      const approveResult = await runApproveFlow({
+        processInstance,
+        transaction,
+        transactionData: latestTransactionData,
+        currentVersion,
+        overrideTarget,
+        userId,
+        sequelize,
+        dbTransaction
+      })
+
+      workflowStatus = approveResult.workflowStatus
+      nextStageId = approveResult.nextStageId
+      currentVersion = approveResult.currentVersion
+      latestTransactionData = approveResult.transactionData
+    }
+
+    sideEffects = markCompleteSideEffectStep(sideEffects, 'workflow_synced', {
+      workflow_status: workflowStatus,
+      next_stage_id: nextStageId
+    })
+    latestTransactionData = attachCompleteSideEffects(
+      latestTransactionData,
+      sideEffects
+    )
+
+    const synced = await persistCompleteCheckpoint({
+      transactionId: transaction.id,
       transactionData: latestTransactionData,
-      currentVersion,
+      sideEffects,
+      expectedVersion: currentVersion,
+      dbTransaction
+    })
+
+    currentVersion = synced.version
+    latestTransactionData = synced.transactionData
+
+    await releaseLockAndInvalidateCaches({
+      isAutoComplete,
+      processInstance,
+      task,
+      userId,
+      stage,
+      nextStageId,
+      workflowStatus,
+      isReject
+    })
+
+    sideEffects = markCompleteSideEffectsDone(sideEffects, {
+      workflow_status: workflowStatus,
+      next_stage_id: nextStageId
+    })
+    latestTransactionData = attachCompleteSideEffects(
+      latestTransactionData,
+      sideEffects
+    )
+
+    await persistCompleteCheckpoint({
+      transactionId: transaction.id,
+      transactionData: latestTransactionData,
+      sideEffects,
+      expectedVersion: currentVersion,
+      dbTransaction
+    })
+
+    return buildCompleteResponse({
       stage,
       stageSnapshot,
-      userId,
-      sequelize,
-      dbTransaction
+      variables: routingValue ? { value: routingValue } : null,
+      signingRequest,
+      idempotencyKey: issuedIdempotencyKey,
+      idempotentReplay: false,
+      workflowStatus,
+      templates: responseTemplates
     })
+  } catch (err) {
+    sideEffects = markCompleteSideEffectsFailed(sideEffects, err)
+    transactionData = attachCompleteSideEffects(transactionData, sideEffects)
 
-    workflowStatus = rejectResult.workflowStatus
-    nextStageId = rejectResult.nextStageId
-    currentVersion = rejectResult.currentVersion
-    latestTransactionData = rejectResult.transactionData
-  } else {
-    const approveResult = await runApproveFlow({
-      processInstance,
-      transaction,
-      transactionData: latestTransactionData,
-      currentVersion,
-      overrideTarget,
-      userId,
-      sequelize,
-      dbTransaction
-    })
+    if (sideEffects.camunda_done) {
+      try {
+        await persistCompleteCheckpoint({
+          transactionId: transaction.id,
+          transactionData,
+          sideEffects,
+          expectedVersion: currentVersion,
+          dbTransaction
+        })
 
-    workflowStatus = approveResult.workflowStatus
-    nextStageId = approveResult.nextStageId
-    currentVersion = approveResult.currentVersion
-    latestTransactionData = approveResult.transactionData
+        logStep('COMPLETE_CHECKPOINT_SAVED_FOR_RECOVERY', {
+          transactionId: transaction.id,
+          taskId: task.id
+        })
+      } catch (persistErr) {
+        console.error(
+          '[CompleteTask] failed to persist recovery checkpoint:',
+          persistErr.message
+        )
+      }
+    }
+
+    throw err
   }
-
-  await releaseLockAndInvalidateCaches({
-    isAutoComplete,
-    processInstance,
-    task,
-    userId,
-    stage,
-    nextStageId,
-    workflowStatus,
-    isReject
-  })
-
-  return buildCompleteResponse({
-    stage,
-    stageSnapshot,
-    variables: routingValue ? { value: routingValue } : null,
-    signingRequest,
-    idempotencyKey: issuedIdempotencyKey,
-    idempotentReplay: false,
-    workflowStatus,
-    templates: responseTemplates
-  })
 }
 
 module.exports = {
-  completeTaskCore
+  completeTaskCore,
+  persistCompleteCheckpoint
 }

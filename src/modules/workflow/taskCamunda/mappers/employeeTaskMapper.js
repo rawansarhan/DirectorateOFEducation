@@ -5,6 +5,7 @@ const { EmployeeTaskOutputDTO } = require('../dto/EmployeeTaskOutputDTO')
 function toEmployeeTaskItem ({
   processInstance,
   activeTask,
+  activeStage = null,
   userId,
   progressPercent,
   employeeStatus,
@@ -13,6 +14,7 @@ function toEmployeeTaskItem ({
   return new EmployeeTaskOutputDTO({
     processInstance,
     activeTask,
+    activeStage,
     userId,
     progressPercent,
     employeeStatus,

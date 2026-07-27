@@ -1,6 +1,7 @@
 'use strict'
 
 const axios = require('axios')
+const { TRACCAR_URL, TRACCAR_TOKEN } = require('../../../../core/config/env')
 
 // تحويل الرقم السوري من 09XXXXXXXX إلى +963XXXXXXXX
 function toInternational(phone) {
@@ -12,10 +13,7 @@ function toInternational(phone) {
 }
 
 async function sendSms(phone, message) {
-  const url = process.env.TRACCAR_URL
-  const token = process.env.TRACCAR_TOKEN
-
-  if (!url || !token) {
+  if (!TRACCAR_URL || !TRACCAR_TOKEN) {
     throw new Error('TRACCAR_URL or TRACCAR_TOKEN not configured in .env')
   }
 
@@ -23,11 +21,11 @@ async function sendSms(phone, message) {
 
   try {
   const response = await axios.post(
-    url,
+    TRACCAR_URL,
     { to: internationalPhone, message :message},
     {
       headers: {
-        Authorization: token,
+        Authorization: TRACCAR_TOKEN,
         'Content-Type': 'application/json',
         Accept: 'application/json'
       },

@@ -107,23 +107,21 @@ async function countActiveForDepartments ({ userId, departmentIds }) {
   let pendingPickupCount = 0
 
   for (const instance of instances) {
-    const activeTask = taskMap.get(instance.camunda_process_instance_id)
+    const activeTasks = taskMap.get(instance.camunda_process_instance_id) || []
 
-    if (!activeTask) {
-      continue
-    }
+    for (const activeTask of activeTasks) {
+      const employeeStatus = resolveEmployeeTaskStatus({
+        transaction: instance.transaction,
+        processInstance: instance,
+        activeTask,
+        userId
+      })
 
-    const employeeStatus = resolveEmployeeTaskStatus({
-      transaction: instance.transaction,
-      processInstance: instance,
-      activeTask,
-      userId
-    })
-
-    if (employeeStatus.status === 'in_progress') {
-      inProgressCount += 1
-    } else if (employeeStatus.status === 'pending_pickup') {
-      pendingPickupCount += 1
+      if (employeeStatus.status === 'in_progress') {
+        inProgressCount += 1
+      } else if (employeeStatus.status === 'pending_pickup') {
+        pendingPickupCount += 1
+      }
     }
   }
 

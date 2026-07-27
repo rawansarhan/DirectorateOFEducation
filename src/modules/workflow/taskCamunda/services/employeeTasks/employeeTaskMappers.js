@@ -86,8 +86,9 @@ async function buildStageNameMap (instances = []) {
   )
 }
 
-function resolveStageName (instance, activeTask, stageNameMap) {
+function resolveStageName (instance, activeTask, activeStage, stageNameMap) {
   return (
+    activeStage?.name ||
     instance.current_stage?.name ||
     activeTask?.name ||
     stageNameMap.get(instance.transaction?.id) ||
@@ -98,6 +99,7 @@ function resolveStageName (instance, activeTask, stageNameMap) {
 function mapInstanceToTask ({
   instance,
   activeTask,
+  activeStage = null,
   userId,
   stageCountMap,
   completedStageCountMap,
@@ -121,10 +123,16 @@ function mapInstanceToTask ({
   return toEmployeeTaskItem({
     processInstance: instance,
     activeTask,
+    activeStage,
     userId,
     progressPercent,
     employeeStatus,
-    stageNameOverride: resolveStageName(instance, activeTask, stageNameMap)
+    stageNameOverride: resolveStageName(
+      instance,
+      activeTask,
+      activeStage,
+      stageNameMap
+    )
   })
 }
 
@@ -168,7 +176,18 @@ function isActivePairAfterCursor (pair, cursor) {
     return false
   }
 
-  return id > cursor.id
+  if (id > cursor.id) {
+    return true
+  }
+
+  if (id < cursor.id) {
+    return false
+  }
+
+  const taskId = pair.activeTask?.id || ''
+  const cursorTaskId = cursor.tid || ''
+
+  return taskId > cursorTaskId
 }
 
 function buildActiveTaskCursor (pair) {
@@ -178,7 +197,8 @@ function buildActiveTaskCursor (pair) {
     t: new Date(
       pair.instance.transaction?.created_at || pair.instance.created_at
     ).toISOString(),
-    id: pair.instance.id
+    id: pair.instance.id,
+    tid: pair.activeTask?.id || null
   })
 }
 

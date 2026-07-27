@@ -4,8 +4,9 @@ const { Op } = require('sequelize')
 const { ProcessInstance, Transaction } = require('../../../../entities')
 const { transactionRepository } = require('../../../transaction/public')
 const { runServiceTaskActions } = require('./completeTask/completeTaskActionsRunner')
+const { syncPendingCompleteRecoveries } = require('./completeRecoveryService')
 
-const LOG_PREFIX = '[ServiceTaskSync]'
+const LOG_PREFIX = '[WorkflowSync]'
 
 function cloneData (data) {
   return data && typeof data === 'object' ? { ...data } : {}
@@ -101,7 +102,8 @@ async function syncProcessInstanceServiceTasks (processInstance) {
     transaction,
     transactionData: cloneData(transaction.data),
     task,
-    userId: null
+    userId: null,
+    source: 'sync'
   })
 
   const changed =
@@ -152,6 +154,28 @@ async function mapPool (items, concurrency, worker) {
  * Cursor دائري في الذاكرة — يوزّع الحمل على عدة دقائق بدل فحص الكل دفعة واحدة.
  */
 let cursorId = 0
+
+async function syncPendingWorkflowSideEffects ({
+  batchSize = 40,
+  concurrency = 3,
+  recoveryBatchSize = 20,
+  recoveryConcurrency = 2
+} = {}) {
+  const recovery = await syncPendingCompleteRecoveries({
+    batchSize: recoveryBatchSize,
+    concurrency: recoveryConcurrency
+  })
+
+  const serviceTasks = await syncPendingServiceTaskActions({
+    batchSize,
+    concurrency
+  })
+
+  return {
+    recovery,
+    serviceTasks
+  }
+}
 
 async function syncPendingServiceTaskActions ({
   batchSize = 40,
@@ -255,6 +279,7 @@ async function syncPendingServiceTaskActions ({
 }
 
 module.exports = {
+  syncPendingWorkflowSideEffects,
   syncPendingServiceTaskActions,
   syncProcessInstanceServiceTasks
 }

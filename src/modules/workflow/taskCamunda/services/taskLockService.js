@@ -14,12 +14,23 @@ const { formatTransactionDate } = require('../utils/employeeTaskFormatters')
 const {
   userMatchesAssigneeRoute
 } = require('./taskAssignmentRoutingService')
+const {
+  getTaskLockEntry,
+  isTaskLockExpired,
+  isTaskLockedByOther,
+  isTaskLockedByUser,
+  buildTaskLocksPayload,
+  removeTaskLockEntry,
+  normalizeTaskLocks,
+  syncLegacyLockColumns
+} = require('../utils/processInstanceTaskLocks')
 
 function clearLockFieldsOnInstance (instance) {
   instance.task_lock_user_id = null
   instance.task_lock_task_id = null
   instance.task_locked_at = null
   instance.task_lock_expires_at = null
+  instance.task_locks = {}
 }
 
 async function unclaimCamundaTaskSafe (taskId) {
@@ -47,41 +58,19 @@ function buildTaskLockError ({
   return error
 }
 
-function isLockExpired (instance, now = new Date()) {
-  return instance.task_lock_expires_at && now >= instance.task_lock_expires_at
-}
-
-function isLockedByOther (instance, taskId, userId, now = new Date()) {
-  if (!instance.task_lock_user_id || isLockExpired(instance, now)) {
-    return false
-  }
-
-  if (instance.task_lock_task_id !== taskId) {
-    return false
-  }
-
-  return instance.task_lock_user_id !== userId
-}
-
 function buildTaskLockStatus (processInstance, taskId, userId) {
   const now = new Date()
-  const hasActiveLock =
-    Boolean(processInstance?.task_lock_user_id) &&
-    processInstance.task_lock_task_id === taskId &&
-    !isLockExpired(processInstance, now)
-
-  const lockedByMe =
-    hasActiveLock && processInstance.task_lock_user_id === userId
-
-  const lockedByOther =
-    hasActiveLock && processInstance.task_lock_user_id !== userId
+  const entry = getTaskLockEntry(processInstance, taskId)
+  const hasActiveLock = Boolean(entry?.user_id) && !isTaskLockExpired(entry, now)
+  const lockedByMe = hasActiveLock && Number(entry.user_id) === Number(userId)
+  const lockedByOther = hasActiveLock && !lockedByMe
 
   return {
     is_locked: hasActiveLock,
     locked_by_me: lockedByMe,
-    locked_by_user_id: hasActiveLock ? processInstance.task_lock_user_id : null,
+    locked_by_user_id: hasActiveLock ? entry.user_id : null,
     locked_at: hasActiveLock
-      ? formatTransactionDate(processInstance.task_locked_at)
+      ? formatTransactionDate(entry.locked_at)
       : null,
     can_pickup: !hasActiveLock || lockedByMe,
     can_release: lockedByMe
@@ -144,55 +133,66 @@ async function clearLockIfHolderLostStageAccess ({
   transaction,
   now = new Date()
 }) {
+  const entry = getTaskLockEntry(instance, taskId)
+
   if (
-    !instance.task_lock_user_id ||
-    instance.task_lock_user_id === requesterUserId ||
-    instance.task_lock_task_id !== taskId ||
-    isLockExpired(instance, now) ||
+    !entry?.user_id ||
+    Number(entry.user_id) === Number(requesterUserId) ||
+    isTaskLockExpired(entry, now) ||
     !taskDefinitionKey
   ) {
     return
   }
 
   const holderStillAllowed = await userCanAccessTaskStage({
-    userId: instance.task_lock_user_id,
+    userId: entry.user_id,
     processDefinitionId: instance.process_definition_id,
     taskDefinitionKey,
     transactionId: instance.transaction_id
   })
 
   if (!holderStillAllowed) {
-    await processInstanceRepository.clearTaskLock(instance, transaction)
-    clearLockFieldsOnInstance(instance)
+    const taskLocks = removeTaskLockEntry(instance, taskId)
+    await processInstanceRepository.updateTaskLocks(instance, taskLocks, transaction)
+    instance.task_locks = taskLocks
+    Object.assign(instance, syncLegacyLockColumns(taskLocks))
   }
 }
 
-async function clearExpiredTaskLock ({
+async function clearExpiredTaskLocksOnInstance ({
   instance,
   transaction,
   now = new Date()
 }) {
-  if (!instance?.task_lock_user_id || !isLockExpired(instance, now)) {
-    return false
+  const locks = normalizeTaskLocks(instance.task_locks)
+  const expired = []
+
+  for (const [taskId, entry] of Object.entries(locks)) {
+    if (entry?.user_id && isTaskLockExpired(entry, now)) {
+      expired.push({ taskId, userId: entry.user_id })
+      delete locks[taskId]
+    }
   }
 
-  const expiredTaskId = instance.task_lock_task_id
-  const expiredUserId = instance.task_lock_user_id
+  if (!expired.length) {
+    return null
+  }
 
-  await processInstanceRepository.clearTaskLock(instance, transaction)
-  clearLockFieldsOnInstance(instance)
+  await processInstanceRepository.updateTaskLocks(instance, locks, transaction)
+  instance.task_locks = locks
+  Object.assign(instance, syncLegacyLockColumns(locks))
 
-  return { expiredTaskId, expiredUserId }
+  return expired
 }
 
-/**
- * يفك قفل المعاملات التي انتهت مهلة قفلها (legacy — القفل الجديد بدون TTL).
- */
 async function releaseExpiredTaskLocksForProcessInstances (instances = []) {
   const now = new Date()
-  const candidates = instances.filter(
-    (instance) => instance?.task_lock_user_id && isLockExpired(instance, now)
-  )
+  const candidates = instances.filter((instance) => {
+    const locks = normalizeTaskLocks(instance?.task_locks)
+    return Object.values(locks).some(
+      entry => entry?.user_id && isTaskLockExpired(entry, now)
+    )
+  })
 
   if (!candidates.length) {
     return
@@ -214,20 +214,22 @@ async function releaseExpiredTaskLocksForProcessInstances (instances = []) {
         continue
       }
 
-      const cleared = await clearExpiredTaskLock({ instance, transaction, now })
+      const cleared = await clearExpiredTaskLocksOnInstance({
+        instance,
+        transaction,
+        now
+      })
 
-      if (!cleared) {
+      if (!cleared?.length) {
         continue
       }
 
       clearLockFieldsOnInstance(candidate)
+      Object.assign(candidate, syncLegacyLockColumns(instance.task_locks))
 
-      if (cleared.expiredTaskId) {
-        unclaimTaskIds.add(cleared.expiredTaskId)
-      }
-
-      if (cleared.expiredUserId) {
-        affectedUserIds.add(cleared.expiredUserId)
+      for (const item of cleared) {
+        unclaimTaskIds.add(item.taskId)
+        affectedUserIds.add(item.userId)
       }
     }
 
@@ -271,12 +273,11 @@ async function acquireTaskLock ({
     }
 
     const now = new Date()
-    let unclaimAfterCommit = null
-
-    if (isLockExpired(instance, now)) {
-      const cleared = await clearExpiredTaskLock({ instance, transaction, now })
-      unclaimAfterCommit = cleared?.expiredTaskId || null
-    }
+    const expiredLocks = await clearExpiredTaskLocksOnInstance({
+      instance,
+      transaction,
+      now
+    })
 
     await clearLockIfHolderLostStageAccess({
       instance,
@@ -287,30 +288,29 @@ async function acquireTaskLock ({
       now
     })
 
-    if (isLockedByOther(instance, taskId, userId, now)) {
+    if (isTaskLockedByOther(instance, taskId, userId, now)) {
+      const entry = getTaskLockEntry(instance, taskId)
+
       throw buildTaskLockError({
-        message: 'المعاملة مقفلة لموظف آخر. لا يمكن استلامها في نفس الوقت.',
+        message: 'المهمة مقفلة لموظف آخر. لا يمكن استلامها في نفس الوقت.',
         code: 'TASK_LOCKED_BY_ANOTHER',
-        lockedBy: instance.task_lock_user_id,
-        lockedUntil: instance.task_lock_expires_at
+        lockedBy: entry?.user_id || null,
+        lockedUntil: entry?.expires_at || null
       })
     }
 
-    await processInstanceRepository.updateInstance(
-      instance,
-      {
-        task_lock_user_id: userId,
-        task_lock_task_id: taskId,
-        task_locked_at: now,
-        task_lock_expires_at: null
-      },
-      transaction
-    )
+    const taskLocks = buildTaskLocksPayload(instance, taskId, userId, now)
+
+    await processInstanceRepository.updateTaskLocks(instance, taskLocks, transaction)
+    instance.task_locks = taskLocks
+    Object.assign(instance, syncLegacyLockColumns(taskLocks))
 
     await transaction.commit()
 
-    if (unclaimAfterCommit) {
-      await unclaimCamundaTaskSafe(unclaimAfterCommit)
+    if (expiredLocks?.length) {
+      for (const item of expiredLocks) {
+        await unclaimCamundaTaskSafe(item.taskId)
+      }
     }
 
     try {
@@ -355,42 +355,42 @@ async function assertTaskLockHolder ({
     }
 
     const now = new Date()
+    const expiredLocks = await clearExpiredTaskLocksOnInstance({
+      instance,
+      transaction,
+      now
+    })
 
-    if (isLockExpired(instance, now)) {
-      const cleared = await clearExpiredTaskLock({ instance, transaction, now })
+    if (expiredLocks?.length) {
       await transaction.commit()
 
-      if (cleared?.expiredTaskId) {
-        await unclaimCamundaTaskSafe(cleared.expiredTaskId)
+      for (const item of expiredLocks) {
+        await unclaimCamundaTaskSafe(item.taskId)
 
-        if (cleared.expiredUserId) {
-          invalidateEmployeeTasksForUser(cleared.expiredUserId).catch(() => {})
+        if (item.userId) {
+          invalidateEmployeeTasksForUser(item.userId).catch(() => {})
         }
-
-        invalidateEmployeeTaskStats().catch(() => {})
       }
+
+      invalidateEmployeeTaskStats().catch(() => {})
 
       throw buildTaskLockError({
         message:
-          'انتهت صلاحية قفل المعاملة. استلمها مجدداً عبر POST /api/workflow/tasks/{taskId}/pickup.',
+          'انتهت صلاحية قفل المهمة. استلمها مجدداً عبر POST /api/workflow/tasks/{taskId}/pickup.',
         code: 'TASK_LOCK_EXPIRED'
       })
     }
 
-    if (
-      !instance.task_lock_user_id ||
-      instance.task_lock_user_id !== userId ||
-      instance.task_lock_task_id !== taskId
-    ) {
+    if (!isTaskLockedByUser(instance, taskId, userId, now)) {
       throw buildTaskLockError({
-        message: isLockedByOther(instance, taskId, userId, now)
-          ? 'المعاملة مقفلة لموظف آخر. لا يمكن التعديل في نفس الوقت.'
-          : 'يجب استلام المعاملة أولاً عبر POST /api/workflow/tasks/{taskId}/pickup.',
-        code: isLockedByOther(instance, taskId, userId, now)
+        message: isTaskLockedByOther(instance, taskId, userId, now)
+          ? 'المهمة مقفلة لموظف آخر. لا يمكن التعديل في نفس الوقت.'
+          : 'يجب استلام المهمة أولاً عبر POST /api/workflow/tasks/{taskId}/pickup.',
+        code: isTaskLockedByOther(instance, taskId, userId, now)
           ? 'TASK_LOCKED_BY_ANOTHER'
           : 'TASK_LOCK_REQUIRED',
-        lockedBy: instance.task_lock_user_id,
-        lockedUntil: instance.task_lock_expires_at
+        lockedBy: getTaskLockEntry(instance, taskId)?.user_id || null,
+        lockedUntil: getTaskLockEntry(instance, taskId)?.expires_at || null
       })
     }
 
@@ -419,12 +419,11 @@ async function releaseTaskLock ({ processInstanceId, taskId, userId }) {
       return
     }
 
-    if (
-      instance.task_lock_user_id === userId &&
-      instance.task_lock_task_id === taskId
-    ) {
-      await processInstanceRepository.clearTaskLock(instance, transaction)
-      clearLockFieldsOnInstance(instance)
+    if (isTaskLockedByUser(instance, taskId, userId)) {
+      const taskLocks = removeTaskLockEntry(instance, taskId)
+      await processInstanceRepository.updateTaskLocks(instance, taskLocks, transaction)
+      instance.task_locks = taskLocks
+      Object.assign(instance, syncLegacyLockColumns(taskLocks))
 
       try {
         await camundaClient.unclaimTask(taskId)
@@ -458,17 +457,9 @@ async function releaseTaskLockStrict ({ processInstanceId, taskId, userId }) {
     }
 
     const now = new Date()
+    const entry = getTaskLockEntry(instance, taskId)
 
-    if (isLockExpired(instance, now)) {
-      await clearExpiredTaskLock({ instance, transaction, now })
-      await transaction.commit()
-      throw buildTaskLockError({
-        message: 'لا يوجد قفل نشط على هذه المعاملة.',
-        code: 'TASK_LOCK_NOT_HELD'
-      })
-    }
-
-    if (!instance.task_lock_user_id || instance.task_lock_task_id !== taskId) {
+    if (!entry?.user_id || isTaskLockExpired(entry, now)) {
       await transaction.commit()
       throw buildTaskLockError({
         message: 'لا يوجد قفل نشط على هذه المهمة.',
@@ -476,16 +467,18 @@ async function releaseTaskLockStrict ({ processInstanceId, taskId, userId }) {
       })
     }
 
-    if (instance.task_lock_user_id !== userId) {
+    if (Number(entry.user_id) !== Number(userId)) {
       throw buildTaskLockError({
-        message: 'لا يمكنك إلغاء استلام معاملة مقفولة لموظف آخر.',
+        message: 'لا يمكنك إلغاء استلام مهمة مقفولة لموظف آخر.',
         code: 'TASK_LOCK_NOT_OWNER',
-        lockedBy: instance.task_lock_user_id
+        lockedBy: entry.user_id
       })
     }
 
-    await processInstanceRepository.clearTaskLock(instance, transaction)
-    clearLockFieldsOnInstance(instance)
+    const taskLocks = removeTaskLockEntry(instance, taskId)
+    await processInstanceRepository.updateTaskLocks(instance, taskLocks, transaction)
+    instance.task_locks = taskLocks
+    Object.assign(instance, syncLegacyLockColumns(taskLocks))
     await transaction.commit()
 
     try {

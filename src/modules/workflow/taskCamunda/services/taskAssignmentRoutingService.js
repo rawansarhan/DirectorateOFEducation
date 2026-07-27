@@ -181,21 +181,15 @@ async function resolveDestinationOverrideFromComplete ({
 }
 
 async function resolveOrgDeptRolesForStage (stageId) {
-  const rows = await stageAssignmentRepository.findDetailedByStageId(stageId)
+  const assignments = await getCachedStageAssignmentsForPickup(stageId)
 
-  return rows
-    .map(row => {
-      const odr = row.organization_department_role
-      if (!odr) return null
-      return {
-        organization_id: odr.organization_id,
-        department_id: odr.department_id,
-        role_id: odr.role_id,
-        organization_department_roles_id: odr.id,
-        camunda_group_key: odr.camunda_group_key
-      }
-    })
-    .filter(Boolean)
+  return assignments.map(item => ({
+    organization_id: item.organization_id,
+    department_id: item.department_id,
+    role_id: item.role_id,
+    organization_department_roles_id: item.organization_department_roles_id,
+    camunda_group_key: item.camunda_group_key
+  }))
 }
 
 async function applyCandidateGroupsToTask (taskId, groupKeys = []) {

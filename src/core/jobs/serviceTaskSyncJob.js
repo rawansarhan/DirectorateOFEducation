@@ -5,13 +5,15 @@ const {
   SERVICE_TASK_SYNC_ENABLED,
   SERVICE_TASK_SYNC_CRON,
   SERVICE_TASK_SYNC_BATCH_SIZE,
-  SERVICE_TASK_SYNC_CONCURRENCY
+  SERVICE_TASK_SYNC_CONCURRENCY,
+  COMPLETE_RECOVERY_BATCH_SIZE,
+  COMPLETE_RECOVERY_CONCURRENCY
 } = require('../config/env')
 const {
-  syncPendingServiceTaskActions
+  syncPendingWorkflowSideEffects
 } = require('../../modules/workflow/taskCamunda/services/serviceTaskSyncService')
 
-const LOG_PREFIX = '[ServiceTaskSyncJob]'
+const LOG_PREFIX = '[WorkflowSyncJob]'
 
 let isRunning = false
 
@@ -27,14 +29,18 @@ async function tick () {
   isRunning = true
 
   try {
-    const result = await syncPendingServiceTaskActions({
+    const result = await syncPendingWorkflowSideEffects({
       batchSize: SERVICE_TASK_SYNC_BATCH_SIZE,
-      concurrency: SERVICE_TASK_SYNC_CONCURRENCY
+      concurrency: SERVICE_TASK_SYNC_CONCURRENCY,
+      recoveryBatchSize: COMPLETE_RECOVERY_BATCH_SIZE,
+      recoveryConcurrency: COMPLETE_RECOVERY_CONCURRENCY
     })
 
-    if (result.scanned > 0) {
+    const { recovery, serviceTasks } = result
+
+    if (recovery.scanned > 0 || serviceTasks.scanned > 0) {
       console.log(
-        `${LOG_PREFIX} scanned=${result.scanned} changed=${result.changed} errors=${result.errors} cursor=${result.cursorId}`
+        `${LOG_PREFIX} recovery scanned=${recovery.scanned} recovered=${recovery.recovered} errors=${recovery.errors} | serviceTasks scanned=${serviceTasks.scanned} changed=${serviceTasks.changed} errors=${serviceTasks.errors} cursor=${serviceTasks.cursorId}`
       )
     }
   } catch (err) {

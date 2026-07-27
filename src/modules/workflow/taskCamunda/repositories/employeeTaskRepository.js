@@ -248,6 +248,7 @@ async function getRunningInstancesForAssigneeRoute (roleIds = []) {
       'task_lock_user_id',
       'task_lock_task_id',
       'task_lock_expires_at',
+      'task_locks',
       'created_at'
     ],
     include: includes,
@@ -293,6 +294,7 @@ async function getRunningInstancesForProcessDefinitions ({
       'task_lock_user_id',
       'task_lock_task_id',
       'task_lock_expires_at',
+      'task_locks',
       'created_at'
     ],
     include: buildRunningListIncludes(),
@@ -591,7 +593,8 @@ async function getRunningInstancesForDepartmentTransactions ({
       'camunda_process_instance_id',
       'task_lock_user_id',
       'task_lock_task_id',
-      'task_lock_expires_at'
+      'task_lock_expires_at',
+      'task_locks'
     ],
     include: [
       {

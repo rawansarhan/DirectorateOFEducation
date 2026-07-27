@@ -2,11 +2,9 @@ const axios = require('axios')
 const FormData = require('form-data')
 const fs = require('fs')
 const xml2js = require('xml2js')
-const { CAMUNDA_URL } = require('../../../config/camunda')
+const { CAMUNDA_URL, CAMUNDA_TIMEOUT_MS } = require('../../../config/env')
 const { formatCamundaError, rethrowAxiosAsWorkflowError } = require('../../../utils/errorMessageHelper')
 const { createHttpError, HTTP_STATUS } = require('../../../middleware/httpStatusCodes')
-
-const CAMUNDA_TIMEOUT_MS = Number(process.env.CAMUNDA_TIMEOUT_MS || 30000)
 
 const camundaHttp = axios.create({
   timeout: CAMUNDA_TIMEOUT_MS
@@ -210,11 +208,13 @@ class CamundaClient {
       })
 
       for (const task of res.data || []) {
-        if (!task?.processInstanceId || taskMap.has(task.processInstanceId)) {
+        if (!task?.processInstanceId) {
           continue
         }
 
-        taskMap.set(task.processInstanceId, task)
+        const existing = taskMap.get(task.processInstanceId) || []
+        existing.push(task)
+        taskMap.set(task.processInstanceId, existing)
       }
     }
 
