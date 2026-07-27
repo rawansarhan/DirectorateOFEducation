@@ -5,8 +5,7 @@ const {
 } = require('../repositories/userAccessRepository')
 const ApiResponder = require('../utils/apiResponder')
 const { KEYS, getOrLoad } = require('../cache/apiCacheService')
-
-const JWT_SECRET = process.env.JWT_SECRET || 'your_very_secret_key'
+const { JWT_ACCESS_SECRET } = require('../config/env')
 
 // TTL قصير: مساعدة سريعة لـ authorize دون إبقاء صلاحيات قديمة طويلاً بعد التعديل
 const USER_PERMISSIONS_TTL_SECONDS = 90
@@ -22,7 +21,7 @@ const authMiddleware = async (req, res, next) => {
 
     const token = authHeader.split(' ')[1]
 
-    const decoded = jwt.verify(token, JWT_SECRET)
+    const decoded = jwt.verify(token, JWT_ACCESS_SECRET)
 
     // جلب الـ ODRs الفعّالة فقط: تعيين مفعّل + دور مفعّل
     const roleIds = await findActiveOrgDeptRoleIdsByUserId(decoded.id)

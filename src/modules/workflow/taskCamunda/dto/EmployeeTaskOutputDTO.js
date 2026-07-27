@@ -13,6 +13,7 @@ class EmployeeTaskOutputDTO {
   constructor ({
     processInstance,
     activeTask,
+    activeStage = null,
     progressPercent,
     employeeStatus,
     stageNameOverride = null
@@ -21,7 +22,7 @@ class EmployeeTaskOutputDTO {
     const processDefinition = processInstance?.process_definition
     const typeTrans = processDefinition?.type_trans
     const user = transaction?.user
-    const currentStage = processInstance?.current_stage
+    const currentStage = activeStage || processInstance?.current_stage
 
     const stageName =
       stageNameOverride ??

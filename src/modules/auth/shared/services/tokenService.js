@@ -4,20 +4,12 @@ const jwt = require('jsonwebtoken')
 const crypto = require('crypto')
 
 const refreshTokenRepository = require('../repositories/refreshTokenRepository')
-
-const ACCESS_SECRET =
-  process.env.JWT_ACCESS_SECRET ||
-  process.env.JWT_SECRET ||
-  'your_very_secret_key'
-
-const REFRESH_SECRET =
-  process.env.JWT_REFRESH_SECRET ||
-  (process.env.JWT_SECRET
-    ? process.env.JWT_SECRET + '_refresh'
-    : 'your_very_secret_refresh_key')
-
-const ACCESS_EXPIRES_IN = process.env.JWT_ACCESS_EXPIRES_IN || '1h'
-const REFRESH_EXPIRES_IN = process.env.JWT_REFRESH_EXPIRES_IN || '30d'
+const {
+  JWT_ACCESS_SECRET,
+  JWT_REFRESH_SECRET,
+  JWT_ACCESS_EXPIRES_IN,
+  JWT_REFRESH_EXPIRES_IN
+} = require('../../../../core/config/env')
 
 // ============================================================
 // أدوات مساعدة
@@ -25,8 +17,8 @@ const REFRESH_EXPIRES_IN = process.env.JWT_REFRESH_EXPIRES_IN || '30d'
 
 // إنشاء access token قصير العمر (يُستخدم في كل طلب عبر Authorization header)
 function signAccessToken (userId) {
-  return jwt.sign({ id: userId }, ACCESS_SECRET, {
-    expiresIn: ACCESS_EXPIRES_IN
+  return jwt.sign({ id: userId }, JWT_ACCESS_SECRET, {
+    expiresIn: JWT_ACCESS_EXPIRES_IN
   })
 }
 
@@ -35,8 +27,8 @@ function signAccessToken (userId) {
 function signRefreshToken (userId) {
   const jti = crypto.randomUUID()
 
-  const token = jwt.sign({ id: userId, jti }, REFRESH_SECRET, {
-    expiresIn: REFRESH_EXPIRES_IN
+  const token = jwt.sign({ id: userId, jti }, JWT_REFRESH_SECRET, {
+    expiresIn: JWT_REFRESH_EXPIRES_IN
   })
 
   const decoded = jwt.decode(token)
@@ -83,7 +75,7 @@ async function rotateRefreshToken (rawToken, clientMeta = {}) {
   // 1) التحقق من توقيع وصلاحية الـ JWT
   let payload
   try {
-    payload = jwt.verify(rawToken, REFRESH_SECRET)
+    payload = jwt.verify(rawToken, JWT_REFRESH_SECRET)
   } catch (err) {
     throw buildAuthError('Refresh token غير صالح أو منتهي')
   }
@@ -203,6 +195,6 @@ module.exports = {
   rotateRefreshToken,
   revokeRefreshToken,
   revokeAllForUser,
-  ACCESS_SECRET,
-  REFRESH_SECRET
+  JWT_ACCESS_SECRET,
+  JWT_REFRESH_SECRET
 }

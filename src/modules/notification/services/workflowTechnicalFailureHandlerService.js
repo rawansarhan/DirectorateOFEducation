@@ -27,6 +27,9 @@ const NON_TECHNICAL_ERROR_CODES = new Set([
   'SIGNATURE_INVALID',
   'VERSION_CONFLICT',
   'IDEMPOTENT_REPLAY',
+  // جاهزية PDF/الوثيقة تعالجها retry/outbox وليست سبب رفض فوري
+  'GENERATE_PDF_NOT_READY',
+  'FINAL_DOCUMENT_NOT_READY',
   'FORBIDDEN',
   'UNAUTHORIZED',
   'TASK_LOCKED_BY_ANOTHER',
@@ -154,7 +157,8 @@ async function rejectTransactionForTechnicalFailure ({
           task_lock_user_id: null,
           task_lock_task_id: null,
           task_locked_at: null,
-          task_lock_expires_at: null
+          task_lock_expires_at: null,
+          task_locks: {}
         },
         dbTx
       )

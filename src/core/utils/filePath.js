@@ -1,11 +1,12 @@
 const path = require('path')
 const fs = require('fs')
+const { UPLOADS_DIR, API_PUBLIC_URL } = require('../config/env')
 
 /** جذر المشروع (…/DirectorateOFEducation) — ثابت بغضّ النظر عن process.cwd() */
 const PROJECT_ROOT = path.resolve(__dirname, '../../..')
 
 function getUploadsRoot () {
-  const configured = process.env.UPLOADS_DIR
+  const configured = UPLOADS_DIR
 
   if (configured && String(configured).trim()) {
     return path.isAbsolute(configured)
@@ -48,10 +49,7 @@ function resolveAbsoluteUploadPath (storedPath) {
 }
 
 function getApiBaseUrl () {
-  return (
-    process.env.API_PUBLIC_URL ||
-    `http://localhost:${process.env.PORT || 4000}`
-  )
+  return API_PUBLIC_URL
 }
 
 /**

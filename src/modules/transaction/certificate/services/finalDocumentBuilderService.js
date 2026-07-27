@@ -37,7 +37,7 @@ const {
   toPublicFileUrl,
   isSyntheticSignatureDocumentPath
 } = require('../../../../core/utils/filePath')
-const { API_PUBLIC_URL, FINAL_DOCUMENT_CACHE_TTL_SECONDS } = require('../../../../core/config/env')
+const { API_PUBLIC_URL, FINAL_DOCUMENT_CACHE_TTL_SECONDS, REPUBLIC_LOGO_PATH } = require('../../../../core/config/env')
 const {
   getOrLoad,
   KEYS
@@ -71,7 +71,7 @@ const KUFI_FONT_PATH = path.join(
 )
 
 const LOGO_CANDIDATES = [
-  process.env.REPUBLIC_LOGO_PATH,
+  REPUBLIC_LOGO_PATH,
   path.join(process.cwd(), 'photo_2026-04-06_11-49-49.jpg'),
   path.join(process.cwd(), 'assets/republic-logo.jpg')
 ].filter(Boolean)

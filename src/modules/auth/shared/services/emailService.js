@@ -1,6 +1,7 @@
 'use strict'
 
 const nodemailer = require('nodemailer')
+const { EMAIL_USER, EMAIL_PASS } = require('../../../../core/config/env')
 
 let transporter
 
@@ -9,16 +10,13 @@ function getTransporter () {
     return transporter
   }
 
-  const user = process.env.EMAIL_USER
-  const pass = process.env.EMAIL_PASS
-
-  if (!user || !pass) {
+  if (!EMAIL_USER || !EMAIL_PASS) {
     throw new Error('EMAIL_USER or EMAIL_PASS is not configured in .env')
   }
 
   transporter = nodemailer.createTransport({
     service: 'gmail',
-    auth: { user, pass }
+    auth: { user: EMAIL_USER, pass: EMAIL_PASS }
   })
 
   return transporter
@@ -28,7 +26,7 @@ async function sendEmail ({ to, subject, text }) {
   const mailer = getTransporter()
 
   return mailer.sendMail({
-    from: process.env.EMAIL_USER,
+    from: EMAIL_USER,
     to,
     subject,
     text

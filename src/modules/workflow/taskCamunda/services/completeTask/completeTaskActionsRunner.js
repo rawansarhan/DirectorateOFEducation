@@ -11,6 +11,42 @@ const {
 const { extractPdfFieldsFromActionResults } = require('../../utils/generatedPdfHistory')
 const { logStep } = require('./completeTaskHelpers')
 
+const { SERVICE_TASK_SYNC_STALE_MS } = require('../../../../../core/config/env')
+
+// SERVICE_TASK القديمة في history Camunda لا تُنفَّذ retroactively عند أول sync
+const SYNC_STALE_SERVICE_TASK_MS = SERVICE_TASK_SYNC_STALE_MS
+
+function parseEndTimeMs (endTime) {
+  if (!endTime) return 0
+  const ms = new Date(endTime).getTime()
+  return Number.isFinite(ms) ? ms : 0
+}
+
+function isStaleServiceTaskInstance (item, nowMs = Date.now()) {
+  const endMs = parseEndTimeMs(item.endTime)
+  if (!endMs) return false
+  return nowMs - endMs > SYNC_STALE_SERVICE_TASK_MS
+}
+
+function updateServiceTaskWatermark (transactionData, instances = []) {
+  let watermarkMs = parseEndTimeMs(transactionData._serviceTaskSyncWatermark)
+
+  for (const item of instances) {
+    const endMs = parseEndTimeMs(item.endTime)
+    if (endMs > watermarkMs) {
+      watermarkMs = endMs
+    }
+  }
+
+  if (watermarkMs > 0) {
+    transactionData._serviceTaskSyncWatermark = new Date(watermarkMs).toISOString()
+  } else if (!transactionData._serviceTaskSyncWatermark) {
+    transactionData._serviceTaskSyncWatermark = new Date().toISOString()
+  }
+
+  return transactionData
+}
+
 async function executeActions (actions, context) {
   logStep('ACTIONS_START', {
     count: actions.length,
@@ -51,13 +87,18 @@ async function executeActions (actions, context) {
 /**
  * ينفّذ actions لكل SERVICE_TASK مكتملة في Camunda ولم تُعالج بعد.
  * التتبّع بـ activityInstanceId حتى يتكرر مسار التايمر (R/PT5M) بشكل صحيح.
+ *
+ * source:
+ * - complete / recovery: يُنفَّذ مباشرة بعد complete (المسار الرئيسي)
+ * - sync: Job خلفي — لا يعيد تنفيذ SERVICE_TASK القديمة من history Camunda
  */
 async function runServiceTaskActions ({
   processInstance,
   transaction,
   transactionData,
   task,
-  userId
+  userId,
+  source = 'sync'
 }) {
   logStep('SERVICE_TASKS_CHECK', {
     processInstanceId: processInstance.id,
@@ -86,9 +127,52 @@ async function runServiceTaskActions ({
     transactionData._serviceTaskInstanceTracking = true
   }
 
-  const pending = completedServiceTasks.filter(
-    item => !executedInstances.has(item.id)
-  )
+  // أول sync: تجاهل SERVICE_TASK القديمة في history (1,2,3…) ولا تعِد إشعاراتها
+  if (source === 'sync') {
+    const nowMs = Date.now()
+    let skippedStale = 0
+
+    for (const item of completedServiceTasks) {
+      if (executedInstances.has(item.id)) continue
+
+      if (isStaleServiceTaskInstance(item, nowMs)) {
+        executedInstances.add(item.id)
+        legacyActivityIds.add(item.activityId)
+        skippedStale += 1
+      }
+    }
+
+    if (skippedStale > 0) {
+      logStep('SERVICE_TASKS_SKIP_STALE_HISTORY', {
+        skipped: skippedStale,
+        transactionId: transaction.id
+      })
+    }
+  }
+
+  const watermarkMs = parseEndTimeMs(transactionData._serviceTaskSyncWatermark)
+
+  const pending = completedServiceTasks.filter(item => {
+    if (executedInstances.has(item.id)) {
+      return false
+    }
+
+    if (source === 'complete' || source === 'recovery') {
+      return true
+    }
+
+    const endMs = parseEndTimeMs(item.endTime)
+
+    if (!endMs) {
+      return true
+    }
+
+    if (watermarkMs > 0 && endMs <= watermarkMs) {
+      return false
+    }
+
+    return true
+  })
 
   if (!pending.length) {
     transactionData._executedServiceTaskInstances = [...executedInstances]
@@ -177,6 +261,7 @@ async function runServiceTaskActions ({
 
   transactionData._executedServiceTaskInstances = [...executedInstances]
   transactionData._executedServiceTasks = [...legacyActivityIds]
+  updateServiceTaskWatermark(transactionData, pending)
 
   logStep('SERVICE_TASKS_DONE')
 

@@ -8,14 +8,14 @@
 const { createCipheriv, createDecipheriv, randomBytes } = require('crypto')
 
 // يحمّل dotenv عبر env.js مرة واحدة عند أول استيراد
-require('../config/env')
+const { SUBMIT_AES_KEY_BASE64 } = require('../config/env')
 
 const ALGORITHM = 'aes-256-gcm'
 const IV_LENGTH = 12
 const KEY_LENGTH = 32
 
 function getSubmitAesKey () {
-  const raw = process.env.SUBMIT_AES_KEY_BASE64
+  const raw = SUBMIT_AES_KEY_BASE64
 
   if (!raw || !String(raw).trim()) {
     const error = new Error(

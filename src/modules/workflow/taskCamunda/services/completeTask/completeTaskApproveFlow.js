@@ -27,6 +27,80 @@ const {
   logStep
 } = require('./completeTaskHelpers')
 
+function isUserTaskStage (stage) {
+  return !stage?.type || stage.type === 'USER_TASK'
+}
+
+async function resolveTaskStagePairs ({
+  processDefinitionId,
+  tasks = []
+}) {
+  const pairs = []
+
+  for (const task of tasks) {
+    const stage = await stageRepository.findByCodeAndProcess(
+      processDefinitionId,
+      task.taskDefinitionKey
+    )
+
+    pairs.push({ task, stage })
+  }
+
+  return pairs
+}
+
+async function routeAssignmentsForTasks ({
+  taskStagePairs = [],
+  transactionData,
+  overrideTarget = null,
+  applyOverrideOnce = true
+}) {
+  const routedAssignments = []
+  let overrideApplied = false
+
+  for (const { task, stage } of taskStagePairs) {
+    if (!isUserTaskStage(stage)) {
+      continue
+    }
+
+    const routingResult = await routeNextUserTaskAssignments({
+      nextTask: task,
+      nextStage: stage,
+      transactionData,
+      overrideTarget:
+        applyOverrideOnce && !overrideApplied ? overrideTarget : null
+    })
+
+    if (applyOverrideOnce && overrideTarget && routingResult.routed) {
+      overrideApplied = true
+    }
+
+    if (routingResult.assignments?.length) {
+      routedAssignments.push(...routingResult.assignments)
+    }
+  }
+
+  return routedAssignments
+}
+
+async function invalidateUsersForAssignments (assignments = [], userId = null) {
+  const userIds = new Set([userId].filter(Boolean))
+
+  if (assignments.length) {
+    const routedUserIds = await employeeTaskRepository.getUserIdsForOrgDeptRoleIds(
+      assignments.map(item => item.organization_department_roles_id)
+    )
+
+    for (const routedUserId of routedUserIds) {
+      userIds.add(routedUserId)
+    }
+  }
+
+  for (const affectedUserId of userIds) {
+    invalidateEmployeeTasksForUser(affectedUserId).catch(() => {})
+  }
+}
+
 async function runApproveFlow ({
   processInstance,
   transaction,
@@ -43,29 +117,34 @@ async function runApproveFlow ({
     processInstance.camunda_process_instance_id
   )
 
-  const nextTask = nextTasks?.[0] || null
   let nextVersion = currentVersion
   let nextStageId = null
   let workflowStatus = 'running'
 
-  if (nextTask) {
-    const nextStage = await stageRepository.findByCodeAndProcess(
-      processInstance.process_definition_id,
-      nextTask.taskDefinitionKey
+  if (nextTasks.length) {
+    const taskStagePairs = await resolveTaskStagePairs({
+      processDefinitionId: processInstance.process_definition_id,
+      tasks: nextTasks
+    })
+
+    const userTaskPairs = taskStagePairs.filter(({ stage }) =>
+      isUserTaskStage(stage)
     )
+    const representative =
+      userTaskPairs[0] || taskStagePairs[0] || null
 
     await processInstanceRepository.update(processInstance.id, {
-      current_stage_id: nextStage?.id || null,
+      current_stage_id: representative?.stage?.id || null,
       status: 'running'
     }, dbTransaction)
 
-    nextStageId = nextStage?.id || null
+    nextStageId = representative?.stage?.id || null
 
-    const routingResult = await routeNextUserTaskAssignments({
-      nextTask,
-      nextStage,
+    const routedAssignments = await routeAssignmentsForTasks({
+      taskStagePairs: userTaskPairs.length ? userTaskPairs : taskStagePairs,
       transactionData,
-      overrideTarget
+      overrideTarget,
+      applyOverrideOnce: true
     })
 
     await withDbTransaction(sequelize, dbTransaction, async (dbTx) => {
@@ -78,35 +157,41 @@ async function runApproveFlow ({
       nextVersion = updatedTransaction.version
     })
 
-    if (routingResult.assignments?.length) {
-      const routedUserIds = await employeeTaskRepository.getUserIdsForOrgDeptRoleIds(
-        routingResult.assignments.map(item => item.organization_department_roles_id)
-      )
+    await invalidateUsersForAssignments(routedAssignments, userId)
 
-      for (const routedUserId of routedUserIds) {
-        invalidateEmployeeTasksForUser(routedUserId).catch(() => {})
-      }
+    const activeStageIds = taskStagePairs
+      .map(({ stage }) => stage?.id)
+      .filter(Boolean)
 
-      if (routingResult.routed) {
-        scheduleNotifyTechnicalOfficersIfNoAssigneeStaff({
-          targets: routingResult.assignments,
-          nextStage,
-          transaction,
-          processInstance,
-          processDefinitionId: processInstance.process_definition_id,
-          sentByUserId: userId
-        })
+    if (activeStageIds.length) {
+      const stageUserIds =
+        await employeeTaskRepository.getUserIdsForStageIds(activeStageIds)
+
+      for (const affectedUserId of stageUserIds) {
+        invalidateEmployeeTasksForUser(affectedUserId).catch(() => {})
       }
     }
 
+    if (routedAssignments.length) {
+      scheduleNotifyTechnicalOfficersIfNoAssigneeStaff({
+        targets: routedAssignments,
+        nextStage: representative?.stage || null,
+        transaction,
+        processInstance,
+        processDefinitionId: processInstance.process_definition_id,
+        sentByUserId: userId
+      })
+    }
+
     logStep('APPROVE_ADVANCED', {
-      nextTaskId: nextTask.id,
-      nextStageCode: nextStage?.code || '',
-      nextStageType: nextStage?.type || '',
+      activeTaskCount: nextTasks.length,
+      parallelUserTaskCount: userTaskPairs.length,
+      nextTaskIds: nextTasks.map(task => task.id),
+      nextStageCode: representative?.stage?.code || '',
+      nextStageType: representative?.stage?.type || '',
       workflowStatus: 'running',
       routedOverride: Boolean(overrideTarget),
-      routedPending: Boolean(routingResult.pending),
-      routedAssignmentCount: routingResult.assignments?.length || 0
+      routedAssignmentCount: routedAssignments.length
     })
   } else {
     logStep('APPROVE_WORKFLOW_FINISHING', { transactionId: transaction.id })

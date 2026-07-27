@@ -2,6 +2,7 @@
 
 const multer = require('multer')
 const path = require('path')
+const { TRANSACTION_FILE_MAX_MB } = require('../config/env')
 const { normalizeUploadedFiles } = require('../utils/uploadFilename')
 const { ensureUploadsRoot } = require('../utils/filePath')
 
@@ -87,8 +88,6 @@ const TRANSACTION_FILE_EXTENSIONS = [
   '.doc',
   '.docx'
 ]
-
-const TRANSACTION_FILE_MAX_MB = Number(process.env.TRANSACTION_FILE_MAX_MB) || 25
 
 const transactionFileFilter = (req, file, cb) => {
   const ext = path.extname(file.originalname).toLowerCase()

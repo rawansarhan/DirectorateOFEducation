@@ -1,7 +1,12 @@
 'use strict'
 
-const MAX_FAILED_ATTEMPTS = Number(process.env.SECURITY_MAX_FAILED_ATTEMPTS || 5)
-const LOCK_DURATION_MS = Number(process.env.SECURITY_LOCK_DURATION_MS || 15 * 60 * 1000)
+const {
+  SECURITY_MAX_FAILED_ATTEMPTS,
+  SECURITY_LOCK_DURATION_MS
+} = require('../config/env')
+
+const MAX_FAILED_ATTEMPTS = SECURITY_MAX_FAILED_ATTEMPTS
+const LOCK_DURATION_MS = SECURITY_LOCK_DURATION_MS
 
 function getClientIp (req) {
   const forwarded = req.headers['x-forwarded-for']

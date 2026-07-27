@@ -24,20 +24,13 @@
 const http = require('http')
 const jwt = require('jsonwebtoken')
 const { WebSocketServer } = require('ws')
-
-// نفس منطق اشتقاق السرّ المستخدَم في tokenService.js / authMiddleware.js
-// كي يتطابق التحقق هنا مع توقيع الـ access token في الـ backend.
-const ACCESS_SECRET =
-  process.env.JWT_ACCESS_SECRET ||
-  process.env.JWT_SECRET ||
-  'your_very_secret_key'
-
-const WS_PATH = process.env.WS_PATH || '/ws'
-const WS_PORT = Number(process.env.WS_PORT) || 4100 // للتشغيل المستقل فقط.
-
-// إشعار تجريبي دوري (مفيد للتحقق). أوقفه في الإنتاج عبر WS_DEMO=false.
-const DEMO_ENABLED = process.env.WS_DEMO === 'true'
-const DEMO_INTERVAL_MS = Number(process.env.WS_DEMO_INTERVAL_MS) || 15000
+const {
+  JWT_ACCESS_SECRET,
+  WS_PATH,
+  WS_PORT,
+  WS_DEMO,
+  WS_DEMO_INTERVAL_MS
+} = require('../config/env')
 
 /** اتصالات حيّة مفهرسة بمعرّف المستخدم: userId -> Set<WebSocket>. */
 const clientsByUser = new Map()
@@ -117,7 +110,7 @@ function attach (server) {
 
     let decoded
     try {
-      decoded = jwt.verify(token, ACCESS_SECRET)
+      decoded = jwt.verify(token, JWT_ACCESS_SECRET)
     } catch (_) {
       socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
       socket.destroy()
@@ -174,7 +167,7 @@ function attach (server) {
   console.log(`[ws] خادم الإشعارات مُركَّب على المسار ${WS_PATH}`)
 
   // إشعار تجريبي دوري (اختياري) للتحقق من العرض من الطرف إلى الطرف.
-  if (DEMO_ENABLED && !_demoTimer) {
+  if (WS_DEMO && !_demoTimer) {
     let counter = 0
     _demoTimer = setInterval(() => {
       counter += 1
@@ -183,7 +176,7 @@ function attach (server) {
         body: `رسالة رقم ${counter} من خادم الإشعارات.`,
         payload: { type: 'demo', counter }
       })
-    }, DEMO_INTERVAL_MS)
+    }, WS_DEMO_INTERVAL_MS)
   }
 
   return {
