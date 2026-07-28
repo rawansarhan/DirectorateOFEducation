@@ -127,8 +127,38 @@ async function runServiceTaskActions ({
     transactionData._serviceTaskInstanceTracking = true
   }
 
-  // أول sync: تجاهل SERVICE_TASK القديمة في history (1,2,3…) ولا تعِد إشعاراتها
-  if (source === 'sync') {
+  // معاملات قديمة بلا watermark: سجّل كل history الحالي مرة واحدة بدون إعادة إشعارات
+  if (source === 'sync' && !parseEndTimeMs(transactionData._serviceTaskSyncWatermark)) {
+    let bootstrapped = 0
+
+    for (const item of completedServiceTasks) {
+      if (executedInstances.has(item.id)) {
+        continue
+      }
+
+      executedInstances.add(item.id)
+      legacyActivityIds.add(item.activityId)
+      bootstrapped += 1
+    }
+
+    updateServiceTaskWatermark(transactionData, completedServiceTasks)
+
+    if (!transactionData._serviceTaskSyncWatermark) {
+      transactionData._serviceTaskSyncWatermark = new Date().toISOString()
+    }
+
+    transactionData._serviceTaskInstanceTracking = true
+
+    if (bootstrapped > 0) {
+      logStep('SERVICE_TASKS_BOOTSTRAP_HISTORY', {
+        bootstrapped,
+        transactionId: transaction.id
+      })
+    }
+  }
+
+  // أول sync بعد bootstrap: تجاهل SERVICE_TASK القديمة جداً في history
+  if (source === 'sync' && parseEndTimeMs(transactionData._serviceTaskSyncWatermark)) {
     const nowMs = Date.now()
     let skippedStale = 0
 

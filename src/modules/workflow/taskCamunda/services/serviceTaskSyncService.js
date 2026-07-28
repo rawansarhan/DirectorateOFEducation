@@ -29,6 +29,10 @@ function mergeExecutedTracking (targetData, sourceData) {
   ]
   merged._serviceTaskInstanceTracking = true
 
+  if (sourceData._serviceTaskSyncWatermark) {
+    merged._serviceTaskSyncWatermark = sourceData._serviceTaskSyncWatermark
+  }
+
   for (const [key, value] of Object.entries(sourceData || {})) {
     if (key.startsWith('_')) continue
     if (value?.last_activity_instance_id) {
@@ -91,6 +95,7 @@ async function syncProcessInstanceServiceTasks (processInstance) {
     beforeData._executedServiceTaskInstances || []
   )
   const beforeLegacy = JSON.stringify(beforeData._executedServiceTasks || [])
+  const beforeWatermark = beforeData._serviceTaskSyncWatermark || null
   const beforeTracking = Boolean(beforeData._serviceTaskInstanceTracking)
 
   const task = processInstance.task_lock_task_id
@@ -110,7 +115,8 @@ async function syncProcessInstanceServiceTasks (processInstance) {
     beforeInstances !==
       JSON.stringify(nextData._executedServiceTaskInstances || []) ||
     beforeLegacy !== JSON.stringify(nextData._executedServiceTasks || []) ||
-    beforeTracking !== Boolean(nextData._serviceTaskInstanceTracking)
+    beforeTracking !== Boolean(nextData._serviceTaskInstanceTracking) ||
+    beforeWatermark !== (nextData._serviceTaskSyncWatermark || null)
 
   if (!changed) {
     return { changed: false }
