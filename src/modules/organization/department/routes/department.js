@@ -246,7 +246,7 @@ router.get(
 router.get(
   '/by-organization/:organizationId/leaves',
   authMiddleware,
-  // authorize('DEPARTMENT_VIEW'),
+  authorize('DEPARTMENT_VIEW'),
   getLeafDepartmentsByOrganization
 )
 

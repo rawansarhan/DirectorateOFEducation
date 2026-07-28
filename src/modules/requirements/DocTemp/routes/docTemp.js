@@ -280,7 +280,7 @@ router.post(
 router.get(
   '/:id',
   authMiddleware,
-  // authorize('TEMPLATE_READ_ONE'),
+  authorize('TEMPLATE_READ_ONE'),
   getOneActiveDocumentTemplate
 )
 

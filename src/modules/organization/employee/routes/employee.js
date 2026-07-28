@@ -188,7 +188,7 @@ router.get(
 router.get(
   '/by-departments',
   authMiddleware,
-  // authorize('DEPARTMENT_VIEW'),
+  authorize('DEPARTMENT_VIEW'),
   getEmployeesByDepartments
 )
 
@@ -318,7 +318,7 @@ router.get(
 router.get(
   '/by-org-dept-role',
   authMiddleware,
-  // authorize('EMPLOYEE_VIEW'),
+  authorize('EMPLOYEE_VIEW'),
   getUsersByOrgRoleDept
 )
 
@@ -345,7 +345,7 @@ router.get(
 router.get(
   '/:id',
   authMiddleware,
-  // authorize('EMPLOYEE_VIEW'),
+  authorize('EMPLOYEE_VIEW'),
   getEmployeeById
 )
 
