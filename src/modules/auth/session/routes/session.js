@@ -21,7 +21,8 @@ const {
   authBruteForceLimiter
 } = require('../../../../core/security/rateLimitMiddleware')
 
-router.use(authSensitiveLimiter)
+// لا نضع rate limit عام على كل الـ router:
+// /refresh كان يستهلك نفس عدّاد الـ login لمدة 15 دقيقة ويقفل الدخول بالخطأ.
 
 /**
  * @swagger
@@ -193,7 +194,7 @@ router.post('/device-token', authMiddleware, accountLockMiddleware, registerDevi
  *       401:
  *         description: refresh token غير صالح أو منتهٍ أو مُبطَل
  */
-router.post('/refresh', authBruteForceLimiter, refreshTokenUser)
+router.post('/refresh', authSensitiveLimiter, refreshTokenUser)
 
 /**
  * @swagger

@@ -54,9 +54,10 @@ function createRateLimiter ({
     }
 
     if (current.count >= max) {
+      // لا نزيد العداد ولا نمدّد النافذة — القفل ينتهي عند resetAt فقط
       res.setHeader('X-RateLimit-Limit', String(max))
       res.setHeader('X-RateLimit-Remaining', '0')
-      const retryAfter = Math.ceil((current.resetAt - now) / 1000)
+      const retryAfter = Math.max(1, Math.ceil((current.resetAt - now) / 1000))
       res.setHeader('Retry-After', String(retryAfter))
 
       return ApiResponder.tooManyRequestsResponse(
