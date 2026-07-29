@@ -147,13 +147,40 @@ async function resumeCompleteSideEffectsForTransaction (transactionRow) {
 
   try {
     if (nextStep === 'service_tasks') {
+      let recoveryClaimVersion = currentVersion
+      const idsBeforeServiceTasks = new Set(
+        transactionData._executedServiceTaskInstances || []
+      )
+
       transactionData = await runServiceTaskActions({
         processInstance,
         transaction,
         transactionData,
         task,
         userId: sideEffects.user_id,
-        source: 'recovery'
+        source: 'recovery',
+        claimAndPersist: async (dataWithClaim) => {
+          const claimedIds = (dataWithClaim._executedServiceTaskInstances || [])
+            .filter(id => !idsBeforeServiceTasks.has(id))
+
+          const claimed = await persistRecoveryState({
+            transactionId: transaction.id,
+            expectedVersion: recoveryClaimVersion,
+            transactionData: dataWithClaim,
+            sideEffects
+          })
+
+          recoveryClaimVersion = claimed.version
+          currentVersion = claimed.version
+
+          claimed.transactionData.__claimedServiceTaskIds = claimedIds
+
+          return {
+            ok: true,
+            transactionData: claimed.transactionData,
+            version: claimed.version
+          }
+        }
       })
 
       sideEffects = markCompleteSideEffectStep(sideEffects, 'service_tasks_done')

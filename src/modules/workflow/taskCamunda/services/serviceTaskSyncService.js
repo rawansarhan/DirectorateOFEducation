@@ -30,7 +30,11 @@ function mergeExecutedTracking (targetData, sourceData) {
   merged._serviceTaskInstanceTracking = true
 
   if (sourceData._serviceTaskSyncWatermark) {
-    merged._serviceTaskSyncWatermark = sourceData._serviceTaskSyncWatermark
+    const currentMs = Date.parse(merged._serviceTaskSyncWatermark || '') || 0
+    const sourceMs = Date.parse(sourceData._serviceTaskSyncWatermark) || 0
+    if (sourceMs >= currentMs) {
+      merged._serviceTaskSyncWatermark = sourceData._serviceTaskSyncWatermark
+    }
   }
 
   for (const [key, value] of Object.entries(sourceData || {})) {
@@ -45,41 +49,127 @@ function mergeExecutedTracking (targetData, sourceData) {
 
 async function persistServiceTaskResults (transactionId, expectedVersion, nextData) {
   try {
-    await transactionRepository.updateDataOptimistic(
+    const updated = await transactionRepository.updateDataOptimistic(
       transactionId,
       nextData,
       expectedVersion
     )
-    return { ok: true, conflict: false }
+    return {
+      ok: true,
+      conflict: false,
+      version: updated.version,
+      transactionData: updated.data || nextData
+    }
   } catch (err) {
     if (err.code !== 'VERSION_CONFLICT') {
       throw err
     }
 
-    // سباق مع completeTask: ادمج التتبّع فقط حتى لا تُعاد الإشعارات
     const fresh = await transactionRepository.findById(transactionId)
     if (!fresh) {
-      return { ok: false, conflict: true }
+      return { ok: false, conflict: true, reason: 'missing_transaction' }
     }
 
     const merged = mergeExecutedTracking(fresh.data || {}, nextData)
 
     try {
-      await transactionRepository.updateDataOptimistic(
+      const updated = await transactionRepository.updateDataOptimistic(
         transactionId,
         merged,
         fresh.version
       )
-      return { ok: true, conflict: true }
+      return {
+        ok: true,
+        conflict: true,
+        version: updated.version,
+        transactionData: updated.data || merged
+      }
     } catch (retryErr) {
       if (retryErr.code === 'VERSION_CONFLICT') {
         console.warn(
           `${LOG_PREFIX} version conflict persists — tx ${transactionId}, will retry next tick`
         )
-        return { ok: false, conflict: true }
+        return { ok: false, conflict: true, reason: 'version_conflict' }
       }
       throw retryErr
     }
+  }
+}
+
+/**
+ * يحجز activityInstanceIds في DB قبل إرسال الإشعارات (at-most-once).
+ * يُرجع فقط المعرفات التي نجح هذا الـ worker بحجزها فعلياً.
+ */
+async function claimServiceTaskInstances ({
+  transactionId,
+  expectedVersion,
+  transactionData,
+  pendingIds
+}) {
+  if (!pendingIds.length) {
+    return {
+      ok: true,
+      claimedIds: [],
+      version: expectedVersion,
+      transactionData
+    }
+  }
+
+  const fresh = await transactionRepository.findById(transactionId)
+  if (!fresh) {
+    return { ok: false, claimedIds: [], reason: 'missing_transaction' }
+  }
+
+  const already = new Set(fresh.data?._executedServiceTaskInstances || [])
+  const toClaim = pendingIds.filter(id => !already.has(id))
+
+  if (!toClaim.length) {
+    return {
+      ok: true,
+      claimedIds: [],
+      version: fresh.version,
+      transactionData: fresh.data || transactionData,
+      reason: 'already_claimed'
+    }
+  }
+
+  const claimData = mergeExecutedTracking(fresh.data || {}, transactionData)
+  claimData._executedServiceTaskInstances = [
+    ...new Set([
+      ...(claimData._executedServiceTaskInstances || []),
+      ...toClaim
+    ])
+  ]
+
+  const persisted = await persistServiceTaskResults(
+    transactionId,
+    fresh.version,
+    claimData
+  )
+
+  if (!persisted.ok) {
+    return {
+      ok: false,
+      claimedIds: [],
+      reason: persisted.reason || 'persist_failed'
+    }
+  }
+
+  // بعد الحفظ (حتى مع conflict merge): احسب ما بقي لنا وغير منفّذ سابقاً
+  const after = new Set(
+    persisted.transactionData?._executedServiceTaskInstances || []
+  )
+  const claimedIds = toClaim.filter(id => after.has(id))
+
+  // إذا worker آخر حجز نفس الـ IDs قبلنا عبر merge، لا نعيد التنفيذ
+  // claimedIds قد تكون موجودة — لكن إذا كانت أصلاً في already قبل محاولتنا، toClaim كان فارغاً.
+  // هنا toClaim كانت جديدة بالنسبة لنا عند بداية الحجز.
+
+  return {
+    ok: true,
+    claimedIds,
+    version: persisted.version,
+    transactionData: persisted.transactionData
   }
 }
 
@@ -90,33 +180,83 @@ async function syncProcessInstanceServiceTasks (processInstance) {
     return { changed: false }
   }
 
-  const beforeData = cloneData(transaction.data)
-  const beforeInstances = JSON.stringify(
-    beforeData._executedServiceTaskInstances || []
-  )
-  const beforeLegacy = JSON.stringify(beforeData._executedServiceTasks || [])
-  const beforeWatermark = beforeData._serviceTaskSyncWatermark || null
-  const beforeTracking = Boolean(beforeData._serviceTaskInstanceTracking)
+  let currentVersion = transaction.version
+  let currentData = cloneData(transaction.data)
 
   const task = processInstance.task_lock_task_id
     ? { id: processInstance.task_lock_task_id }
     : null
 
+  const beforeSnapshot = JSON.stringify({
+    instances: currentData._executedServiceTaskInstances || [],
+    legacy: currentData._executedServiceTasks || [],
+    watermark: currentData._serviceTaskSyncWatermark || null,
+    tracking: Boolean(currentData._serviceTaskInstanceTracking)
+  })
+
   const nextData = await runServiceTaskActions({
     processInstance,
     transaction,
-    transactionData: cloneData(transaction.data),
+    transactionData: cloneData(currentData),
     task,
     userId: null,
-    source: 'sync'
+    source: 'sync',
+    claimAndPersist: async (dataWithClaim) => {
+      const pendingIds = (dataWithClaim._executedServiceTaskInstances || [])
+        .filter(id => !(currentData._executedServiceTaskInstances || []).includes(id))
+
+      const claim = await claimServiceTaskInstances({
+        transactionId: transaction.id,
+        expectedVersion: currentVersion,
+        transactionData: dataWithClaim,
+        pendingIds
+      })
+
+      if (!claim.ok) {
+        return { ok: false, reason: claim.reason, transactionData: currentData }
+      }
+
+      currentVersion = claim.version
+      currentData = claim.transactionData || dataWithClaim
+
+      // لا إشعارات إذا لم نحجز شيئاً جديداً (worker آخر سبقنا)
+      if (!claim.claimedIds.length) {
+        return {
+          ok: false,
+          reason: 'already_claimed',
+          transactionData: currentData
+        }
+      }
+
+      // أبقِ فقط المحجوز من قِبلنا في قائمة التنفيذ عبر تصفية لاحقة في runner
+      // نضع علامة بالمحجوز
+      currentData.__claimedServiceTaskIds = claim.claimedIds
+
+      return {
+        ok: true,
+        transactionData: currentData,
+        version: currentVersion
+      }
+    }
   })
 
-  const changed =
-    beforeInstances !==
-      JSON.stringify(nextData._executedServiceTaskInstances || []) ||
-    beforeLegacy !== JSON.stringify(nextData._executedServiceTasks || []) ||
-    beforeTracking !== Boolean(nextData._serviceTaskInstanceTracking) ||
-    beforeWatermark !== (nextData._serviceTaskSyncWatermark || null)
+  // صفِّ نتائج التنفيذ واحفظها إن تغيّر شيء غير التتبّع وحده
+  const afterSnapshot = JSON.stringify({
+    instances: nextData._executedServiceTaskInstances || [],
+    legacy: nextData._executedServiceTasks || [],
+    watermark: nextData._serviceTaskSyncWatermark || null,
+    tracking: Boolean(nextData._serviceTaskInstanceTracking)
+  })
+
+  delete nextData.__claimedServiceTaskIds
+
+  const changed = beforeSnapshot !== afterSnapshot ||
+    Object.keys(nextData).some(key => {
+      if (key.startsWith('_')) return false
+      return nextData[key]?.last_activity_instance_id &&
+        nextData[key]?.last_activity_instance_id !==
+          currentData[key]?.last_activity_instance_id
+    })
 
   if (!changed) {
     return { changed: false }
@@ -124,7 +264,7 @@ async function syncProcessInstanceServiceTasks (processInstance) {
 
   await persistServiceTaskResults(
     transaction.id,
-    transaction.version,
+    currentVersion,
     nextData
   )
 
@@ -156,9 +296,6 @@ async function mapPool (items, concurrency, worker) {
   return results
 }
 
-/**
- * Cursor دائري في الذاكرة — يوزّع الحمل على عدة دقائق بدل فحص الكل دفعة واحدة.
- */
 let cursorId = 0
 
 async function syncPendingWorkflowSideEffects ({

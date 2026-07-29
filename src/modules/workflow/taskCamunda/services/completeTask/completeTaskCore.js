@@ -240,14 +240,42 @@ async function completeTaskCore ({
     transactionData = checkpoint.transactionData
 
     if (!isReject) {
-    transactionData = await runServiceTaskActions({
-      processInstance,
-      transaction,
-      transactionData,
-      task,
-      userId,
-      source: 'complete'
-    })
+      let completeClaimVersion = currentVersion
+      const idsBeforeServiceTasks = new Set(
+        transactionData._executedServiceTaskInstances || []
+      )
+
+      transactionData = await runServiceTaskActions({
+        processInstance,
+        transaction,
+        transactionData,
+        task,
+        userId,
+        source: 'complete',
+        claimAndPersist: async (dataWithClaim) => {
+          const claimedIds = (dataWithClaim._executedServiceTaskInstances || [])
+            .filter(id => !idsBeforeServiceTasks.has(id))
+
+          const claimed = await persistCompleteCheckpoint({
+            transactionId: transaction.id,
+            transactionData: dataWithClaim,
+            sideEffects,
+            expectedVersion: completeClaimVersion,
+            dbTransaction
+          })
+
+          completeClaimVersion = claimed.version
+          currentVersion = claimed.version
+
+          claimed.transactionData.__claimedServiceTaskIds = claimedIds
+
+          return {
+            ok: true,
+            transactionData: claimed.transactionData,
+            version: claimed.version
+          }
+        }
+      })
 
       sideEffects = markCompleteSideEffectStep(sideEffects, 'service_tasks_done')
       transactionData = attachCompleteSideEffects(transactionData, sideEffects)
