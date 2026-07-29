@@ -1,5 +1,6 @@
 'use strict'
 
+const { Op } = require('sequelize')
 const { RolePermission, Permission, OrgDeptRole } = require('../../../../entities')
 
 async function findByOrgDeptRoleId (organizationDepartmentRolesId) {
@@ -98,13 +99,27 @@ async function findOrgDeptRoleByOrgDeptRole ({
   departmentId,
   roleId
 }) {
-  return OrgDeptRole.findOne({
-    where: {
-      organization_id: organizationId,
-      department_id: departmentId,
-      role_id: roleId
-    }
-  })
+  const where = {}
+
+  if (organizationId == null) {
+    where.organization_id = { [Op.is]: null }
+  } else {
+    where.organization_id = organizationId
+  }
+
+  if (departmentId == null) {
+    where.department_id = { [Op.is]: null }
+  } else {
+    where.department_id = departmentId
+  }
+
+  if (roleId == null) {
+    where.role_id = { [Op.is]: null }
+  } else {
+    where.role_id = roleId
+  }
+
+  return OrgDeptRole.findOne({ where })
 }
 
 module.exports = {

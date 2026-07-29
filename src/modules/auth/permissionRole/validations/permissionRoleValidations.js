@@ -7,11 +7,18 @@ function createHttpError (message, statusCode = 400, code = 'VALIDATION_ERROR') 
   return err
 }
 
-function parsePositiveInt (value, fieldName) {
+
+function normalizeNullableId (value, fieldName) {
+  if (value === 0 || value === '0' || value == null || value === '') {
+    return null
+  }
+
   const n = Number(value)
 
   if (!Number.isInteger(n) || n < 1) {
-    throw createHttpError(`${fieldName} يجب أن يكون رقماً صحيحاً موجباً`)
+    throw createHttpError(
+      `${fieldName} يجب أن يكون رقماً صحيحاً موجباً أو null/0/فارغ`
+    )
   }
 
   return n
@@ -52,23 +59,24 @@ function resolvePermissionIdsInput (body = {}) {
 
 function parseOrgDeptRoleBody (body = {}) {
   return {
-    organizationId: parsePositiveInt(body.organization_id, 'organization_id'),
-    departmentId: parsePositiveInt(body.department_id, 'department_id'),
-    roleId: parsePositiveInt(body.role_id, 'role_id'),
+    organizationId: normalizeNullableId(body.organization_id, 'organization_id'),
+    departmentId: normalizeNullableId(body.department_id, 'department_id'),
+    roleId: normalizeNullableId(body.role_id, 'role_id'),
     permissionIds: parsePermissionIds(resolvePermissionIdsInput(body))
   }
 }
 
 function parseOrgDeptRoleQuery (query = {}) {
   return {
-    organizationId: parsePositiveInt(query.organization_id, 'organization_id'),
-    departmentId: parsePositiveInt(query.department_id, 'department_id'),
-    roleId: parsePositiveInt(query.role_id, 'role_id')
+    organizationId: normalizeNullableId(query.organization_id, 'organization_id'),
+    departmentId: normalizeNullableId(query.department_id, 'department_id'),
+    roleId: normalizeNullableId(query.role_id, 'role_id')
   }
 }
 
 module.exports = {
   createHttpError,
+  normalizeNullableId,
   parseOrgDeptRoleBody,
   parseOrgDeptRoleQuery,
   parsePermissionIds

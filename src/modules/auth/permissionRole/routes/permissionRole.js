@@ -51,6 +51,8 @@ router.get(
  *     description: |
  *       يبحث عن organization_department_roles المطابق لـ
  *       (organization_id, department_id, role_id) ثم يعرض صلاحياته.
+ *
+ *       القيم `0` أو `null` أو فارغة تُعامل كـ `null` لأي من الحقول الثلاثة.
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -59,19 +61,25 @@ router.get(
  *         required: true
  *         schema:
  *           type: integer
+ *           nullable: true
  *           example: 1
+ *         description: 0 أو null أو فارغ = null
  *       - in: query
  *         name: department_id
  *         required: true
  *         schema:
  *           type: integer
+ *           nullable: true
  *           example: 2
+ *         description: 0 أو null أو فارغ = null
  *       - in: query
  *         name: role_id
  *         required: true
  *         schema:
  *           type: integer
+ *           nullable: true
  *           example: 3
+ *         description: 0 أو null أو فارغ = null
  *     responses:
  *       200:
  *         description: صلاحيات الدور
@@ -94,6 +102,8 @@ router.get(
  *     description: |
  *       يضيف مجموعة permission_id لسجل organization_department_roles
  *       المطابق لـ (organization_id, department_id, role_id) بدون حذف الموجود.
+ *
+ *       القيم `0` أو `null` أو فارغة تُعامل كـ `null` لأي من الحقول الثلاثة.
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -110,13 +120,19 @@ router.get(
  *             properties:
  *               organization_id:
  *                 type: integer
+ *                 nullable: true
  *                 example: 1
+ *                 description: 0 أو null أو فارغ = null
  *               department_id:
  *                 type: integer
+ *                 nullable: true
  *                 example: 2
+ *                 description: 0 أو null أو فارغ = null
  *               role_id:
  *                 type: integer
+ *                 nullable: true
  *                 example: 3
+ *                 description: 0 أو null أو فارغ = null
  *               permission_id:
  *                 type: array
  *                 items:
@@ -147,6 +163,8 @@ router.post(
  *     description: |
  *       يستبدل كل صلاحيات organization_department_roles المطابق
  *       بمجموعة permission_id (يمكن أن تكون فارغة لمسح الصلاحيات).
+ *
+ *       القيم `0` أو `null` أو فارغة تُعامل كـ `null` لأي من الحقول الثلاثة.
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -163,13 +181,19 @@ router.post(
  *             properties:
  *               organization_id:
  *                 type: integer
+ *                 nullable: true
  *                 example: 1
+ *                 description: 0 أو null أو فارغ = null
  *               department_id:
  *                 type: integer
+ *                 nullable: true
  *                 example: 2
+ *                 description: 0 أو null أو فارغ = null
  *               role_id:
  *                 type: integer
+ *                 nullable: true
  *                 example: 3
+ *                 description: 0 أو null أو فارغ = null
  *               permission_id:
  *                 type: array
  *                 items:

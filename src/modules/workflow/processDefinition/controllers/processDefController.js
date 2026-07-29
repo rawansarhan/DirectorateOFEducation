@@ -15,6 +15,7 @@ const {
   getUnapprovedOrInactiveProcesses,
   getProcessesWithMissingStageConfig,
   getProcessesByTypeForAdmin,
+  updateProcessActiveStatus,
   getComplaintProcessesForAdmin,
   getAllComplaintProcessesForAdmin,
   getProcessDetailsWithValidation,
@@ -138,6 +139,19 @@ const getProcessesByTypeForAdminController = asyncHandler(async (req, res) => {
   }
 })
 
+const updateProcessActiveStatusController = asyncHandler(async (req, res) => {
+  try {
+    const result = await updateProcessActiveStatus(
+      req.params.id,
+      req.body?.is_active
+    )
+
+    return ApiResponder.okResponse(res, result, 'تم تعديل حالة العملية بنجاح')
+  } catch (err) {
+    return ApiResponder.badRequestResponse(res, err.message)
+  }
+})
+
 const getComplaintProcessesForAdminController = asyncHandler(async (req, res) => {
   try {
     const { page, limit, offset } = parsePaginationQuery(req.query)
@@ -222,6 +236,7 @@ module.exports = {
   getUnapprovedOrInactiveProcessesController,
   getProcessesWithMissingStageConfigController,
   getProcessesByTypeForAdminController,
+  updateProcessActiveStatusController,
   getComplaintProcessesForAdminController,
   getAllComplaintProcessesForAdminController,
   getProcessDetails,

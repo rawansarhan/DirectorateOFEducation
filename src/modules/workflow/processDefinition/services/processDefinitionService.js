@@ -343,6 +343,33 @@ async function getProcessesByTypeForAdmin (typeTransID, paginationInput) {
   }
 }
 
+async function updateProcessActiveStatus (processId, isActive) {
+  const numericProcessId = Number(processId)
+  if (!Number.isInteger(numericProcessId) || numericProcessId < 1) {
+    throw new Error('معرّف العملية غير صالح')
+  }
+
+  if (typeof isActive !== 'boolean') {
+    throw new Error('الحقل is_active يجب أن يكون true أو false')
+  }
+
+  const process = await processRepository.findById(numericProcessId)
+  if (!process) {
+    throw new Error('العملية غير موجودة')
+  }
+
+  await processRepository.update(numericProcessId, { is_active: isActive })
+
+  await invalidateAllProcessLists()
+  await invalidateProcessDefinitionsWithType()
+  await invalidateProcessDefinitionDetails(numericProcessId)
+
+  return {
+    process_definition_id: numericProcessId,
+    is_active: isActive
+  }
+}
+
 async function getComplaintProcessesForAdmin (paginationInput) {
   const cacheKey = KEYS.adminComplaintProcessesActive()
 
@@ -577,6 +604,7 @@ module.exports = {
   getUnapprovedOrInactiveProcesses,
   getProcessesWithMissingStageConfig,
   getProcessesByTypeForAdmin,
+  updateProcessActiveStatus,
   getComplaintProcessesForAdmin,
   getAllComplaintProcessesForAdmin,
   getProcessDetailsWithValidation,

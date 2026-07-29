@@ -173,7 +173,8 @@ class ProcessRepository {
 
   _buildProcessesByTypeAdminQuery ({ typeTransId = null, allTypes = false } = {}) {
     const where = {
-      is_complaint: false
+      is_complaint: false,
+      is_active: true
     }
 
     if (!allTypes) {

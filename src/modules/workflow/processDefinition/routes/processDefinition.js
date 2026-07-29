@@ -9,6 +9,7 @@ const {
   getUnapprovedOrInactiveProcessesController,
   getProcessesWithMissingStageConfigController,
   getProcessesByTypeForAdminController,
+  updateProcessActiveStatusController,
   getComplaintProcessesForAdminController,
   getAllComplaintProcessesForAdminController,
   getProcessDetails,
@@ -298,6 +299,92 @@ router.get(
   '/admin/type/:id',
   authMiddleware,
   getProcessesByTypeForAdminController
+)
+
+/**
+ * @swagger
+ * /api/process_definitions/admin/{id}/active:
+ *   patch:
+ *     summary: تعديل حالة تفعيل العملية (is_active)
+ *     tags: [Process Definition]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         example: 1
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [is_active]
+ *             properties:
+ *               is_active:
+ *                 type: boolean
+ *                 example: true
+ *     responses:
+ *       200:
+ *         description: تم تعديل حالة العملية بنجاح
+ *       400:
+ *         description: بيانات غير صالحة
+ *       401:
+ *         description: Unauthorized
+ */
+router.patch(
+  '/admin/:id/active',
+  authMiddleware,
+  authorize('PROCESS_REVIEW'),
+  updateProcessActiveStatusController
+)
+
+/**
+ * @swagger
+ * /api/process_definitions/admin/{id}/status:
+ *   patch:
+ *     summary: تعديل حالة العملية (نشط/غير نشط) لكل الأنواع
+ *     description: |
+ *       يبدّل `is_active` للعملية المحددة سواء كانت:
+ *       - `is_complaint = false` (معاملة عادية)
+ *       - `is_complaint = true` (عملية شكوى)
+ *     tags: [Process Definition]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         example: 1
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [is_active]
+ *             properties:
+ *               is_active:
+ *                 type: boolean
+ *                 example: false
+ *     responses:
+ *       200:
+ *         description: تم تعديل حالة العملية بنجاح
+ *       400:
+ *         description: بيانات غير صالحة
+ *       401:
+ *         description: Unauthorized
+ */
+router.patch(
+  '/admin/:id/status',
+  authMiddleware,
+  authorize('PROCESS_REVIEW'),
+  updateProcessActiveStatusController
 )
 
 /**
