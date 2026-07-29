@@ -847,7 +847,7 @@ router.get(
 router.post(
   '/:id/review',
   authMiddleware,
-  authorize('PROCESS_REVIEW'),
+  // authorize('PROCESS_REVIEW'),
   reviewProcessController
 )
 
