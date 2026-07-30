@@ -47,10 +47,10 @@ const {
  *                     config_json:
  *                       type: object
  *                       description: |
- *                         عقد الاستمارة: form_id, form_name, widgets, template, actions, is_assignment.
- *                         is_assignment=true → الموظف يختار الوجهة التالية عند POST /complete.
+ *                         عقد الاستمارة: form_id, form_name, widgets, template, actions, is_assignment, …
+ *                         is_assignment يُحفظ داخل config_json فقط (مثل widgets/template) ولا يغيّر سلوك assignments.
  *                         type_doc_id مطلوب فقط داخل file_picker.
- *                         لمرحلة SERVICE_TASK أضف actions (GENERATE_PDF، SEND_EMAIL، …).
+ *                         لمرحلة SERVICE_TASK أضف actions (GENERATE_PDF، SEND_EMAIL، …) — بدون assignments.
  *                       example:
  *                         form_id: civil_transaction_55
  *                         form_name: استمارة معاملة المواطن
@@ -99,11 +99,10 @@ const {
  *                     assignments:
  *                       type: array
  *                       description: |
- *                         تعيينات المرحلة (تُحفظ في stage_assignments).
- *                         عند `is_assignment=true` أرسل:
- *                         `[{ organization_id: null, department_id: null, role_id: null }]`
- *                         ولا تُحفظ stage_assignments — التوجيه يتم عبر POST /complete.
- *                         الحالة الافتراضية: org/dept/role فعلية للمرحلة التالية.
+ *                         مطلوب لـ USER_TASK فقط — يُحفظ في stage_assignments (نفس السلوك سواء is_assignment true أو false).
+ *                         لا تُرسل لـ SERVICE_TASK.
+ *                         مثال: `[{ organization_id, department_id, role_id }]`
+ *                         أو CITIZEN: `[{ organization_id: null, department_id: null, role_id: null }]`
  *                       items:
  *                         type: object
  *                         required:
@@ -114,18 +113,18 @@ const {
  *                           organization_id:
  *                             type: integer
  *                             nullable: true
- *                             example: null
+ *                             example: 1
  *                           department_id:
  *                             type: integer
  *                             nullable: true
- *                             example: null
+ *                             example: 2
  *                           role_id:
  *                             type: integer
  *                             nullable: true
- *                             example: null
+ *                             example: 3
  *           examples:
  *             with_dynamic_assignment:
- *               summary: USER_TASK مع is_assignment — assignments كلها null
+ *               summary: USER_TASK مع is_assignment=true — assignments تُحفظ كالمعتاد
  *               value:
  *                 stages:
  *                   - stage_id: 2
@@ -148,11 +147,11 @@ const {
  *                       requires_digital_signature: true
  *                       is_assignment: true
  *                     assignments:
- *                       - organization_id: null
- *                         department_id: null
- *                         role_id: null
+ *                       - organization_id: 1
+ *                         department_id: 2
+ *                         role_id: 3
  *             with_static_assignment:
- *               summary: USER_TASK — تعيين ثابت للمرحلة التالية
+ *               summary: USER_TASK مع is_assignment=false — نفس حفظ assignments
  *               value:
  *                 stages:
  *                   - stage_id: 3

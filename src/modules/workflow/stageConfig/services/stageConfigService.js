@@ -1,6 +1,9 @@
 'use strict'
 
-const { findOrgDeptRole } = require('../../../organization/public')
+const {
+  findOrgDeptRole,
+  getCitizenRole
+} = require('../../../organization/public')
 const orgDeptRoleRepository = require('../../../organization/role/repositories/orgDeptRoleRepository')
 
 const {
@@ -8,8 +11,7 @@ const {
 } = require('../validations/stageConfigValidations')
 
 const {
-  validateStageConfigJson,
-  ORG_DEP_ROLE_ASSIGNMENT_WIDGET_ID
+  validateStageConfigJson
 } = require('../validations/stageConfigSchema')
 
 const stageRepository = require('../../processDefinition/repositories/stageRepository')
@@ -62,18 +64,6 @@ function throwBusinessError (message, statusCode = HTTP_STATUS.BAD_REQUEST) {
 
 // 0 / '0' / null تعني "لا يوجد" عند البحث عن الدور (مؤسسة/قسم عامّ)
 const normalizeOrgId = (v) => (v === 0 || v === '0' || v == null ? null : v)
-
-function hasDynamicOrgDepRoleDestination (configJson = {}) {
-  if (configJson?.is_assignment === true) {
-    return true
-  }
-
-  const widget = configJson?.assignments
-  return (
-    widget?.widget_type === 'dropdown' &&
-    widget?.data?.id === ORG_DEP_ROLE_ASSIGNMENT_WIDGET_ID
-  )
-}
 
 function isNullStageAssignment (assignment = {}) {
   const organizationId = normalizeOrgId(assignment.organization_id)
@@ -283,27 +273,10 @@ async function createStageConfigService (data) {
 
     if (stage.type === 'USER_TASK') {
       const assignments = item.assignments || []
-      const dynamicDestination = hasDynamicOrgDepRoleDestination(item.config_json)
 
       if (!assignments.length) {
         throwBusinessError(
-          dynamicDestination
-            ? `المرحلة ${item.stage_id} (USER_TASK): عند is_assignment=true أرسل assignments: [{ organization_id: null, department_id: null, role_id: null }]`
-            : `المرحلة ${item.stage_id} (USER_TASK): يجب تحديد assignments (مؤسسة/قسم/دور)`
-        )
-      }
-
-      if (dynamicDestination) {
-        const allNull = assignments.every(isNullStageAssignment)
-
-        if (!allNull) {
-          throwBusinessError(
-            `المرحلة ${item.stage_id}: عند is_assignment=true يجب أن تكون assignments كلها null — التوجيه يتم عبر POST /complete`
-          )
-        }
-      } else if (assignments.some(isNullStageAssignment)) {
-        throwBusinessError(
-          `المرحلة ${item.stage_id}: assignments بـ null مسموحة فقط مع is_assignment=true`
+          `المرحلة ${item.stage_id} (USER_TASK): يجب تحديد assignments (مؤسسة/قسم/دور)`
         )
       }
     }
@@ -326,19 +299,26 @@ async function createStageConfigService (data) {
     // =================================
     // USER TASK ASSIGNMENTS
     // =================================
+    // is_assignment في config_json لا يغيّر سلوك الحفظ — يُخزَّن مثل باقي الحقول فقط.
+    // USER_TASK: assignments مطلوبة وتُحفظ في stage_assignments
+    // SERVICE_TASK: لا تُرسل assignments
 
     if (stage.type === 'USER_TASK') {
       const assignments = item.assignments || []
-      const dynamicDestination = hasDynamicOrgDepRoleDestination(item.config_json)
 
-      // توجيه ديناميكي عبر OrgDepRole في complete → لا تُحفظ stage_assignments
-      if (!dynamicDestination) {
-        for (const a of assignments) {
-          if (isNullStageAssignment(a)) {
-            continue
+      for (const a of assignments) {
+        let orgDeptRole = null
+
+        if (isNullStageAssignment(a)) {
+          orgDeptRole = await getCitizenRole()
+
+          if (!orgDeptRole) {
+            throwBusinessError(
+              `المرحلة ${item.stage_id}: تعذّر إيجاد دور CITIZEN لتعيين organization_id/department_id/role_id = null`
+            )
           }
-
-          const orgDeptRole = await findOrgDeptRole({
+        } else {
+          orgDeptRole = await findOrgDeptRole({
             organization_id: normalizeOrgId(a.organization_id),
             department_id: normalizeOrgId(a.department_id),
             role_id: a.role_id
@@ -349,20 +329,20 @@ async function createStageConfigService (data) {
               `لم يتم العثور على دور (role_id=${a.role_id}) للمؤسسة ${a.organization_id} والقسم ${a.department_id}`
             )
           }
-
-          const existingKey = `${stage.id}_${orgDeptRole.id}`
-
-          if (existingSet.has(existingKey)) {
-            continue
-          }
-
-          assignmentsToCreate.push({
-            stage_id: stage.id,
-            organization_department_roles_id: orgDeptRole.id
-          })
-
-          existingSet.add(existingKey)
         }
+
+        const existingKey = `${stage.id}_${orgDeptRole.id}`
+
+        if (existingSet.has(existingKey)) {
+          continue
+        }
+
+        assignmentsToCreate.push({
+          stage_id: stage.id,
+          organization_department_roles_id: orgDeptRole.id
+        })
+
+        existingSet.add(existingKey)
       }
     }
 
