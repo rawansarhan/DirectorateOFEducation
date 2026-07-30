@@ -29,6 +29,10 @@ const { authMiddleware ,authorize } = require('../../../../core/middleware/authM
  * /api/process_definitions/create:
  *   post:
  *     summary: Create new process definition (upload BPMN) =.(المسؤول التقني)
+ *     description: |
+ *       عند `is_complaint=true` يُرفض الإنشاء إذا وُجدت شكوى أخرى نشطة
+ *       (`is_complaint=true` و `is_active=true`). يُسمح بإنشاء شكوى جديدة فقط
+ *       بعد تعطيل كل الشكاوى السابقة (`is_active=false`).
  *     tags: [Process Definition]
  *     security:
  *       - bearerAuth: []
@@ -303,47 +307,6 @@ router.get(
 
 /**
  * @swagger
- * /api/process_definitions/admin/{id}/active:
- *   patch:
- *     summary: تعديل حالة تفعيل العملية (is_active)
- *     tags: [Process Definition]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *         example: 1
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required: [is_active]
- *             properties:
- *               is_active:
- *                 type: boolean
- *                 example: true
- *     responses:
- *       200:
- *         description: تم تعديل حالة العملية بنجاح
- *       400:
- *         description: بيانات غير صالحة
- *       401:
- *         description: Unauthorized
- */
-router.patch(
-  '/admin/:id/active',
-  authMiddleware,
-  authorize('PROCESS_REVIEW'),
-  updateProcessActiveStatusController
-)
-
-/**
- * @swagger
  * /api/process_definitions/admin/{id}/status:
  *   patch:
  *     summary: تعديل حالة العملية (نشط/غير نشط) لكل الأنواع
@@ -397,7 +360,7 @@ router.patch(
  *       مع Redis cache (TTL = PROCESS_CACHE_TTL_SECONDS).
  *
  *       **Auth:** Bearer (تسجيل دخول فقط — بدون تقييد دور)
- *     tags: [Process Definition]
+ *     tags: [Complaint]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -457,7 +420,7 @@ router.get(
  *       مع Redis cache (TTL = PROCESS_CACHE_TTL_SECONDS).
  *
  *       **Auth:** Bearer (تسجيل دخول فقط — بدون تقييد دور)
- *     tags: [Process Definition]
+ *     tags: [Complaint]
  *     security:
  *       - bearerAuth: []
  *     parameters:

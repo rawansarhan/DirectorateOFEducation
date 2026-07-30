@@ -56,6 +56,10 @@ module.exports = [
     "description": "الشهادة، الوثيقة النهائية، وسلسلة النزاهة (QR) — Certificate, Final Document, Integrity Chain"
   },
   {
+    "name": "Complaint",
+    "description": "عمليات الشكاوى واستمارة التقديم النشطة (Complaints)"
+  },
+  {
     "name": "TypeProcess",
     "description": "أنواع العمليات (Type Process)"
   },

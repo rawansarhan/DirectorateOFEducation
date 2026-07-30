@@ -5,8 +5,10 @@ const { HTTP_STATUS } = require('../../../core/middleware/httpStatusCodes')
 const MESSAGES = {
   LIST_RETRIEVED: 'تم جلب الإشعارات بنجاح',
   MARKED_READ: 'تم تعليم الإشعار كمقروء بنجاح',
+  MARKED_READ_BULK: 'تم تعليم الإشعارات كمقروءة بنجاح',
   NOT_FOUND: 'الإشعار غير موجود أو لا يخص حسابك',
   INVALID_NOTIFICATION_ID: 'معرّف الإشعار غير صالح — يجب أن يكون رقماً صحيحاً أكبر من 0',
+  INVALID_NOTIFICATION_IDS: 'notification_ids يجب أن تكون مصفوفة أرقام صحيحة موجبة (1–100 عنصر)',
   INVALID_UNREAD: 'قيمة unread غير صالحة — استخدم true أو false فقط',
   INVALID_PAGE: 'رقم الصفحة (page) غير صالح — يجب أن يكون رقماً صحيحاً أكبر من أو يساوي 1',
   INVALID_LIMIT: 'قيمة limit غير صالحة — يجب أن تكون رقماً بين 1 و 100',

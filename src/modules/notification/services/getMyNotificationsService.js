@@ -129,8 +129,76 @@ async function markNotificationAsRead ({ userId, notificationId }) {
   }
 }
 
+function normalizeNotificationIds (rawIds) {
+  if (!Array.isArray(rawIds) || rawIds.length === 0 || rawIds.length > 100) {
+    throw createHttpError(
+      MESSAGES.INVALID_NOTIFICATION_IDS,
+      HTTP_STATUS.BAD_REQUEST,
+      'VALIDATION_ERROR'
+    )
+  }
+
+  const ids = []
+  const seen = new Set()
+
+  for (const raw of rawIds) {
+    const id = Number(raw)
+
+    if (!Number.isInteger(id) || id < 1) {
+      throw createHttpError(
+        MESSAGES.INVALID_NOTIFICATION_IDS,
+        HTTP_STATUS.BAD_REQUEST,
+        'VALIDATION_ERROR'
+      )
+    }
+
+    if (!seen.has(id)) {
+      seen.add(id)
+      ids.push(id)
+    }
+  }
+
+  return ids
+}
+
+async function markNotificationsAsRead ({ userId, notificationIds }) {
+  const ids = normalizeNotificationIds(notificationIds)
+
+  const rows = await retryWithBackoff(
+    () => notificationRepository.markManyAsRead(ids, userId),
+    { label: 'notification.markManyAsRead' }
+  )
+
+  if (!rows.length) {
+    throw createHttpError(
+      MESSAGES.NOT_FOUND,
+      HTTP_STATUS.NOT_FOUND,
+      'NOTIFICATION_NOT_FOUND'
+    )
+  }
+
+  const unreadCount = await retryWithBackoff(
+    () => notificationRepository.countUnreadByUserId(userId),
+    { label: 'notification.countUnreadByUserId' }
+  )
+
+  const foundIds = new Set(rows.map(row => Number(row.id)))
+  const notFoundIds = ids.filter(id => !foundIds.has(id))
+
+  return {
+    message: MESSAGES.MARKED_READ_BULK,
+    data: {
+      items: toListItemDTOList(rows),
+      updated_count: rows.length,
+      not_found_ids: notFoundIds,
+      unread_count: unreadCount
+    }
+  }
+}
+
 module.exports = {
   getMyNotifications,
   markNotificationAsRead,
+  markNotificationsAsRead,
   parseUnreadFilter
 }

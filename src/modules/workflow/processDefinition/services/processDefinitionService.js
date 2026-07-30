@@ -115,6 +115,18 @@ async function createProcessDefinitionService (data) {
     throw new Error('نوع العملية غير موجود')
   }
 
+  if (isComplaint) {
+    const activeComplaint = await processRepository.existsActiveComplaintProcess()
+
+    if (activeComplaint) {
+      throw createHttpError(
+        'لا يمكن إنشاء شكوى جديدة طالما توجد شكوى نشطة (is_complaint=true و is_active=true). عطّل الشكاوى الحالية أولاً.',
+        HTTP_STATUS.BAD_REQUEST,
+        'ACTIVE_COMPLAINT_EXISTS'
+      )
+    }
+  }
+
   // camunda deploy
   const deployRes =
     await camundaClient.deployProcess(

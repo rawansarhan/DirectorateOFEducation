@@ -5,7 +5,8 @@ const router = express.Router()
 
 const {
   getMyNotificationsController,
-  markNotificationReadController
+  markNotificationReadController,
+  markNotificationsReadController
 } = require('../controllers/notificationController')
 
 const { authMiddleware } = require('../../../core/middleware/authMiddleware')
@@ -112,6 +113,93 @@ router.get(
   '/my',
   authMiddleware,
   getMyNotificationsController
+)
+
+/**
+ * @swagger
+ * /api/notifications/read:
+ *   patch:
+ *     summary: Mark multiple notifications as read
+ *     description: |
+ *       يعلّم عدة إشعارات كمقروءة دفعة واحدة للمستخدم المسجّل.
+ *       يُحدَّث فقط ما يخص حسابه من القائمة.
+ *     tags: [Notifications]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [notification_ids]
+ *             properties:
+ *               notification_ids:
+ *                 type: array
+ *                 minItems: 1
+ *                 maxItems: 100
+ *                 items:
+ *                   type: integer
+ *                   minimum: 1
+ *                 example: [42, 43, 44]
+ *           example:
+ *             notification_ids: [42, 43, 44]
+ *     responses:
+ *       200:
+ *         description: تم تعليم الإشعارات كمقروءة
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/ApiSuccessResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         items:
+ *                           type: array
+ *                           items:
+ *                             type: object
+ *                         updated_count:
+ *                           type: integer
+ *                           example: 3
+ *                         not_found_ids:
+ *                           type: array
+ *                           items:
+ *                             type: integer
+ *                           example: []
+ *                         unread_count:
+ *                           type: integer
+ *                           example: 1
+ *       400:
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ApiErrorResponse'
+ *       404:
+ *         description: لا يوجد أي إشعار من القائمة يخص الحساب
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ApiErrorResponse'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ApiErrorResponse'
+ */
+router.patch(
+  '/read',
+  authMiddleware,
+  markNotificationsReadController
+)
+
+router.put(
+  '/read',
+  authMiddleware,
+  markNotificationsReadController
 )
 
 /**

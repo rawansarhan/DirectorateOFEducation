@@ -4,7 +4,8 @@ const asyncHandler = require('../../../../core/middleware/asyncHandler')
 const ApiResponder = require('../../../../core/utils/apiResponder')
 const {
   createStageConfigService,
-  getConfig_json
+  getConfig_json,
+  getComplaintConfigForUser
 } = require('../services/stageConfigService')
 const {
   HTTP_STATUS,
@@ -70,7 +71,17 @@ const getJsonProcess = asyncHandler(async (req, res) => {
   }
 })
 
+const getComplaintConfigController = asyncHandler(async (req, res) => {
+  try {
+    const result = await getComplaintConfigForUser(req.user.id)
+    return ApiResponder.okResponse(res, result.data, result.message)
+  } catch (err) {
+    return handleStageConfigError(res, err, 'تعذّر جلب استمارة الشكوى')
+  }
+})
+
 module.exports = {
   createStageConfig,
-  getJsonProcess
+  getJsonProcess,
+  getComplaintConfigController
 }

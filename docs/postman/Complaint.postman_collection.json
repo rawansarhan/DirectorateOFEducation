@@ -1,0 +1,94 @@
+{
+  "info": {
+    "_postman_id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+    "name": "Complaint",
+    "description": "مجموعة Postman لـ APIs الشكاوى.\n\n**المتغيرات:**\n- `baseUrl` — عنوان السيرفر (افتراضي http://localhost:4000)\n- `token` — Bearer token\n\n**الطلبات:**\n1. GET admin/complaints — عمليات الشكاوى النشطة فقط\n2. GET admin/complaints/all — كل عمليات الشكاوى (نشطة + غير نشطة)\n3. GET stage_config/config/complaint — استمارة تقديم الشكوى النشطة (AUTH)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:4000",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "GET عمليات الشكاوى النشطة فقط",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/process_definitions/admin/complaints?page=1&limit=20",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "process_definitions", "admin", "complaints"],
+          "query": [
+            {
+              "key": "page",
+              "value": "1"
+            },
+            {
+              "key": "limit",
+              "value": "20"
+            }
+          ]
+        },
+        "description": "عمليات الشكاوى النشطة فقط (`is_complaint=true`, `is_active=true`).\n\n**Auth:** Bearer (تسجيل دخول فقط)"
+      },
+      "response": []
+    },
+    {
+      "name": "GET كل عمليات الشكاوى (نشطة + غير نشطة)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/process_definitions/admin/complaints/all?page=1&limit=20",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "process_definitions", "admin", "complaints", "all"],
+          "query": [
+            {
+              "key": "page",
+              "value": "1"
+            },
+            {
+              "key": "limit",
+              "value": "20"
+            }
+          ]
+        },
+        "description": "كل عمليات الشكاوى حيث `is_complaint=true` (نشطة وغير نشطة).\n\n**Auth:** Bearer (تسجيل دخول فقط)"
+      },
+      "response": []
+    },
+    {
+      "name": "GET استمارة تقديم الشكوى النشطة (AUTH)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/stage_config/config/complaint",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "stage_config", "config", "complaint"]
+        },
+        "description": "يجلب `config_json` لمرحلة AUTH الخاصة بعملية الشكوى النشطة الوحيدة (`is_complaint=true` و `is_active=true`).\n\nيتحقق أن stageAssignment يطابق أدوار المستخدم.\n\n**Auth:** Bearer"
+      },
+      "response": []
+    }
+  ]
+}

@@ -50,6 +50,7 @@ const KEYS = {
   adminComplaintProcessesAllStatuses: () => 'process:admin:complaint:all-statuses',
   technicalOfficerUserIds: () => 'notification:technical-officer-user-ids',
   stageConfig: (processId) => `stage-config:process:${processId}`,
+  complaintStageConfigActive: () => 'stage-config:complaint:active',
   currentStage: (processDefinitionId, taskDefinitionKey) =>
     `current-stage:${processDefinitionId}:${taskDefinitionKey}`,
   finalDocument: (transactionId) => `final-document:tx:${transactionId}`,
@@ -515,6 +516,17 @@ async function invalidateAuthComplaintProcesses () {
   })
 }
 
+async function invalidateComplaintStageConfig () {
+  const cacheKey = KEYS.complaintStageConfigActive()
+  const deleted = await deleteKey(cacheKey)
+
+  logInvalidate({
+    module: 'ComplaintStageConfig',
+    fullKey: `${API_CACHE_PREFIX}${cacheKey}`,
+    deleted
+  })
+}
+
 async function invalidateAllAuthProcessCaches () {
   const typedCount = await deleteKeysByPattern('process:auth:typed:*')
   const allKey = KEYS.authProcessesAll()
@@ -528,6 +540,7 @@ async function invalidateAllAuthProcessCaches () {
   const adminComplaintAllStatusesDeleted = await deleteKey(
     KEYS.adminComplaintProcessesAllStatuses()
   )
+  await invalidateComplaintStageConfig()
 
   console.log(
     `${LOG_PREFIX} invalidate all auth process caches — typed: ${typedCount} key(s), all: ${allDeleted} key(s), complaint: ${complaintDeleted} key(s) — redis: ${redisStatusLabel()}`
@@ -544,6 +557,7 @@ async function invalidateStageConfig (processId = null) {
     await deleteKeysByPattern(`current-stage:${processId}:*`)
     await deleteKeysByPattern('stage-assignments:*')
     await invalidateProcessDefinitionDetails(processId)
+    await invalidateComplaintStageConfig()
     console.log(`${LOG_PREFIX} invalidate stage config — process ${processId}`)
     return
   }
@@ -551,6 +565,7 @@ async function invalidateStageConfig (processId = null) {
   const count = await deleteKeysByPattern('stage-config:process:*')
   const stageCount = await deleteKeysByPattern('current-stage:*')
   const assignmentCount = await deleteKeysByPattern('stage-assignments:*')
+  await invalidateComplaintStageConfig()
   console.log(
     `${LOG_PREFIX} invalidate all stage configs (${count} key(s)) + current stages (${stageCount} key(s)) + stage assignments (${assignmentCount} key(s))`
   )
@@ -559,11 +574,13 @@ async function invalidateStageConfig (processId = null) {
 async function invalidateStageAssignments (stageId = null) {
   if (stageId != null) {
     await deleteKey(KEYS.stageAssignments(stageId))
+    await invalidateComplaintStageConfig()
     console.log(`${LOG_PREFIX} invalidate stage assignments — stage ${stageId}`)
     return
   }
 
   const count = await deleteKeysByPattern('stage-assignments:*')
+  await invalidateComplaintStageConfig()
   console.log(`${LOG_PREFIX} invalidate all stage assignments (${count} key(s))`)
 }
 
@@ -806,6 +823,7 @@ module.exports = {
   invalidateFilePickers,
   invalidateAuthProcessesByType,
   invalidateAuthComplaintProcesses,
+  invalidateComplaintStageConfig,
   invalidateAllAuthProcessCaches,
   invalidateStageConfig,
   invalidateStageAssignments,

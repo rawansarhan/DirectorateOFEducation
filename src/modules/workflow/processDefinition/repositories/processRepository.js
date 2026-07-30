@@ -231,6 +231,18 @@ class ProcessRepository {
     })
   }
 
+  async existsActiveComplaintProcess () {
+    const row = await ProcessDefinition.findOne({
+      where: {
+        is_complaint: true,
+        is_active: true
+      },
+      attributes: ['id', 'name', 'code']
+    })
+
+    return row
+  }
+
   async findAuthComplaintProcesses (roleIds) {
     return ProcessDefinition.findAll(
       this._buildAuthProcessesQuery({ isComplaint: true, roleIds })

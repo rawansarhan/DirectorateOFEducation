@@ -134,6 +134,43 @@ class NotificationRepository {
 
     return this.findByIdForUser(id, uid)
   }
+
+  async markManyAsRead (notificationIds, userId) {
+    const uid = Number(userId)
+    const ids = [...new Set(
+      (notificationIds || [])
+        .map(id => Number(id))
+        .filter(id => Number.isInteger(id) && id >= 1)
+    )]
+
+    if (!Number.isInteger(uid) || uid < 1 || !ids.length) {
+      return []
+    }
+
+    await Notification.update(
+      { read_at: new Date() },
+      {
+        where: {
+          id: { [Op.in]: ids },
+          user_id: uid
+        }
+      }
+    )
+
+    return Notification.findAll({
+      where: {
+        id: { [Op.in]: ids },
+        user_id: uid
+      },
+      order: [['id', 'ASC']],
+      include: [{
+        model: User,
+        as: 'sender',
+        attributes: ['id', 'userName'],
+        required: false
+      }]
+    })
+  }
 }
 
 module.exports = new NotificationRepository()

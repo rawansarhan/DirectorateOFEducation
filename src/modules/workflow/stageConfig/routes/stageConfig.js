@@ -2,7 +2,11 @@ const express = require('express')
 const router = express.Router()
 const { authMiddleware ,authorize } = require('../../../../core/middleware/authMiddleware')
 
-const { createStageConfig , getJsonProcess} = require('../controllers/stageConfigController')
+const {
+  createStageConfig,
+  getJsonProcess,
+  getComplaintConfigController
+} = require('../controllers/stageConfigController')
 /**
  * @swagger
  * /api/stage_config/create:
@@ -201,6 +205,106 @@ router.post(
   createStageConfig
 )
  /**
+ * @swagger
+ * /api/stage_config/config/complaint:
+ *   get:
+ *     summary: استمارة تقديم الشكوى النشطة (AUTH stage)
+ *     description: |
+ *       يجلب `config_json` لمرحلة AUTH الخاصة بعملية الشكوى النشطة الوحيدة
+ *       (`is_complaint=true` و `is_active=true`).
+ *       مع Redis cache (TTL = API_CACHE_TTL_SECONDS).
+ *
+ *       يتحقق أن `stageAssignment` يطابق أدوار المستخدم الحالي (التحقق خارج الكاش).
+ *       إن وُجد `is_assignment` / `assignments` يُحذفان من الاستجابة للمواطن.
+ *     tags: [Complaint]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: تم جلب استمارة الشكوى بنجاح
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 status_code:
+ *                   type: integer
+ *                   example: 200
+ *                 message:
+ *                   type: string
+ *                   example: تم جلب استمارة الشكوى بنجاح
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     process_definition_id:
+ *                       type: integer
+ *                       example: 12
+ *                     process_name:
+ *                       type: string
+ *                       example: شكوى مواطن
+ *                     process_code:
+ *                       type: string
+ *                       example: COMPLAINT_01
+ *                     config_json:
+ *                       type: object
+ *       401:
+ *         description: غير مصادق
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ApiErrorResponse'
+ *       403:
+ *         description: دور المستخدم غير مطابق لتعيينات مرحلة التقديم
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ApiErrorResponse'
+ *             example:
+ *               success: false
+ *               status_code: 403
+ *               message: ليس لديك صلاحية تقديم شكوى — دورك غير مطابق لتعيينات مرحلة التقديم
+ *               error: FORBIDDEN
+ *               data: null
+ *       404:
+ *         description: لا توجد شكوى نشطة أو مرحلة AUTH أو استمارة غير مكوّنة
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ApiErrorResponse'
+ *             examples:
+ *               no_active_complaint:
+ *                 summary: لا توجد شكوى نشطة
+ *                 value:
+ *                   success: false
+ *                   status_code: 404
+ *                   message: لا توجد شكوى نشطة حالياً
+ *                   error: NOT_FOUND
+ *                   data: null
+ *               auth_stage_missing:
+ *                 summary: لا توجد مرحلة AUTH
+ *                 value:
+ *                   success: false
+ *                   status_code: 404
+ *                   message: لا توجد مرحلة تقديم (AUTH) مرتبطة بعملية الشكوى
+ *                   error: NOT_FOUND
+ *                   data: null
+ *       500:
+ *         description: خطأ داخلي في السيرفر
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ApiErrorResponse'
+ */
+router.get(
+  '/config/complaint',
+  authMiddleware,
+  getComplaintConfigController
+)
+
+/**
  * @swagger
  * /api/stage_config/config/{id}:
  *   get:

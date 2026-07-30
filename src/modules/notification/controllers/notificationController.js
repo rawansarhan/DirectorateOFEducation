@@ -3,6 +3,7 @@
 const {
   getMyNotifications,
   markNotificationAsRead,
+  markNotificationsAsRead,
   parseUnreadFilter
 } = require('../services/getMyNotificationsService')
 const {
@@ -63,7 +64,21 @@ async function markNotificationReadController (req, res) {
   }
 }
 
+async function markNotificationsReadController (req, res) {
+  try {
+    const result = await markNotificationsAsRead({
+      userId: req.user.id,
+      notificationIds: req.body?.notification_ids ?? req.body?.ids
+    })
+
+    return sendNotificationSuccess(res, result.data, result.message)
+  } catch (err) {
+    return sendNotificationError(res, err)
+  }
+}
+
 module.exports = {
   getMyNotificationsController,
-  markNotificationReadController
+  markNotificationReadController,
+  markNotificationsReadController
 }

@@ -505,7 +505,106 @@ async function getConfig_json (processId, { userId } = {}) {
     data
   }
 }
+async function loadComplaintConfigPayload () {
+  const activeComplaint = await processRepository.existsActiveComplaintProcess()
+
+  if (!activeComplaint) {
+    throw createHttpError(
+      'لا توجد شكوى نشطة حالياً',
+      HTTP_STATUS.NOT_FOUND,
+      'NOT_FOUND'
+    )
+  }
+
+  const stage = await stageRepository.findFirstAuthStage(activeComplaint.id)
+
+  if (!stage) {
+    throw createHttpError(
+      'لا توجد مرحلة تقديم (AUTH) مرتبطة بعملية الشكوى',
+      HTTP_STATUS.NOT_FOUND,
+      'NOT_FOUND'
+    )
+  }
+
+  const assignments = await stageAssignmentRepository.findByStageIds([stage.id])
+
+  if (!assignments.length) {
+    throw createHttpError(
+      'لا توجد تعيينات لمرحلة التقديم في عملية الشكوى',
+      HTTP_STATUS.NOT_FOUND,
+      'NOT_FOUND'
+    )
+  }
+
+  const stageConfig = await stageConfigRepository.findByStageId(stage.id)
+
+  if (!stageConfig) {
+    throw createHttpError(
+      'لم تُكوَّن استمارة التقديم لعملية الشكوى بعد',
+      HTTP_STATUS.NOT_FOUND,
+      'NOT_FOUND'
+    )
+  }
+
+  const configJson = stageConfig.config_json || {}
+  let citizenConfig = configJson
+
+  if (configJson.is_assignment || configJson.assignments) {
+    const { is_assignment, assignments: _a, ...rest } = configJson
+    citizenConfig = rest
+  }
+
+  return {
+    process_definition_id: activeComplaint.id,
+    process_name: activeComplaint.name,
+    process_code: activeComplaint.code,
+    assigned_odr_ids: assignments.map(a => a.organization_department_roles_id),
+    config_json: citizenConfig
+  }
+}
+
+async function getComplaintConfigForUser (userId) {
+  const cacheKey = KEYS.complaintStageConfigActive()
+
+  console.log(
+    `[StageConfig] GET /api/stage_config/config/complaint — cache key: api:${cacheKey}`
+  )
+
+  const payload = await getOrLoad(
+    cacheKey,
+    () => retryWithBackoff(
+      () => loadComplaintConfigPayload(),
+      { label: 'stageConfig.getComplaintConfigForUser' }
+    ),
+    {
+      label: 'stage-config:complaint:active',
+      ttlSeconds: API_CACHE_TTL_SECONDS
+    }
+  )
+
+  const { getUserRoles } = require('../../../auth/public')
+  const userOdrIds = await getUserRoles(userId)
+  const assignedOdrIds = new Set(payload.assigned_odr_ids || [])
+  const hasAccess = userOdrIds.some(id => assignedOdrIds.has(id))
+
+  if (!hasAccess) {
+    throw createHttpError(
+      'ليس لديك صلاحية تقديم شكوى — دورك غير مطابق لتعيينات مرحلة التقديم',
+      HTTP_STATUS.FORBIDDEN,
+      'FORBIDDEN'
+    )
+  }
+
+  const { assigned_odr_ids: _assigned, ...data } = payload
+
+  return {
+    message: 'تم جلب استمارة الشكوى بنجاح',
+    data
+  }
+}
+
 module.exports = {
   createStageConfigService,
-  getConfig_json
+  getConfig_json,
+  getComplaintConfigForUser
 }
