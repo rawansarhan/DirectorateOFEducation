@@ -14,7 +14,7 @@ const {
   runMulterUpload
 } = require('../../../../core/middleware/upload')
 
-const { authMiddleware } = require('../../../../core/middleware/authMiddleware')
+const { authMiddleware, authorize } = require('../../../../core/middleware/authMiddleware')
 
 /**
  * @swagger
@@ -26,14 +26,23 @@ const { authMiddleware } = require('../../../../core/middleware/authMiddleware')
  *
  *       يجمع كل ما يحتاجه الفرونت:
  *       - `transaction_history` (process_name + applicant + stages؛ PDF على مرحلة GENERATE_PDF)
+ *       - `signers` سلسلة التواقيع مرتبة: من وقّع كل مرحلة
+ *         (الاسم الأول/الأخير، اسم الأب، اسم الأم، الرقم الوطني)
  *       - `final_document` إن وُجدت
  *
  *       ملاحظة: لا يتضمّن هذا الرد أي بيانات QR / سلسلة نزاهة.
  *
- *       **Auth:** Bearer (تسجيل دخول فقط — بدون تقييد مالك/دور داخل المنطق)
- *       **الحالة:** أي حالة (draft / submitted / in_progress / completed / rejected)
- *       — يعرض `transaction_history` المتاح حتى لو لم تكتمل المعاملة.
+ *       **Auth:** Bearer + صلاحية `VIEW_HISTORY_TRANSACTION`
+ *       **الحالة:** أي حالة — يعرض `transaction_history` المتاح.
  *       `completed_at` يكون `null` إن لم تكن completed؛ `final_document` إن وُجدت فقط.
+ *
+ *       **شكل data:**
+ *       - transaction_id, status, process_name, process_priority
+ *       - submitted_at, completed_at
+ *       - signers: [{ signature_order, stage_code, stage_name, signed_at, user_id,
+ *         first_name, last_name, father_name, mother_name, national_id }]
+ *       - transaction_history: { process_name, priority, data }
+ *       - final_document: سجل الوثيقة أو `{ available: false, message }`
  *     tags: [Certificate & Integrity Chain]
  *     security:
  *       - bearerAuth: []
@@ -63,6 +72,7 @@ const { authMiddleware } = require('../../../../core/middleware/authMiddleware')
 router.get(
   '/:transactionId/certificate',
   authMiddleware,
+  authorize('VIEW_HISTORY_TRANSACTION'),
   getCertificateController
 )
 
@@ -72,9 +82,17 @@ router.get(
  *   post:
  *     summary: رفع وحفظ PDF النهائي بعد توليده من الفرونت
  *     description: |
- *       يرفع PDF الشهادة بعد أن يولّده الفرونت من بيانات GET /certificate.
- *       **Auth:** Bearer — مالك المعاملة
- *       **الحالة:** completed فقط
+ *       يرفع الفرونت ملف PDF الشهادة بعد بنائه من بيانات
+ *       `GET /api/transaction/{transactionId}/certificate`، فيُحفَظ كوثيقة نهائية للمعاملة.
+ *
+ *       **Auth:** Bearer — **مالك المعاملة فقط**
+ *
+ *       **الحالة:** `completed` فقط
+ *
+ *       **ملاحظات:**
+ *       - `file` إلزامي ونوعه PDF.
+ *       - `qr_payload` اختياري؛ إن تُرك فارغاً يُؤخذ snapshot الـ QR من سلسلة النزاهة.
+ *       - رفع ملف جديد يستبدل الوثيقة النهائية السابقة لنفس المعاملة.
  *     tags: [Certificate & Integrity Chain]
  *     security:
  *       - bearerAuth: []
@@ -100,7 +118,7 @@ router.get(
  *                 description: ملف PDF النهائي (إلزامي)
  *               qr_payload:
  *                 type: string
- *                 description: JSON string — snapshot QR عند الطباعة (اختياري؛ إن تُرك فارغاً يُؤخذ من integrity chain)
+ *                 description: JSON string — snapshot QR عند الطباعة (اختياري)
  *                 example: '{"v":1,"tx":12,"genesis":"abc","head":"def","links":2}'
  *     responses:
  *       200:
@@ -115,19 +133,41 @@ router.get(
  *                     data:
  *                       $ref: '#/components/schemas/FinalDocumentRecord'
  *       400:
+ *         description: الملف مفقود أو المعاملة ليست completed
  *         content:
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/ApiErrorResponse'
  *       403:
- *         description: لا تملك صلاحية الوصول
+ *         description: لا تملك صلاحية الوصول (لست مالك المعاملة)
  *       404:
  *         description: المعاملة غير موجودة
+ */
+router.post(
+  '/:transactionId/final-document',
+  authMiddleware,
+  runMulterUpload(uploadFinalTransactionPdf.single('file')),
+  uploadFinalDocumentController
+)
+
+/**
+ * @swagger
+ * /api/transaction/{transactionId}/final-document:
  *   get:
- *     summary: جلب الوثيقة النهائية المحفوظة
+ *     summary: جلب الوثيقة النهائية (أو توليدها إن لم تكن محفوظة)
  *     description: |
- *       يرجع سجل PDF النهائي المحفوظ سابقاً عبر POST.
- *       **Auth:** Bearer — مالك المعاملة
+ *       يجلب الوثيقة النهائية اعتماداً على `transaction_id` فقط — **بدون تقييد بمالك المعاملة**.
+ *
+ *       **السلوك:**
+ *       - إن وُجدت وثيقة نهائية محفوظة → تُعاد كما هي.
+ *       - إن لم توجد والمعاملة `completed` → يولّدها السيرفر (دمج المرفقات + ملفات
+ *         GENERATE_PDF مع صفحة غلاف تحمل رمز QR) ثم يعيدها.
+ *       - إن كانت محفوظة بدون QR وسلسلة التواقيع جاهزة → يُعاد توليدها لتتضمّن QR.
+ *       - إن لم تكن المعاملة `completed` ولا توجد وثيقة محفوظة → `404`.
+ *
+ *       **Auth:** Bearer + صلاحية `VIEW_CREATE_FINAL_DOCUMENT`
+ *
+ *       ملاحظة: **POST** على نفس المسار يبقى مقتصراً على مالك المعاملة.
  *     tags: [Certificate & Integrity Chain]
  *     security:
  *       - bearerAuth: []
@@ -141,7 +181,7 @@ router.get(
  *         example: 12
  *     responses:
  *       200:
- *         description: تم جلب الوثيقة النهائية بنجاح
+ *         description: تم جلب/توليد الوثيقة النهائية بنجاح
  *         content:
  *           application/json:
  *             schema:
@@ -151,23 +191,19 @@ router.get(
  *                   properties:
  *                     data:
  *                       $ref: '#/components/schemas/FinalDocumentRecord'
+ *       403:
+ *         description: لا تملك صلاحية VIEW_CREATE_FINAL_DOCUMENT
  *       404:
- *         description: لا توجد وثيقة نهائية محفوظة
+ *         description: المعاملة غير موجودة أو لا توجد وثيقة نهائية ولا يمكن توليدها
  *         content:
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/ApiErrorResponse'
  */
-router.post(
-  '/:transactionId/final-document',
-  authMiddleware,
-  runMulterUpload(uploadFinalTransactionPdf.single('file')),
-  uploadFinalDocumentController
-)
-
 router.get(
   '/:transactionId/final-document',
   authMiddleware,
+  authorize('VIEW_CREATE_FINAL_DOCUMENT'),
   getFinalDocumentController
 )
 

@@ -188,7 +188,10 @@ const {
 
  */
 
-router.get('/tasks', authMiddleware, getAllTasksController)
+router.get('/tasks', 
+  authMiddleware,
+  authorize('GET_ALL_TASK_FOR_EMPLOYEE'),
+  getAllTasksController)
 
 /**
 
@@ -301,6 +304,7 @@ router.get('/tasks', authMiddleware, getAllTasksController)
 router.get(
   '/tasks/completed/by-department',
   authMiddleware,
+  authorize('GET_TASK_COMPLETED_BY_DEPARTMENT'),
   getCompletedByDepartmentController
 )
 
@@ -405,6 +409,7 @@ router.get(
 router.get(
   '/tasks/rejected/by-department',
   authMiddleware,
+  authorize('GET_TASK_REJECTED_BY_DEPARTMENT'),
   getRejectedByDepartmentController
 )
 
@@ -564,14 +569,14 @@ router.get(
 router.get(
   '/tasks/stats/rejected-last-month',
   authMiddleware,
-  authorize('tasks_STATS_REJECTED_LAST_MONTH'),
+  authorize('TASKS_STATS_REJECTED_LAST_MONTH'),
   getRejectedLastMonthStatsController
 )
 
 router.get(
   '/tasks/stats/active',
   authMiddleware,
-  authorize('tasks_STATS_ACTIVE'),
+  authorize('TASKS_STATS_ACTIVE'),
   getActiveStatsController
 )
 
@@ -758,7 +763,10 @@ router.get(
 
  */
 
-router.get('/tasks/:taskId', authMiddleware, getTaskDetailsController)
+router.get('/tasks/:taskId',
+   authMiddleware,
+  authorize('TASK_SIGNING'),
+   getTaskDetailsController)
 
 
 
@@ -834,7 +842,10 @@ router.get('/tasks/:taskId', authMiddleware, getTaskDetailsController)
 
  */
 
-router.post('/tasks/:taskId/pickup', authMiddleware, pickupTaskController)
+router.post('/tasks/:taskId/pickup',
+   authMiddleware,
+   authorize('TASK_SIGNING'),
+    pickupTaskController)
 
 
 
@@ -888,9 +899,9 @@ router.post('/tasks/:taskId/pickup', authMiddleware, pickupTaskController)
 
  */
 
-router.post('/tasks/:taskId/release', authMiddleware, releaseTaskController)
-
-
+router.post('/tasks/:taskId/release', authMiddleware,
+  authorize('TASK_SIGNING'),
+  releaseTaskController)
 
 /**
 
@@ -1023,19 +1034,12 @@ router.post('/tasks/:taskId/release', authMiddleware, releaseTaskController)
  */
 
 router.post(
-
   '/tasks/:taskId/signing-challenge',
-
   authMiddleware,
-
+  authorize('TASK_SIGNING'),
   signingChallengeLimiter,
-
   createSigningChallengeController
-
 )
-
-
-
 /**
 
  * @swagger
@@ -1283,6 +1287,8 @@ router.post(
   '/tasks/:taskId/complete',
 
   authMiddleware,
+  
+  authorize('TASK_SIGNING'),
 
   completeTaskLimiter,
 

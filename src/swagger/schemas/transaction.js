@@ -1587,6 +1587,61 @@ module.exports = {
       }
     }
   },
+  "CertificateSigner": {
+    "type": "object",
+    "description": "موقّع واحد من سلسلة التواقيع — مرحلة + هوية الموقّع",
+    "properties": {
+      "signature_order": {
+        "type": "integer",
+        "example": 1
+      },
+      "stage_code": {
+        "type": "string",
+        "nullable": true,
+        "example": "Activity_review"
+      },
+      "stage_name": {
+        "type": "string",
+        "nullable": true,
+        "example": "مراجعة الموظف"
+      },
+      "signed_at": {
+        "type": "string",
+        "format": "date-time",
+        "nullable": true
+      },
+      "user_id": {
+        "type": "integer",
+        "nullable": true,
+        "example": 8
+      },
+      "first_name": {
+        "type": "string",
+        "nullable": true,
+        "example": "سامر"
+      },
+      "last_name": {
+        "type": "string",
+        "nullable": true,
+        "example": "الأحمد"
+      },
+      "father_name": {
+        "type": "string",
+        "nullable": true,
+        "example": "خالد"
+      },
+      "mother_name": {
+        "type": "string",
+        "nullable": true,
+        "example": "هدى"
+      },
+      "national_id": {
+        "type": "string",
+        "nullable": true,
+        "example": "04259204010"
+      }
+    }
+  },
   "CertificateBundleResponse": {
     "type": "object",
     "description": "بيانات الشهادة للطباعة — للفرونت لبناء PDF + QR",
@@ -1620,6 +1675,13 @@ module.exports = {
       "completed_at": {
         "type": "string",
         "example": "18/06/2026"
+      },
+      "signers": {
+        "type": "array",
+        "description": "سلسلة التواقيع مرتبة — من وقّع كل مرحلة مع بيانات هويته",
+        "items": {
+          "$ref": "#/components/schemas/CertificateSigner"
+        }
       },
       "transaction_history": {
         "$ref": "#/components/schemas/CertificateTransactionHistoryBlock"

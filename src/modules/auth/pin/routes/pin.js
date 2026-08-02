@@ -54,7 +54,11 @@ router.use(authSensitiveLimiter)
  *       409:
  *         description: PIN موجود مسبقاً
  */
-router.post('/setup-pin', authMiddleware, accountLockMiddleware, setupPinUser)
+router.post('/setup-pin',
+   authMiddleware, 
+   authorize('PIN_SITTING'),
+   accountLockMiddleware, 
+   setupPinUser)
 
 /**
  * @swagger
@@ -84,7 +88,11 @@ router.post('/setup-pin', authMiddleware, accountLockMiddleware, setupPinUser)
  *       400:
  *         description: PIN غير صحيح أو لا يوجد PIN
  */
-router.post('/delete-pin', authMiddleware, accountLockMiddleware, deletePinUser)
+  router.post('/delete-pin', 
+  authMiddleware, 
+  authorize('PIN_SITTING'),
+  accountLockMiddleware,
+  deletePinUser)
 
 /**
  * @swagger
@@ -112,7 +120,11 @@ router.post('/delete-pin', authMiddleware, accountLockMiddleware, deletePinUser)
  *       200:
  *         description: تم فتح القفل
  */
-router.post('/verify-app-pin', authMiddleware, accountLockMiddleware, verifyAppPinUser)
+router.post('/verify-app-pin', 
+  authMiddleware, 
+  authorize('PIN_SITTING'),
+  accountLockMiddleware,
+   verifyAppPinUser)
 
 /**
  * @swagger
@@ -147,7 +159,11 @@ router.post('/verify-app-pin', authMiddleware, accountLockMiddleware, verifyAppP
  *       200:
  *         description: تم تغيير PIN
  */
-router.post('/change-pin', authMiddleware, accountLockMiddleware, changePinUser)
+router.post('/change-pin',
+   authMiddleware, 
+   authorize('PIN_SITTING'),
+   accountLockMiddleware,
+    changePinUser)
 
 /**
  * @swagger
@@ -162,6 +178,10 @@ router.post('/change-pin', authMiddleware, accountLockMiddleware, changePinUser)
  *       200:
  *         description: تم تغيير PIN
  */
-router.post('/citizen/change-pin', authMiddleware, accountLockMiddleware, changePinUser)
+router.post('/citizen/change-pin',
+   authMiddleware,
+   authorize('PIN_SITTING'),
+   accountLockMiddleware,
+   changePinUser)
 
 module.exports = router

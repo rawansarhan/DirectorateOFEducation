@@ -1,12 +1,17 @@
 'use strict'
 
 const fs = require('fs')
-const path = require('path')
 
 const transactionRepository = require('../../transaction/repositories/transactionRepository')
 const documentInstanceRepository = require('../../document/repositories/documentInstanceRepository')
 const documentSignatureRepository =
   require('../../../workflow/public').documentSignatureRepository
+const processRepository =
+  require('../../../workflow/processDefinition/repositories/processRepository')
+const stageRepository =
+  require('../../../workflow/processDefinition/repositories/stageRepository')
+const stageConfigRepository =
+  require('../../../workflow/stageConfig/repositories/stageConfigRepository')
 const transactionSignatureLinkRepository =
   require('../../integrityChain/repositories/transactionSignatureLinkRepository')
 const {
@@ -26,6 +31,7 @@ const {
   loadAuthorizedTransaction,
   CERTIFICATE_AUDIENCE
 } = require('./transactionCertificateService')
+const { RETRY_MAX_ATTEMPTS } = require('../../../../core/config/env')
 
 const COMPLETED_STATUS = 'completed'
 
@@ -91,6 +97,58 @@ function summarizeUploadedFiles (rows = []) {
     })
 }
 
+function extractGeneratePdfTemplateIdsFromConfig (configJson) {
+  const actions = Array.isArray(configJson?.actions) ? configJson.actions : []
+  const templateIds = []
+
+  for (const action of actions) {
+    if (String(action?.name || '').toUpperCase() !== 'GENERATE_PDF') {
+      continue
+    }
+
+    const templateId = Number(action?.payload?.template_id)
+
+    if (Number.isInteger(templateId) && templateId > 0) {
+      templateIds.push(templateId)
+    }
+  }
+
+  return templateIds
+}
+
+async function resolveProcessGeneratePdfRequirement (transaction) {
+  if (!transaction?.code) {
+    return { required: false, templateIds: [] }
+  }
+
+  const process = await processRepository.findByCode(transaction.code)
+
+  if (!process) {
+    return { required: false, templateIds: [] }
+  }
+
+  const stages = await stageRepository.findByProcessDefinitionId(process.id)
+  const stageIds = stages.map(stage => stage.id)
+
+  if (!stageIds.length) {
+    return { required: false, templateIds: [] }
+  }
+
+  const configs = await stageConfigRepository.findByStageIds(stageIds)
+  const templateIds = []
+
+  for (const config of configs) {
+    templateIds.push(...extractGeneratePdfTemplateIdsFromConfig(config.config_json))
+  }
+
+  const uniqueTemplateIds = [...new Set(templateIds)]
+
+  return {
+    required: uniqueTemplateIds.length > 0,
+    templateIds: uniqueTemplateIds
+  }
+}
+
 async function assessFinalDocumentReadiness (
   transactionId,
   {
@@ -122,19 +180,22 @@ async function assessFinalDocumentReadiness (
     throw createTransactionError('TRANSACTION_NOT_FOUND')
   }
 
-  const [instances, uploadedRows, signatureLinks, outboxEvents] = await Promise.all([
-    documentInstanceRepository.findAllByTransactionId(numericTransactionId),
-    documentSignatureRepository.findAllWithSignaturesByTransactionId(
-      numericTransactionId
-    ),
-    transactionSignatureLinkRepository.findByTransactionIdOrdered(
-      numericTransactionId
-    ),
-    findGeneratePdfEventsByTransactionId(numericTransactionId, [
-      'pending',
-      'failed'
+  const [instances, uploadedRows, signatureLinks, outboxEvents, processPdfRequirement] =
+    await Promise.all([
+      documentInstanceRepository.findAllByTransactionId(numericTransactionId),
+      documentSignatureRepository.findAllWithSignaturesByTransactionId(
+        numericTransactionId
+      ),
+      transactionSignatureLinkRepository.findByTransactionIdOrdered(
+        numericTransactionId
+      ),
+      findGeneratePdfEventsByTransactionId(numericTransactionId, [
+        'pending',
+        'failed'
+      ]),
+      resolveProcessGeneratePdfRequirement(transaction)
     ])
-  ])
+
   const instanceSummaries = summarizeGeneratePdfInstances(instances)
   const uploadedSummaries = summarizeUploadedFiles(uploadedRows)
   const outboxSummaries = summarizeOutboxEvents(outboxEvents)
@@ -148,26 +209,59 @@ async function assessFinalDocumentReadiness (
   const uploadsMissingFile = uploadedSummaries.filter(item => !item.file_on_disk)
   const failedOutbox = outboxSummaries.filter(item => item.status === 'failed')
   const pendingOutbox = outboxSummaries.filter(item => item.status === 'pending')
+  const exhaustedOutbox = failedOutbox.filter(
+    item => item.retry_count >= RETRY_MAX_ATTEMPTS
+  )
+
+  const readyGeneratedTemplateIds = new Set(
+    instanceSummaries
+      .filter(item => item.generated_pdf_path && item.file_on_disk)
+      .map(item => Number(item.template_id))
+      .filter(id => Number.isInteger(id) && id > 0)
+  )
+
+  const missingRequiredTemplates = processPdfRequirement.templateIds.filter(
+    templateId => !readyGeneratedTemplateIds.has(templateId)
+  )
 
   const generatePdfRequired =
+    processPdfRequirement.required ||
     outboxSummaries.length > 0 ||
-    instanceSummaries.some(item => item.generated_pdf_path)
+    instanceSummaries.some(item => item.generated_pdf_path) ||
+    instanceSummaries.length > 0
 
   const generatePdfReady =
     !generatePdfRequired ||
     (
+      missingRequiredTemplates.length === 0 &&
       instancesMissingPdf.length === 0 &&
       instancesMissingFile.length === 0 &&
       failedOutbox.length === 0 &&
-      pendingOutbox.length === 0
+      pendingOutbox.length === 0 &&
+      (
+        !processPdfRequirement.required ||
+        processPdfRequirement.templateIds.every(id => readyGeneratedTemplateIds.has(id))
+      )
     )
 
   const authorityConfigured = isAuthorityKeyConfigured()
+  const hasIntegrityChain =
+    Boolean(transaction.genesis_hash) && signatureLinks.length > 0
+  const hasGeneratedPdfOnDisk = instanceSummaries.some(
+    item => item.generated_pdf_path && item.file_on_disk
+  )
+
+  // QR جاهز: وثيقة GENERATE_PDF موقّعة، أو سلسلة تواقيع للمعاملة (بدون PDF)
   const finalQrReady =
     generatePdfReady &&
     Boolean(transaction.genesis_hash) &&
     authorityConfigured &&
-    instanceSummaries.some(item => item.generated_pdf_path && item.file_on_disk)
+    (hasGeneratedPdfOnDisk || hasIntegrityChain)
+
+  const hasMergeSources =
+    instances.length > 0 ||
+    uploadedSummaries.length > 0 ||
+    hasIntegrityChain
 
   const checks = [
     buildCheck({
@@ -180,24 +274,29 @@ async function assessFinalDocumentReadiness (
     }),
     buildCheck({
       id: 'documents_available',
-      ok: instances.length > 0 || uploadedRows.length > 0,
-      message:
-        instances.length > 0 || uploadedRows.length > 0
-          ? 'توجد وثائق للدمج'
-          : 'لا توجد وثائق (GENERATE_PDF أو مرفقات) لهذه المعاملة'
+      ok: hasMergeSources,
+      message: hasMergeSources
+        ? 'توجد مصادر لبناء الوثيقة النهائية'
+        : 'لا توجد وثائق ولا سلسلة تواقيع لهذه المعاملة'
     }),
     buildCheck({
       id: 'generate_pdf',
       ok: generatePdfReady,
       message: generatePdfReady
         ? 'كل ملفات GENERATE_PDF جاهزة'
-        : 'ملفات GENERATE_PDF غير جاهزة بعد',
+        : processPdfRequirement.required && missingRequiredTemplates.length
+          ? `GENERATE_PDF مطلوب ولم يكتمل (قوالب ناقصة: ${missingRequiredTemplates.join(', ')})`
+          : 'ملفات GENERATE_PDF غير جاهزة بعد',
       details: {
         required: generatePdfRequired,
+        process_required: processPdfRequirement.required,
+        required_template_ids: processPdfRequirement.templateIds,
+        missing_required_templates: missingRequiredTemplates,
         missing_paths: instancesMissingPdf,
         missing_files: instancesMissingFile,
         outbox_pending: pendingOutbox,
-        outbox_failed: failedOutbox
+        outbox_failed: failedOutbox,
+        outbox_exhausted: exhaustedOutbox
       }
     }),
     buildCheck({
@@ -212,11 +311,10 @@ async function assessFinalDocumentReadiness (
     }),
     buildCheck({
       id: 'integrity_chain',
-      ok: Boolean(transaction.genesis_hash) && signatureLinks.length > 0,
-      message:
-        transaction.genesis_hash && signatureLinks.length > 0
-          ? `سلسلة التواقيع موجودة (${signatureLinks.length} رابط)`
-          : 'سلسلة التواقيع غير مكتملة أو genesis_hash مفقود'
+      ok: hasIntegrityChain,
+      message: hasIntegrityChain
+        ? `سلسلة التواقيع موجودة (${signatureLinks.length} رابط)`
+        : 'سلسلة التواقيع غير مكتملة أو genesis_hash مفقود'
     }),
     buildCheck({
       id: 'authority_keys',
@@ -262,6 +360,8 @@ async function assessFinalDocumentReadiness (
     generate_pdf: {
       required: generatePdfRequired,
       ready: generatePdfReady,
+      process_required: processPdfRequirement.required,
+      required_template_ids: processPdfRequirement.templateIds,
       instances: instanceSummaries,
       outbox_events: outboxSummaries,
       flush_results: flushResults

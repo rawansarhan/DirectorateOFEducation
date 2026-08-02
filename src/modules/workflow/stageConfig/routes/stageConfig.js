@@ -200,7 +200,7 @@ const {
 router.post(
   '/create',
   authMiddleware,
-  authorize('STAGE_CONFIG_CREATE'),
+  authorize('CREATE'),
   createStageConfig
 )
  /**

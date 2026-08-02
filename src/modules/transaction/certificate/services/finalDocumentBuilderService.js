@@ -12,7 +12,8 @@
  *      والصور (png/jpg) تُدرج كل واحدة في صفحة.
  *
  * يُحفظ ويُسجَّل كـ final_document (document_final_transactions) ويُحسب content_hash.
- * متاح فقط لمعاملة completed ولمالكها.
+ * متاح فقط لمعاملة completed.
+ * requireOwner=true يقيّد التوليد بمالك المعاملة؛ GET final-document يستدعيه بدون تقييد المالك.
  */
 
 const fs = require('fs')
@@ -129,34 +130,46 @@ function readUploadBytes (storedPath) {
   return fs.readFileSync(absolutePath)
 }
 
-/** رابط QR النهائي — كل مسح يُصدر رمز تفاصيل جديد (6 أرقام، 5 دقائق) */
-function buildFinalQr ({ transaction, generatedInstances }) {
-  if (
-    !generatedInstances.length ||
-    !transaction.genesis_hash ||
-    !isAuthorityKeyConfigured()
-  ) {
+/**
+ * رابط QR النهائي — كل مسح يُصدر رمز تفاصيل جديد (6 أرقام، 5 دقائق).
+ * - إن وُجد GENERATE_PDF: الربط على آخر document_instance.
+ * - وإلا: ربط على مستوى المعاملة (doc=0) اعتماداً على genesis + سلسلة التواقيع.
+ */
+function buildFinalQr ({
+  transaction,
+  generatedInstances = [],
+  hasIntegrityChain = false
+}) {
+  if (!transaction.genesis_hash || !isAuthorityKeyConfigured()) {
     return null
   }
 
-  const finalInstance = generatedInstances[generatedInstances.length - 1]
+  const finalInstance = generatedInstances.length
+    ? generatedInstances[generatedInstances.length - 1]
+    : null
+
+  if (!finalInstance && !hasIntegrityChain) {
+    return null
+  }
+
+  const documentInstanceId = finalInstance?.id ?? 0
 
   const signature = signDocumentBinding({
     transactionId: transaction.id,
     genesisHash: transaction.genesis_hash,
-    documentInstanceId: finalInstance.id
+    documentInstanceId
   })
 
   return {
     transaction_id: transaction.id,
     genesis_hash: transaction.genesis_hash,
-    document_instance_id: finalInstance.id,
+    document_instance_id: documentInstanceId,
     signature,
     verification_url: buildVerificationUrl({
       apiBaseUrl: API_PUBLIC_URL,
       transactionId: transaction.id,
       genesisHash: transaction.genesis_hash,
-      documentInstanceId: finalInstance.id,
+      documentInstanceId,
       signatureBase64Url: signature
     })
   }
@@ -466,11 +479,15 @@ async function generateMergedFinalDocument (
   ])
 
   const generatedInstances = instances.filter(item => item.generated_pdf_path)
+  const hasIntegrityChain = Boolean(
+    transaction.genesis_hash &&
+    Number(readiness?.integrity_chain?.total_links || 0) > 0
+  )
 
-  if (!generatedInstances.length && !uploadedRows.length) {
+  if (!generatedInstances.length && !uploadedRows.length && !hasIntegrityChain) {
     throw createTransactionError(
       'VALIDATION_ERROR',
-      'لا توجد وثائق (GENERATE_PDF أو مرفقات) لدمجها في هذه المعاملة'
+      'لا توجد وثائق (GENERATE_PDF أو مرفقات) ولا سلسلة تواقيع لبناء الوثيقة النهائية'
     )
   }
 
@@ -478,7 +495,11 @@ async function generateMergedFinalDocument (
     ? await processRepository.findByCode(transaction.code)
     : null
 
-  const finalQr = buildFinalQr({ transaction, generatedInstances })
+  const finalQr = buildFinalQr({
+    transaction,
+    generatedInstances,
+    hasIntegrityChain
+  })
 
   const mergedPdf = await PDFDocument.create()
   const bodyFont = await embedUnicodeFont(mergedPdf)

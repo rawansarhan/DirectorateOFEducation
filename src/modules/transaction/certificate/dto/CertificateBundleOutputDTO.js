@@ -10,6 +10,7 @@ class CertificateBundleOutputDTO {
     process_priority = null,
     submitted_at = null,
     completed_at = null,
+    signers = [],
     transaction_history = null,
     final_document = null
   }) {
@@ -19,6 +20,7 @@ class CertificateBundleOutputDTO {
     this.process_priority = process_priority
     this.submitted_at = submitted_at
     this.completed_at = completed_at
+    this.signers = Array.isArray(signers) ? signers : []
     this.transaction_history = transaction_history
     this.final_document = final_document instanceof FinalDocumentOutputDTO
       ? final_document

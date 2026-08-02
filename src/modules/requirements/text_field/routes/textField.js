@@ -49,7 +49,7 @@ const {
 router.get(
   '/',
   authMiddleware,
-  authorize('REQUIREMENTS_READ_ALL'),
+  authorize('VIEW_ALL'),
   getAllTextFields
 )
 
@@ -98,7 +98,7 @@ router.get(
 router.post(
   '/',
   authMiddleware,
-  authorize('REQUIREMENTS_CREATE'),
+  authorize('CREATE'),
   createTextField
 )
 
@@ -125,7 +125,7 @@ router.post(
 router.get(
   '/:id',
   authMiddleware,
-  authorize('REQUIREMENTS_READ_ONE'),
+  authorize('VIEW_ONE'),
   getTextFieldById
 )
 

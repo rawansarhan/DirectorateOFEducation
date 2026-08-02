@@ -334,7 +334,13 @@ async function verifyDocumentQr ({
     throw new Error('معرّف المعاملة غير صالح')
   }
 
-  if (!Number.isInteger(numericDocumentInstanceId) || numericDocumentInstanceId < 1) {
+  // doc=0 = رمز QR على مستوى المعاملة (سلسلة التواقيع بدون GENERATE_PDF)
+  const isTransactionLevelQr = numericDocumentInstanceId === 0
+
+  if (
+    !isTransactionLevelQr &&
+    (!Number.isInteger(numericDocumentInstanceId) || numericDocumentInstanceId < 1)
+  ) {
     throw new Error('معرّف الوثيقة غير صالح')
   }
 
@@ -345,7 +351,7 @@ async function verifyDocumentQr ({
   const signatureValid = verifyDocumentBinding({
     transactionId: numericTransactionId,
     genesisHash,
-    documentInstanceId: numericDocumentInstanceId,
+    documentInstanceId: isTransactionLevelQr ? 0 : numericDocumentInstanceId,
     signatureBase64Url
   })
 
@@ -373,17 +379,29 @@ async function verifyDocumentQr ({
     })
   }
 
-  const documentInstance = await documentInstanceRepository.findById(
-    numericDocumentInstanceId
-  )
+  let document = null
 
-  if (!documentInstance || documentInstance.transaction_id !== numericTransactionId) {
-    return toDocumentQrVerifyDTO({
-      valid: false,
-      signature_valid: true,
-      reason: 'نسخة الوثيقة لا تخص هذه المعاملة',
-      verified_at: new Date()
-    })
+  if (!isTransactionLevelQr) {
+    const documentInstance = await documentInstanceRepository.findById(
+      numericDocumentInstanceId
+    )
+
+    if (!documentInstance || documentInstance.transaction_id !== numericTransactionId) {
+      return toDocumentQrVerifyDTO({
+        valid: false,
+        signature_valid: true,
+        reason: 'نسخة الوثيقة لا تخص هذه المعاملة',
+        verified_at: new Date()
+      })
+    }
+
+    document = {
+      document_instance_id: documentInstance.id,
+      document_template_id: documentInstance.document_template_id,
+      generated_pdf_path: documentInstance.generated_pdf_path,
+      content_hash: documentInstance.content_hash,
+      status: documentInstance.status
+    }
   }
 
   const chain = await verifyIntegrityChain(numericTransactionId, { genesis_hash: genesisHash })
@@ -394,13 +412,7 @@ async function verifyDocumentQr ({
     transaction_id: numericTransactionId,
     transaction_status: transaction.status,
     genesis_hash: transaction.genesis_hash,
-    document: {
-      document_instance_id: documentInstance.id,
-      document_template_id: documentInstance.document_template_id,
-      generated_pdf_path: documentInstance.generated_pdf_path,
-      content_hash: documentInstance.content_hash,
-      status: documentInstance.status
-    },
+    document,
     chain,
     verified_at: new Date()
   })

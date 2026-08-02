@@ -37,7 +37,7 @@ const { authMiddleware, authorize } = require('../../../../core/middleware/authM
 router.post(
   '/',
   authMiddleware,
-  authorize('ORGANIZATION_CREATE'),
+  authorize('CREATE'),
   createOrganization
 )
 
@@ -124,7 +124,7 @@ router.post(
 router.get(
   '/',
   authMiddleware,
-  authorize('ORGANIZATION_VIEW'),
+  authorize('VIEW_ALL'),
   getAllOrganizations
 )
 
@@ -153,7 +153,7 @@ router.get(
 router.get(
   '/:id',
   authMiddleware,
-  authorize('ORGANIZATION_VIEW'),
+  authorize('VIEW_ONE'),
   getOrganizationById
 )
 

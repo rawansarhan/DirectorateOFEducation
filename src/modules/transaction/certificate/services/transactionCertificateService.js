@@ -3,6 +3,7 @@
 const transactionRepository = require('../../transaction/repositories/transactionRepository')
 const {
   processRepository,
+  stageRepository,
   employeeTaskRepository,
   formatTransactionHistoryForDisplay,
   enrichHistoryTemplatesWithDocumentInstances,
@@ -11,10 +12,13 @@ const {
 } = require('../../../workflow/public')
 const documentInstanceRepository = require('../../document/repositories/documentInstanceRepository')
 const documentFinalTransactionRepository = require('../repositories/documentFinalTransactionRepository')
+const transactionSignatureLinkRepository =
+  require('../../integrityChain/repositories/transactionSignatureLinkRepository')
 const { getIntegrityChain } = require('../../integrityChain/services/integrityChainService')
 const { createTransactionError } = require('../../transaction/utils/transactionErrors')
 const {
   toFinalDocumentDTO,
+  toCertificateSignerDTO,
   toCertificateBundleDTO,
   toSaveFinalDocumentInput
 } = require('../mappers/certificateMapper')
@@ -81,6 +85,22 @@ async function loadAuthorizedTransaction (
   throw createTransactionError('UNAUTHORIZED')
 }
 
+async function buildStageNamesByCode (processDefinitionId) {
+  if (!processDefinitionId) {
+    return new Map()
+  }
+
+  const stages = await stageRepository.findByProcessDefinitionId(
+    processDefinitionId
+  )
+
+  return new Map(
+    (stages || [])
+      .filter(stage => stage.code)
+      .map(stage => [stage.code, stage.name ?? null])
+  )
+}
+
 async function getCertificateBundle (
   transactionId,
   { userId: _userId = null, audience: _audience = CERTIFICATE_AUDIENCE.OWNER } = {}
@@ -91,14 +111,19 @@ async function getCertificateBundle (
     throw createTransactionError('TRANSACTION_NOT_FOUND')
   }
 
-  const [process, documentInstances, finalDocument] =
+  const [process, documentInstances, finalDocument, signerLinks] =
     await Promise.all([
       transaction.code
         ? processRepository.findByCode(transaction.code)
         : null,
       documentInstanceRepository.findAllByTransactionId(transactionId),
-      documentFinalTransactionRepository.findByTransactionIdCached(transactionId)
+      documentFinalTransactionRepository.findByTransactionIdCached(transactionId),
+      transactionSignatureLinkRepository.findSignersWithIdentityByTransactionId(
+        transactionId
+      )
     ])
+
+  const stageNamesByCode = await buildStageNamesByCode(process?.id ?? null)
 
   const historyData = enrichHistoryTemplatesWithDocumentInstances(
     formatTransactionHistoryForDisplay(transaction.data || {}, transaction),
@@ -116,6 +141,9 @@ async function getCertificateBundle (
     completed_at: isCompleted
       ? formatTransactionDate(transaction.updated_at)
       : null,
+    signers: (signerLinks || []).map(link =>
+      toCertificateSignerDTO(link, { stageNamesByCode })
+    ),
     transaction_history: {
       process_name: process?.name ?? null,
       priority: normalizeProcessPriority(process?.priority),
@@ -168,11 +196,54 @@ async function saveFinalDocument (payload) {
 }
 
 async function getFinalDocument (transactionId, { userId = null } = {}) {
-  await loadAuthorizedTransaction(transactionId, userId)
+  const numericTransactionId = Number.parseInt(transactionId, 10)
 
-  const row = await documentFinalTransactionRepository.findByTransactionIdCached(
-    transactionId
+  if (!Number.isInteger(numericTransactionId) || numericTransactionId < 1) {
+    throw createTransactionError('VALIDATION_ERROR', 'معرّف المعاملة غير صالح')
+  }
+
+  const transaction = await transactionRepository.findById(numericTransactionId)
+
+  if (!transaction) {
+    throw createTransactionError('TRANSACTION_NOT_FOUND')
+  }
+
+  let row = await documentFinalTransactionRepository.findByTransactionIdCached(
+    numericTransactionId
   )
+
+  const snapshot = row?.qr_payload_snapshot || {}
+  const missingQr =
+    Boolean(row) &&
+    !snapshot.verification_url &&
+    !snapshot.signature
+
+  const shouldGenerate =
+    COMPLETED_STATUSES.has(transaction.status) &&
+    (!row || missingQr)
+
+  if (shouldGenerate) {
+    const {
+      generateMergedFinalDocument
+    } = require('./finalDocumentBuilderService')
+
+    try {
+      await generateMergedFinalDocument(numericTransactionId, {
+        userId,
+        force: Boolean(missingQr),
+        requireOwner: false
+      })
+
+      row = await documentFinalTransactionRepository.findByTransactionIdCached(
+        numericTransactionId
+      )
+    } catch (error) {
+      // إن فشلت إعادة التوليد وما زالت نسخة قديمة موجودة نُعيدها
+      if (!row) {
+        throw error
+      }
+    }
+  }
 
   if (!row) {
     throw createTransactionError(

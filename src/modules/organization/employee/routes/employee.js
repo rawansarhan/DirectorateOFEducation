@@ -188,7 +188,7 @@ router.get(
 router.get(
   '/by-departments',
   authMiddleware,
-  authorize('DEPARTMENT_VIEW'),
+  authorize('EMPLOYEES_STATS'),
   getEmployeesByDepartments
 )
 
@@ -324,6 +324,33 @@ router.get(
 
 /**
  * @swagger
+ * /api/employees/admin/{id}:
+ *   get:
+ *     summary: جلب موظف حسب المعرّف
+ *     tags: [Employee]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: بيانات الموظف
+ *       404:
+ *         description: الموظف غير موجود
+ */
+router.get(
+  'admin/:id',
+  authMiddleware,
+  authorize('VIEW_ONE'),
+  getEmployeeById
+)
+
+/**
+ * @swagger
  * /api/employees/{id}:
  *   get:
  *     summary: جلب موظف حسب المعرّف
@@ -345,13 +372,12 @@ router.get(
 router.get(
   '/:id',
   authMiddleware,
-  authorize('EMPLOYEE_VIEW'),
+  authorize('EMPLOYEE_VIEW_ONE'),
   getEmployeeById
 )
-
 /**
  * @swagger
- * /api/employees/{id}:
+ * /api/employees/admin/{id}:
  *   put:
  *     summary: تعديل بيانات موظف
  *     description: |
@@ -406,9 +432,9 @@ router.get(
  *         description: تعارض في حقل فريد (بريد/اسم مستخدم/رقم وطني)
  */
 router.put(
-  '/:id',
+  'admin/:id',
   authMiddleware,
-  authorize('EMPLOYEE_UPDATE'),
+  authorize('UPDATE'),
   updateEmployee
 )
 

@@ -41,7 +41,7 @@ const { authMiddleware, authorize } = require('../../../../core/middleware/authM
 router.post(
   '/',
   authMiddleware,
-  authorize('DEPARTMENT_CREATE'),
+  authorize('CREATE'),
   createDepartment
 )
 
@@ -128,7 +128,7 @@ router.post(
 router.get(
   '/',
   authMiddleware,
-  authorize('DEPARTMENT_VIEW'),
+  authorize('VIEW_ALL'),
   getAllDepartments
 )
 
@@ -246,7 +246,67 @@ router.get(
 router.get(
   '/by-organization/:organizationId/leaves',
   authMiddleware,
-  authorize('DEPARTMENT_VIEW'),
+  authorize('DEPARTMENT_LEAVES'),
+  getLeafDepartmentsByOrganization
+)
+/**
+ * @swagger
+ * /api/department/admin/by-organization/{organizationId}/leaves:
+ *   get:
+ *     summary: جلب آخر هرمية للأقسام التابعة لمؤسسة
+ *     description: |
+ *       يعيد فقط الأقسام التي لا يوجد لها أبناء، مع اسم كامل يمثل المسار من الجذر
+ *       (مثل `قسم المحاسبة\شعبة التدقيق`).
+ *
+ *       **هذا الـ API يدعم Caching + Retry limit:**
+ *       - **Caching:** Redis key = `department:leaves:{organizationId}` — TTL = `API_CACHE_TTL_SECONDS`
+ *       - **Retry limit:** `retryWithBackoff` — عدد المحاولات = `RETRY_MAX_ATTEMPTS`
+ *
+ *       **شكل الاستجابة:** `{ success, status_code, message, data }`
+ *     tags: [Department]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: organizationId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *         example: 1
+ *     responses:
+ *       200:
+ *         description: آخر هرمية للأقسام
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/DepartmentLeavesEnvelope'
+ *             example:
+ *               success: true
+ *               status_code: 200
+ *               message: تم جلب البيانات بنجاح
+ *               data:
+ *                 - id: 3
+ *                   name: قسم المحاسبة\شعبة التدقيق
+ *                 - id: 8
+ *                   name: قسم الموارد البشرية\شعبة التوظيف
+ *       400:
+ *         description: معرّف المؤسسة غير صالح
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ApiErrorResponse'
+ *       404:
+ *         description: المؤسسة غير موجودة
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ApiErrorResponse'
+ */
+router.get(
+  'admin/by-organization/:organizationId/leaves',
+  authMiddleware,
+  authorize('VIEW_ALL'),
   getLeafDepartmentsByOrganization
 )
 
@@ -276,7 +336,7 @@ router.get(
 router.patch(
   '/:id/toggle-status',
   authMiddleware,
-  authorize('DEPARTMENT_TOGGLE_STATUS'),
+  authorize('UPDATE'),
   toggleDepartmentStatus
 )
 
@@ -304,7 +364,7 @@ router.patch(
 router.get(
   '/:id/overview',
   authMiddleware,
-  authorize('DEPARTMENT_VIEW'),
+  authorize('DEPARTMENT_OVERVIEW'),
   getDepartmentOverview
 )
 
@@ -333,7 +393,7 @@ router.get(
 router.get(
   '/:id',
   authMiddleware,
-  authorize('DEPARTMENT_VIEW'),
+  authorize('VIEW_ONE'),
   getDepartmentById
 )
 

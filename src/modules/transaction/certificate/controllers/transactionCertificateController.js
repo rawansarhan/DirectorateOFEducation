@@ -60,11 +60,13 @@ async function uploadFinalDocumentController (req, res) {
 async function getFinalDocumentController (req, res) {
   try {
     const data = await getFinalDocument(req.params.transactionId, {
-      userId: req.user.id
+      userId: req.user?.id ?? null
     })
 
     return successResponse(res, {
-      message: 'تم جلب الوثيقة النهائية بنجاح',
+      message: data?.available === false
+        ? 'لا توجد وثيقة نهائية'
+        : 'تم جلب الوثيقة النهائية بنجاح',
       data
     })
   } catch (err) {

@@ -9,6 +9,9 @@ const {
 const {
   FinalDocumentReadinessOutputDTO
 } = require('../dto/FinalDocumentReadinessOutputDTO')
+const {
+  CertificateSignerOutputDTO
+} = require('../dto/CertificateSignerOutputDTO')
 
 function toPlain (row) {
   if (!row) return null
@@ -36,6 +39,25 @@ function toFinalDocumentDTO (row, options = {}) {
     content_hash: plain.content_hash,
     qr_payload_snapshot: plain.qr_payload_snapshot
   }, options)
+}
+
+function toCertificateSignerDTO (link, { stageNamesByCode = new Map() } = {}) {
+  const plain = toPlain(link) || {}
+  const user = plain.digital_signature?.user_key?.user || {}
+  const stageCode = plain.stage_code ?? null
+
+  return new CertificateSignerOutputDTO({
+    signature_order: plain.signature_order,
+    stage_code: stageCode,
+    stage_name: stageCode ? stageNamesByCode.get(stageCode) ?? null : null,
+    signed_at: plain.signed_at ?? plain.digital_signature?.signed_at ?? null,
+    user_id: plain.digital_signature?.user_key?.user_id ?? user.id ?? null,
+    first_name: user.first_name ?? null,
+    last_name: user.last_name ?? null,
+    father_name: user.father_name ?? null,
+    mother_name: user.mother_name ?? null,
+    national_id: user.national_id ?? null
+  })
 }
 
 function toCertificateBundleDTO (payload) {
@@ -79,6 +101,7 @@ function parseQrPayloadFromBody (body = {}) {
 
 module.exports = {
   toFinalDocumentDTO,
+  toCertificateSignerDTO,
   toCertificateBundleDTO,
   toSaveFinalDocumentInput,
   toGenerateResultDTO,

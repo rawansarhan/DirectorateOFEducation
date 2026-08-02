@@ -43,7 +43,7 @@ const { authMiddleware, authorize } = require('../../../../core/middleware/authM
 router.post(
   '/',
   authMiddleware,
-  authorize('ROLE_CREATE'),
+  authorize('CREATE'),
   createRole
 )
 
@@ -132,7 +132,7 @@ router.post(
 router.get(
   '/',
   authMiddleware,
-  authorize('ROLE_VIEW'),
+  authorize('VIEW_ALL'),
   getAllRoles
 )
 
@@ -198,10 +198,74 @@ router.get(
 router.get(
   '/by-department/:departmentId',
   authMiddleware,
-  authorize('ROLE_VIEW'),
+  authorize('ROLE_VIEW_BY_DEPARTMENT'),
   getRolesByDepartment
 )
-
+/**
+ * @swagger
+ * /api/role/admin/by-department/{departmentId}:
+ *   get:
+ *     summary: جلب الأدوار المتاحة لقسم محدد
+ *     description: |
+ *       يعيد كل الأدوار المرتبطة بالقسم (للـ leaf department)، تُستخدم عند تسجيل موظف بعد اختيار القسم.
+ *       الحقول `organization_id` (من سياق المؤسسة) و `role_id` و `department_id`
+ *       تُمرَّر لـ `GET /api/employees/by-org-dept-role`.
+ *
+ *       **هذا الـ API يدعم Caching + Retry limit:**
+ *       - **Caching:** Redis key = `role:by-dept:{departmentId}` — TTL = `API_CACHE_TTL_SECONDS`
+ *       - **Retry limit:** `retryWithBackoff` — عدد المحاولات = `RETRY_MAX_ATTEMPTS`
+ *
+ *       **شكل الاستجابة:** `{ success, status_code, message, data }`
+ *     tags: [Role]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: departmentId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *         example: 3
+ *     responses:
+ *       200:
+ *         description: أدوار القسم
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/RolesByDepartmentEnvelope'
+ *             example:
+ *               success: true
+ *               status_code: 200
+ *               message: تم جلب البيانات بنجاح
+ *               data:
+ *                 - id: 2
+ *                   organization_department_roles_id: 12
+ *                   name: مدير المحاسبة
+ *                   code: ACCOUNTING_MANAGER
+ *                 - id: 4
+ *                   organization_department_roles_id: 15
+ *                   name: موظف معاملات
+ *                   code: TRANSACTION_CLERK
+ *       400:
+ *         description: معرّف القسم غير صالح
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ApiErrorResponse'
+ *       404:
+ *         description: القسم غير موجود
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ApiErrorResponse'
+ */
+router.get(
+  'admin/by-department/:departmentId',
+  authMiddleware,
+  authorize('VIEW_ALL'),
+  getRolesByDepartment
+)
 /**
  * @swagger
  * /api/role/{id}/toggle-status:
@@ -229,7 +293,7 @@ router.get(
 router.patch(
   '/:id/toggle-status',
   authMiddleware,
-  authorize('ROLE_TOGGLE_STATUS'),
+  authorize('UPDATE'),
   toggleRoleStatus
 )
 
@@ -258,7 +322,7 @@ router.patch(
 router.get(
   '/:id',
   authMiddleware,
-  authorize('ROLE_VIEW'),
+  authorize('VIEW_ONE'),
   getRoleById
 )
 

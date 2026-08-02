@@ -38,7 +38,7 @@ const { authMiddleware, authorize } = require('../../../../core/middleware/authM
 router.post(
   '/',
   authMiddleware,
-  authorize('LOCATION_CREATE'),
+  authorize('CREATE'),
   createLocation
 )
 
@@ -68,7 +68,7 @@ router.post(
 router.get(
   '/',
   authMiddleware,
-  authorize('LOCATION_VIEW'),
+  authorize('VIEW_ALL'),
   getAllLocations
 )
 

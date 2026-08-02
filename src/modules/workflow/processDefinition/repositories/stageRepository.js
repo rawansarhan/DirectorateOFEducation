@@ -24,6 +24,15 @@ class StageRepository {
 //////////////////////////////////////////////
 //============= find by code and process =====
 
+  async findByProcessDefinitionId (processId) {
+    return Stage.findAll({
+      where: {
+        process_definition_id: processId
+      },
+      order: [['id', 'ASC']]
+    })
+  }
+
   async findByCodeAndProcess (processId, code) {
     return await Stage.findOne({
       where: {

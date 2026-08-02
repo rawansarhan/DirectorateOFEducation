@@ -79,7 +79,7 @@ const { authMiddleware ,authorize } = require('../../../../core/middleware/authM
 router.post(
   '/create',
   authMiddleware,
-  authorize('PROCESS_CREATE'),
+  authorize('CREATE'),
   runMulterUpload(uploadBPMN.single('file')),
   createProcessDefinition
 )
@@ -122,7 +122,7 @@ router.post(
 router.get(
   '/admin/review-queue',
   authMiddleware,
-  authorize('PROCESS_VIEW_NOTACTIVE_NOTAPPROVED'),
+  authorize('VIEW_ALL'),
   getUnapprovedOrInactiveProcessesController
 )
 
@@ -253,8 +253,56 @@ router.get(
 router.get(
   '/admin/missing-stage-config',
   authMiddleware,
-  authorize('PROCESS_VIEW_MISSING_STAGE_CONFIGE'),
+  authorize('VIEW_ALL'),
   getProcessesWithMissingStageConfigController
+)
+/**
+ * @swagger
+ * /api/process_definitions/admin/type/{id}:
+ *   get:
+ *     summary: كل عمليات نوع معاملة
+ *     description: |
+ *       مثل GET /auth/{id} للمواطن/الموظف، لكن بدون شرط أن تكون أول مرحلة AUTH.
+ *       id = type_trans_id. أرسل 0 لجلب كل الأنواع (ما عدا الشكاوى).
+ *
+ *       **Auth:** Bearer (تسجيل دخول فقط — بدون تقييد دور/صلاحية داخل المنطق)
+ *       مع Redis cache (TTL = PROCESS_CACHE_TTL_SECONDS).
+ *     tags: [Process Definition]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         example: 1
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 70
+ *           default: 20
+ *     responses:
+ *       200:
+ *         description: تم الجلب بنجاح
+ *       400:
+ *         description: نوع المعاملة غير موجود
+ *       401:
+ *         description: Unauthorized
+ */
+router.get(
+  '/type/:id',
+  authMiddleware,
+  authorize('GET_ORGANIZATIONAL_STRUCTURE'),
+  getProcessesByTypeForAdminController
 )
 
 /**
@@ -302,6 +350,7 @@ router.get(
 router.get(
   '/admin/type/:id',
   authMiddleware,
+  authorize('VIEW_ALL'),
   getProcessesByTypeForAdminController
 )
 
@@ -346,7 +395,7 @@ router.get(
 router.patch(
   '/admin/:id/status',
   authMiddleware,
-  authorize('PROCESS_REVIEW'),
+  authorize('UPDATE'),
   updateProcessActiveStatusController
 )
 
@@ -446,6 +495,7 @@ router.get(
 router.get(
   '/admin/complaints/all',
   authMiddleware,
+  authorize('VIEW_ALL'),
   getAllComplaintProcessesForAdminController
 )
 
@@ -714,7 +764,174 @@ router.get(
 router.get(
   '/:id/details',
   authMiddleware,
-  authorize('PROCESS_DETAILS'),
+  authorize('GET_ORGANIZATIONAL_STRUCTURE'),
+  getProcessDetails
+)
+ /**
+ * @swagger
+ * /api/process_definitions/admin/{id}/details:
+ *   get:
+ *     summary: Get full process details with validation => ( المسؤول التقني)
+ *     description: |
+ *       يجلب تفاصيل العملية الكاملة مع التحقق (validation)، بما فيها assignments
+ *       مع organization.name و department.name و role.name لكل OrgDepRole.
+ *
+ *       **Redis cache:** مفتاح `process:details:{id}` — TTL = API_CACHE_TTL_SECONDS.
+ *       يُبطَّل عند تعديل stage_config أو assignments أو مراجعة العملية (approve/reject).
+ *     tags: [Process Definition]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         example: 1
+ *         description: Process ID
+ *     responses:
+ *       200:
+ *         description: تم جلب تفاصيل العملية بنجاح
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: تم جلب تفاصيل العملية بنجاح
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     process:
+ *                       type: object
+ *                       properties:
+ *                         id:
+ *                           type: integer
+ *                         name:
+ *                           type: string
+ *                         code:
+ *                           type: string
+ *                         status:
+ *                           type: string
+ *                         version:
+ *                           type: integer
+ *                         is_active:
+ *                           type: boolean
+ *                         is_approved:
+ *                           type: boolean
+ *                         start_date:
+ *                           type: string
+ *                           format: date-time
+ *                         end_date:
+ *                           type: string
+ *                           format: date-time
+ *                     stages:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: integer
+ *                           name:
+ *                             type: string
+ *                           type:
+ *                             type: string
+ *                           auth_type:
+ *                             type: string
+ *                           config:
+ *                             type: object
+ *                           assignments:
+ *                             type: array
+ *                             description: |
+ *                               لكل organization_department_role: organization.name، department.name، role.name
+ *                             items:
+ *                               type: object
+ *                               properties:
+ *                                 organization_department_roles_id:
+ *                                   type: integer
+ *                                   example: 12
+ *                                 role:
+ *                                   type: object
+ *                                   nullable: true
+ *                                   properties:
+ *                                     id:
+ *                                       type: integer
+ *                                       example: 12
+ *                                     name:
+ *                                       type: string
+ *                                       example: موظف معاملات
+ *                                     is_active:
+ *                                       type: boolean
+ *                                       example: true
+ *                                     organization:
+ *                                       type: object
+ *                                       nullable: true
+ *                                       properties:
+ *                                         name:
+ *                                           type: string
+ *                                           example: مديرية التربية
+ *                                     department:
+ *                                       type: object
+ *                                       nullable: true
+ *                                       properties:
+ *                                         name:
+ *                                           type: string
+ *                                           example: دائرة الشؤون الإدارية
+ *                     validation:
+ *                       type: object
+ *                       properties:
+ *                         is_valid:
+ *                           type: boolean
+ *                         errors:
+ *                           type: array
+ *                           items:
+ *                             type: string
+ *             example:
+ *               success: true
+ *               status_code: 200
+ *               message: تم جلب تفاصيل العملية بنجاح
+ *               data:
+ *                 process:
+ *                   id: 1
+ *                   name: طلب إجازة سنوية
+ *                   code: LEAVE_ANNUAL_V1
+ *                   status: DEPLOYED
+ *                   version: 1
+ *                   is_active: true
+ *                   approval_status: APPROVED
+ *                   is_approved: true
+ *                   start_date: '2026-01-01T00:00:00.000Z'
+ *                   end_date: null
+ *                 stages:
+ *                   - id: 10
+ *                     name: تقديم الطلب
+ *                     code: SUBMIT
+ *                     type: AUTH
+ *                     auth_type: CITIZEN
+ *                     has_config: true
+ *                     config: {}
+ *                     has_assignments: true
+ *                     assignments:
+ *                       - organization_department_roles_id: 12
+ *                         role:
+ *                           id: 12
+ *                           name: موظف معاملات
+ *                           is_active: true
+ *                           organization:
+ *                             name: مديرية التربية
+ *                           department:
+ *                             name: دائرة الشؤون الإدارية
+ *                 validation:
+ *                   is_valid: true
+ *                   errors: []
+ *       404:
+ *         description: العملية غير موجودة
+ */
+ router.get(
+  'admin/:id/details',
+  authMiddleware,
+  authorize('VIEW_ONE'),
   getProcessDetails
 )
 
@@ -810,7 +1027,7 @@ router.get(
 router.post(
   '/:id/review',
   authMiddleware,
-  // authorize('PROCESS_REVIEW'),
+  authorize('PROCESS_REVIEW'),
   reviewProcessController
 )
 

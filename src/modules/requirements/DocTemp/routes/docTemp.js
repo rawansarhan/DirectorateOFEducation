@@ -82,52 +82,52 @@ const { authMiddleware, authorize } = require('../../../../core/middleware/authM
 router.post(
   '/',
   authMiddleware,
-  authorize('CREATE_TEMPLATE'),
+  authorize('CREATE'),
   createDocumentTemplate
 )
 
-/**
- * @swagger
- * /api/document-templates/{id}:
- *   put:
- *     summary: Update document template config_json => (المسؤول التقني)
- *     description: |
- *       يحدّث config_json فقط.
- *       **Body:** `form_id`, `form_name`, `widgets` (+ `pdf` اختياري)
- *       **widget_type:** text_field | date_picker | dropdown | check_list فقط
- *       يدعم widgets: text_field, date_picker, dropdown, check_list.
- *     tags: [Document Templates]
- *     security:
- *       - bearerAuth: []
- *
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *         example: 1
- *
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/DocumentTemplateConfigJson'
- *
- *     responses:
- *       200:
- *         description: تم تعديل القالب بنجاح
- *
- *       404:
- *         description: القالب غير موجود
- */
-router.put(
-  '/:id',
-  authMiddleware,
-  authorize('UPDATE_TEMPLATE'),
-  updateDocumentTemplate
-)
+// /**
+//  * @swagger
+//  * /api/document-templates/{id}:
+//  *   put:
+//  *     summary: Update document template config_json => (المسؤول التقني)
+//  *     description: |
+//  *       يحدّث config_json فقط.
+//  *       **Body:** `form_id`, `form_name`, `widgets` (+ `pdf` اختياري)
+//  *       **widget_type:** text_field | date_picker | dropdown | check_list فقط
+//  *       يدعم widgets: text_field, date_picker, dropdown, check_list.
+//  *     tags: [Document Templates]
+//  *     security:
+//  *       - bearerAuth: []
+//  *
+//  *     parameters:
+//  *       - in: path
+//  *         name: id
+//  *         required: true
+//  *         schema:
+//  *           type: integer
+//  *         example: 1
+//  *
+//  *     requestBody:
+//  *       required: true
+//  *       content:
+//  *         application/json:
+//  *           schema:
+//  *             $ref: '#/components/schemas/DocumentTemplateConfigJson'
+//  *
+//  *     responses:
+//  *       200:
+//  *         description: تم تعديل القالب بنجاح
+//  *
+//  *       404:
+//  *         description: القالب غير موجود
+//  */
+// router.put(
+//   '/:id',
+//   authMiddleware,
+//   authorize('UPDATE_TEMPLATE'),
+//   updateDocumentTemplate
+// )
 
 /**
  * @swagger
@@ -157,7 +157,7 @@ router.put(
 router.get(
   '/',
   authMiddleware,
-  authorize('GET_ALL_TEMPLATE'),
+  authorize('VIEW_ALL'),
   getAllActiveDocumentTemplates
 )
 
@@ -255,6 +255,36 @@ router.post(
 
 /**
  * @swagger
+ * /api/document-templates/admin/{id}:
+ *   get:
+ *     summary: Get one active document template => (المسؤول التقني)
+ *     tags: [Document Templates]
+ *     security:
+ *       - bearerAuth: []
+ *
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         example: 1
+ *
+ *     responses:
+ *       200:
+ *         description: تم جلب القالب بنجاح
+ *
+ *       404:
+ *         description: القالب غير موجود
+ */
+router.get(
+  'admin/:id',
+  authMiddleware,
+  authorize('VIEW_ONE'),
+  getOneActiveDocumentTemplate
+)
+/**
+ * @swagger
  * /api/document-templates/{id}:
  *   get:
  *     summary: Get one active document template => (المسؤول التقني)
@@ -280,77 +310,76 @@ router.post(
 router.get(
   '/:id',
   authMiddleware,
-  authorize('TEMPLATE_READ_ONE'),
+  authorize('TEMPLETE_VIEW_ONE'),
   getOneActiveDocumentTemplate
 )
-
-/**
- * @swagger
- * /api/document-templates/{id}/fields:
- *   get:
- *     summary: استخراج أسماء إفراغات PDF لقالب محفوظ
- *     description: يقرأ حقول AcroForm من ملف القالب المحفوظ
- *     tags: [Document Templates]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *         example: 1
- *     responses:
- *       200:
- *         description: تم استخراج أسماء الإفراغات بنجاح
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 status_code:
- *                   type: integer
- *                   example: 200
- *                 message:
- *                   type: string
- *                   example: تم استخراج أسماء إفراغات القالب بنجاح
- *                 data:
- *                   type: object
- *                   properties:
- *                     source:
- *                       type: string
- *                       example: template
- *                     engine_type:
- *                       type: string
- *                       example: ACROFORM
- *                     field_count:
- *                       type: integer
- *                       example: 4
- *                     fields:
- *                       type: array
- *                       items:
- *                         type: object
- *                         properties:
- *                           id:
- *                             type: string
- *                             example: employee
- *                           pdf_field_type:
- *                             type: string
- *                             example: PDFTextField
- *                           widget_type:
- *                             type: string
- *                             example: text_field
- *       404:
- *         description: القالب غير موجود
- */
-router.get(
-  '/:id/fields',
-  authMiddleware,
-  authorize('GET_ONE_TEMPLATE'),
-  extractTemplateFieldsById
-)
+// /**
+//  * @swagger
+//  * /api/document-templates/{id}/fields:
+//  *   get:
+//  *     summary: استخراج أسماء إفراغات PDF لقالب محفوظ
+//  *     description: يقرأ حقول AcroForm من ملف القالب المحفوظ
+//  *     tags: [Document Templates]
+//  *     security:
+//  *       - bearerAuth: []
+//  *     parameters:
+//  *       - in: path
+//  *         name: id
+//  *         required: true
+//  *         schema:
+//  *           type: integer
+//  *         example: 1
+//  *     responses:
+//  *       200:
+//  *         description: تم استخراج أسماء الإفراغات بنجاح
+//  *         content:
+//  *           application/json:
+//  *             schema:
+//  *               type: object
+//  *               properties:
+//  *                 success:
+//  *                   type: boolean
+//  *                   example: true
+//  *                 status_code:
+//  *                   type: integer
+//  *                   example: 200
+//  *                 message:
+//  *                   type: string
+//  *                   example: تم استخراج أسماء إفراغات القالب بنجاح
+//  *                 data:
+//  *                   type: object
+//  *                   properties:
+//  *                     source:
+//  *                       type: string
+//  *                       example: template
+//  *                     engine_type:
+//  *                       type: string
+//  *                       example: ACROFORM
+//  *                     field_count:
+//  *                       type: integer
+//  *                       example: 4
+//  *                     fields:
+//  *                       type: array
+//  *                       items:
+//  *                         type: object
+//  *                         properties:
+//  *                           id:
+//  *                             type: string
+//  *                             example: employee
+//  *                           pdf_field_type:
+//  *                             type: string
+//  *                             example: PDFTextField
+//  *                           widget_type:
+//  *                             type: string
+//  *                             example: text_field
+//  *       404:
+//  *         description: القالب غير موجود
+//  */
+// router.get(
+//   '/:id/fields',
+//   authMiddleware,
+//   authorize('GET_ONE_TEMPLATE'),
+//   extractTemplateFieldsById
+// )
 
 module.exports = router
