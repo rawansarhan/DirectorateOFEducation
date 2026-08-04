@@ -1,5 +1,6 @@
 'use strict'
 
+const fs = require('fs')
 const { DocumentFinalTransaction } = require('../../../../entities')
 const {
   KEYS,
@@ -7,6 +8,9 @@ const {
   invalidateFinalDocument
 } = require('../../../../core/cache/apiCacheService')
 const { FINAL_DOCUMENT_CACHE_TTL_SECONDS } = require('../../../../core/config/env')
+const {
+  resolveAbsoluteUploadPath
+} = require('../../../../core/utils/filePath')
 
 async function findByTransactionId (transactionId) {
   return DocumentFinalTransaction.findOne({
@@ -66,8 +70,53 @@ async function upsertForTransaction ({
   return created
 }
 
+async function deleteByTransactionId (transactionId) {
+  const existing = await findByTransactionId(transactionId)
+
+  if (!existing) {
+    return null
+  }
+
+  const plain = typeof existing.get === 'function'
+    ? existing.get({ plain: true })
+    : existing
+
+  if (plain.file_path) {
+    try {
+      const absolutePath = resolveAbsoluteUploadPath(plain.file_path)
+      if (absolutePath && fs.existsSync(absolutePath)) {
+        fs.unlinkSync(absolutePath)
+      }
+    } catch (_) {}
+  }
+
+  await existing.destroy()
+  await invalidateFinalDocument(transactionId)
+
+  return plain
+}
+
+async function findAllByOwnerUserId (userId) {
+  const { Transaction } = require('../../../../entities')
+
+  return DocumentFinalTransaction.findAll({
+    include: [
+      {
+        model: Transaction,
+        as: 'transaction',
+        required: true,
+        where: { user_id: userId },
+        attributes: ['id', 'id_process', 'code', 'status', 'created_at', 'updated_at']
+      }
+    ],
+    order: [['generated_at', 'DESC']]
+  })
+}
+
 module.exports = {
   findByTransactionId,
   findByTransactionIdCached,
-  upsertForTransaction
+  upsertForTransaction,
+  deleteByTransactionId,
+  findAllByOwnerUserId
 }

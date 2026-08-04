@@ -3,7 +3,9 @@
 const {
   getCertificateBundle,
   saveFinalDocument,
-  getFinalDocument
+  getFinalDocument,
+  deleteFinalDocument,
+  listMyFinalDocuments
 } = require('../services/transactionCertificateService')
 const {
   parseQrPayloadFromBody
@@ -16,6 +18,7 @@ const {
   mapErrorToArabic,
   httpStatusForError
 } = require('../../transaction/utils/transactionErrors')
+const { parsePaginationQuery } = require('../../../../core/utils/pagination')
 
 function handleCertificateError (res, err) {
   return errorResponse(res, {
@@ -74,8 +77,37 @@ async function getFinalDocumentController (req, res) {
   }
 }
 
+async function deleteFinalDocumentController (req, res) {
+  try {
+    const data = await deleteFinalDocument(req.params.transactionId)
+
+    return successResponse(res, {
+      message: 'تم حذف الوثيقة النهائية بنجاح',
+      data
+    })
+  } catch (err) {
+    return handleCertificateError(res, err)
+  }
+}
+
+async function listMyFinalDocumentsController (req, res) {
+  try {
+    const pagination = parsePaginationQuery(req.query)
+    const data = await listMyFinalDocuments(req.user.id, pagination)
+
+    return successResponse(res, {
+      message: 'تم جلب الوثائق النهائية لمعاملاتك بنجاح',
+      data
+    })
+  } catch (err) {
+    return handleCertificateError(res, err)
+  }
+}
+
 module.exports = {
   getCertificateController,
   uploadFinalDocumentController,
-  getFinalDocumentController
+  getFinalDocumentController,
+  deleteFinalDocumentController,
+  listMyFinalDocumentsController
 }

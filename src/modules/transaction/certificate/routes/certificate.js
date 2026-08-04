@@ -6,7 +6,9 @@ const router = express.Router()
 const {
   getCertificateController,
   uploadFinalDocumentController,
-  getFinalDocumentController
+  getFinalDocumentController,
+  deleteFinalDocumentController,
+  listMyFinalDocumentsController
 } = require('../controllers/transactionCertificateController')
 
 const {
@@ -15,6 +17,45 @@ const {
 } = require('../../../../core/middleware/upload')
 
 const { authMiddleware, authorize } = require('../../../../core/middleware/authMiddleware')
+
+/**
+ * @swagger
+ * /api/transaction/my/final-documents:
+ *   get:
+ *     summary: كل الوثائق النهائية لمعاملات المستخدم المسجّل
+ *     description: |
+ *       يعرض كل سجلات `document_final_transactions` لمعاملات يملكها المستخدم
+ *       من التوكن (`transaction.user_id = auth user`) مع ترقيم صفحات.
+ *
+ *       **Auth:** Bearer فقط (مالك المعاملات)
+ *     tags: [Certificate & Integrity Chain]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 70
+ *           default: 20
+ *     responses:
+ *       200:
+ *         description: تم جلب الوثائق النهائية بنجاح
+ *       401:
+ *         description: Unauthorized
+ */
+router.get(
+  '/my/final-documents',
+  authMiddleware,
+  listMyFinalDocumentsController
+)
 
 /**
  * @swagger
@@ -207,6 +248,42 @@ router.get(
   authMiddleware,
   authorize('VIEW_CREATE_FINAL_DOCUMENT'),
   getFinalDocumentController
+)
+
+/**
+ * @swagger
+ * /api/transaction/{transactionId}/final-document:
+ *   delete:
+ *     summary: حذف الوثيقة النهائية المحفوظة
+ *     description: |
+ *       يحذف سجل `document_final_transactions` للمعاملة حسب `transaction_id`
+ *       ويمسح ملف PDF من القرص إن وُجد، مع إبطال الكاش.
+ *
+ *       **Auth:** Bearer + صلاحية `DELETE_FINAL_DOCUMENT`
+ *     tags: [Certificate & Integrity Chain]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: transactionId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *         example: 12
+ *     responses:
+ *       200:
+ *         description: تم حذف الوثيقة النهائية بنجاح
+ *       403:
+ *         description: لا تملك صلاحية DELETE_FINAL_DOCUMENT
+ *       404:
+ *         description: المعاملة غير موجودة أو لا توجد وثيقة نهائية
+ */
+router.delete(
+  '/:transactionId/final-document',
+  authMiddleware,
+  authorize('DELETE_FINAL_DOCUMENT'),
+  deleteFinalDocumentController
 )
 
 module.exports = router

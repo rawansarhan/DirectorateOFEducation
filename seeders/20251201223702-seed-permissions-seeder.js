@@ -50,6 +50,11 @@ const PERMISSIONS = [
     type: 'employee'
   },
   {
+    name: 'حذف المستند النهائي لطلب معاملة',
+    code: 'DELETE_FINAL_DOCUMENT',
+    type: 'employee'
+  },
+  {
     name: 'عرض الهيكل التنظيمي',
     code: 'GET_ORGANIZATIONAL_STRUCTURE',
     type: 'employee'

@@ -22,6 +22,8 @@ const {
   toCertificateBundleDTO,
   toSaveFinalDocumentInput
 } = require('../mappers/certificateMapper')
+const { toPublicFileUrl } = require('../../../../core/utils/filePath')
+const { paginateArray } = require('../../../../core/utils/pagination')
 
 const COMPLETED_STATUSES = new Set(['completed'])
 const CERTIFICATE_AUDIENCE = {
@@ -255,10 +257,83 @@ async function getFinalDocument (transactionId, { userId = null } = {}) {
   return toFinalDocumentDTO(row, { includeQrSnapshot: true })
 }
 
+async function deleteFinalDocument (transactionId) {
+  const numericTransactionId = Number.parseInt(transactionId, 10)
+
+  if (!Number.isInteger(numericTransactionId) || numericTransactionId < 1) {
+    throw createTransactionError('VALIDATION_ERROR', 'معرّف المعاملة غير صالح')
+  }
+
+  const transaction = await transactionRepository.findById(numericTransactionId)
+
+  if (!transaction) {
+    throw createTransactionError('TRANSACTION_NOT_FOUND')
+  }
+
+  const deleted = await documentFinalTransactionRepository.deleteByTransactionId(
+    numericTransactionId
+  )
+
+  if (!deleted) {
+    throw createTransactionError(
+      'NOT_FOUND',
+      'لا توجد وثيقة نهائية محفوظة لهذه المعاملة'
+    )
+  }
+
+  return {
+    transaction_id: numericTransactionId,
+    deleted: true,
+    final_document_id: deleted.id ?? null,
+    file_path: deleted.file_path ?? null
+  }
+}
+
+async function listMyFinalDocuments (userId, paginationInput = {}) {
+  if (!userId) {
+    throw createTransactionError('UNAUTHORIZED')
+  }
+
+  const rows = await documentFinalTransactionRepository.findAllByOwnerUserId(
+    userId
+  )
+
+  const items = (rows || []).map(row => {
+    const plain = typeof row.get === 'function' ? row.get({ plain: true }) : row
+    const transaction = plain.transaction || {}
+
+    return {
+      id: plain.id,
+      transaction_id: plain.transaction_id,
+      file_path: plain.file_path,
+      file_url: toPublicFileUrl(plain.file_path),
+      original_name: plain.original_name,
+      mime_type: plain.mime_type,
+      file_size_bytes: plain.file_size_bytes,
+      generated_at: plain.generated_at,
+      transaction: {
+        id: transaction.id ?? plain.transaction_id,
+        id_process: transaction.id_process ?? null,
+        code: transaction.code ?? null,
+        status: transaction.status ?? null
+      }
+    }
+  })
+
+  const { items: pageItems, pagination } = paginateArray(items, paginationInput)
+
+  return {
+    items: pageItems,
+    pagination
+  }
+}
+
 module.exports = {
   CERTIFICATE_AUDIENCE,
   loadAuthorizedTransaction,
   getCertificateBundle,
   saveFinalDocument,
-  getFinalDocument
+  getFinalDocument,
+  deleteFinalDocument,
+  listMyFinalDocuments
 }
