@@ -25,7 +25,9 @@ const { authMiddleware, authorize } = require('../../../../core/middleware/authM
  *       **الترتيب المقترح:** 1) هذا الـ API → 2) الفرونت يبني PDF → 3) POST final-document
  *
  *       يجمع كل ما يحتاجه الفرونت:
- *       - `transaction_history` (process_name + applicant + stages؛ PDF على مرحلة GENERATE_PDF)
+ *       - `transaction_history` (process_name + applicant + stages)
+ *       - `transaction_history`: مراحل USER_TASK فقط؛ ملف GENERATE_PDF داخل
+ *         `templates[].value` (`id_template` + `value` فقط)
  *       - `signers` سلسلة التواقيع مرتبة: من وقّع كل مرحلة
  *         (الاسم الأول/الأخير، اسم الأب، اسم الأم، الرقم الوطني)
  *       - `final_document` إن وُجدت

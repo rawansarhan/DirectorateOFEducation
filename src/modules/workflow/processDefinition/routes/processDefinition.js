@@ -8,6 +8,7 @@ const {
   getAuthProcessesController,
   getUnapprovedOrInactiveProcessesController,
   getProcessesWithMissingStageConfigController,
+  getProcessesByTypeController,
   getProcessesByTypeForAdminController,
   updateProcessActiveStatusController,
   getComplaintProcessesForAdminController,
@@ -79,7 +80,7 @@ const { authMiddleware ,authorize } = require('../../../../core/middleware/authM
 router.post(
   '/create',
   authMiddleware,
-  authorize('CREATE'),
+  authorize('PROCESS_PUBLISH_MANAGE'),
   runMulterUpload(uploadBPMN.single('file')),
   createProcessDefinition
 )
@@ -122,7 +123,7 @@ router.post(
 router.get(
   '/admin/review-queue',
   authMiddleware,
-  authorize('VIEW_ALL'),
+  authorize('PROCESS_PUBLISH_MANAGE'),
   getUnapprovedOrInactiveProcessesController
 )
 
@@ -253,19 +254,19 @@ router.get(
 router.get(
   '/admin/missing-stage-config',
   authMiddleware,
-  authorize('VIEW_ALL'),
+  authorize('PROCESS_PUBLISH_MANAGE'),
   getProcessesWithMissingStageConfigController
 )
 /**
  * @swagger
- * /api/process_definitions/admin/type/{id}:
+ * /api/process_definitions/type/{id}:
  *   get:
- *     summary: كل عمليات نوع معاملة
+ *     summary: كل عمليات نوع معاملة (النشطة فقط)
  *     description: |
- *       مثل GET /auth/{id} للمواطن/الموظف، لكن بدون شرط أن تكون أول مرحلة AUTH.
+ *       يعرض عمليات النوع حيث `is_active = true` فقط.
  *       id = type_trans_id. أرسل 0 لجلب كل الأنواع (ما عدا الشكاوى).
  *
- *       **Auth:** Bearer (تسجيل دخول فقط — بدون تقييد دور/صلاحية داخل المنطق)
+ *       **Auth:** Bearer + صلاحية `GET_ORGANIZATIONAL_STRUCTURE`
  *       مع Redis cache (TTL = PROCESS_CACHE_TTL_SECONDS).
  *     tags: [Process Definition]
  *     security:
@@ -302,20 +303,23 @@ router.get(
   '/type/:id',
   authMiddleware,
   authorize('GET_ORGANIZATIONAL_STRUCTURE'),
-  getProcessesByTypeForAdminController
+  getProcessesByTypeController
 )
 
 /**
  * @swagger
  * /api/process_definitions/admin/type/{id}:
  *   get:
- *     summary: كل عمليات نوع معاملة
+ *     summary: كل عمليات نوع معاملة المعتمدة (للإدارة)
  *     description: |
- *       مثل GET /auth/{id} للمواطن/الموظف، لكن بدون شرط أن تكون أول مرحلة AUTH.
- *       id = type_trans_id. أرسل 0 لجلب كل الأنواع (ما عدا الشكاوى).
+ *       يعرض **كل** عمليات النوع المعتمدة (`approval_status = APPROVED` / `is_approved = true`)
+ *       سواء كانت `is_active = true` أو `is_active = false`.
  *
- *       **Auth:** Bearer (تسجيل دخول فقط — بدون تقييد دور/صلاحية داخل المنطق)
- *       مع Redis cache (TTL = PROCESS_CACHE_TTL_SECONDS).
+ *       - لا يعرض غير المعتمدة (PENDING / REJECTED).
+ *       - id = type_trans_id. أرسل 0 لجلب كل الأنواع (ما عدا الشكاوى).
+ *
+ *       **Auth:** Bearer + صلاحية `PROCESS_PUBLISH_MANAGE`
+ *       مع Redis cache مستقل عن `/type/{id}` (TTL = PROCESS_CACHE_TTL_SECONDS).
  *     tags: [Process Definition]
  *     security:
  *       - bearerAuth: []
@@ -341,16 +345,18 @@ router.get(
  *           default: 20
  *     responses:
  *       200:
- *         description: تم الجلب بنجاح
+ *         description: تم الجلب بنجاح — عمليات معتمدة فقط مع حقل is_active لكل عملية
  *       400:
  *         description: نوع المعاملة غير موجود
  *       401:
  *         description: Unauthorized
+ *       403:
+ *         description: PROCESS_PUBLISH_MANAGE مطلوب
  */
 router.get(
   '/admin/type/:id',
   authMiddleware,
-  authorize('VIEW_ALL'),
+  authorize('PROCESS_PUBLISH_MANAGE'),
   getProcessesByTypeForAdminController
 )
 
@@ -495,7 +501,7 @@ router.get(
 router.get(
   '/admin/complaints/all',
   authMiddleware,
-  authorize('VIEW_ALL'),
+  authorize('PROCESS_PUBLISH_MANAGE'),
   getAllComplaintProcessesForAdminController
 )
 
@@ -931,7 +937,7 @@ router.get(
  router.get(
   'admin/:id/details',
   authMiddleware,
-  authorize('VIEW_ONE'),
+  authorize('PROCESS_PUBLISH_MANAGE'),
   getProcessDetails
 )
 

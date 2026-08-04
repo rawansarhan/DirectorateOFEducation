@@ -11,7 +11,6 @@ const {
   formatTransactionDate,
   parseTransactionDate
 } = require('./employeeTaskFormatters')
-const { resolveStagePdfFields } = require('./generatedPdfHistory')
 
 const ACTIVITY_STAGE_KEY_PATTERN = /^Activity_[A-Za-z0-9_]+$/
 
@@ -116,14 +115,6 @@ function buildHistoryStageEntry (stageData = {}) {
     entry.templates = mapTemplatesForHistory(stageData.templates)
   }
 
-  const pdfFields = resolveStagePdfFields(stageData)
-
-  if (pdfFields) {
-    entry.id_document_instance = pdfFields.id_document_instance
-    entry.generated_pdf_path = pdfFields.generated_pdf_path
-    entry.generated_pdf_url = pdfFields.generated_pdf_url
-  }
-
   return entry
 }
 
@@ -137,6 +128,37 @@ function isDisplayableHistoryStage (stageData = {}) {
   }
 
   if (Array.isArray(stageData.templates) && stageData.templates.length) {
+    return true
+  }
+
+  return false
+}
+
+/**
+ * مراحل SERVICE_TASK (مثل GENERATE_PDF) لا تُعرض كمرحلة مستقلة —
+ * ملف PDF يظهر داخل templates[].value لمرحلة USER_TASK المرتبطة.
+ */
+function shouldOmitServiceTaskFromHistory (stageData = {}) {
+  const stageName = String(stageData.stage_name || stageData.form_name || '')
+    .toUpperCase()
+
+  if (stageName.includes('GENERATE_PDF')) {
+    return true
+  }
+
+  const hasUserContent =
+    (Array.isArray(stageData.widgets) && stageData.widgets.length > 0) ||
+    (Array.isArray(stageData.templates) && stageData.templates.length > 0)
+
+  if (hasUserContent) {
+    return false
+  }
+
+  if (Array.isArray(stageData.actions) && stageData.actions.length > 0) {
+    return true
+  }
+
+  if (String(stageData.executed_by || '').toLowerCase() === 'system') {
     return true
   }
 
@@ -166,6 +188,10 @@ function buildCompletedStagesFromData (rawData = {}) {
     }
 
     if (!isDisplayableHistoryStage(value)) {
+      continue
+    }
+
+    if (shouldOmitServiceTaskFromHistory(value)) {
       continue
     }
 
@@ -216,9 +242,9 @@ function formatTransactionHistoryForDisplay (rawData = {}, transaction = null) {
 }
 
 /**
- * يملأ حقول PDF على مراحل GENERATE_PDF عند غيابها في الـ snapshot
- * (مثلاً معاملات قديمة أو نجاح outbox متأخر).
- * قوالب USER_TASK تبقى id_template + value فقط.
+ * يملأ حقول PDF داخل templates[].value لمراحل USER_TASK
+ * عند غيابها في الـ snapshot (معاملات قديمة أو نجاح outbox متأخر).
+ * مراحل SERVICE_TASK / GENERATE_PDF لا تُعرض كمرحلة مستقلة.
  */
 function enrichHistoryTemplatesWithDocumentInstances (
   historyData = {},
@@ -233,7 +259,6 @@ function enrichHistoryTemplatesWithDocumentInstances (
   }
 
   const byTemplateId = new Map()
-  const unused = new Set(instances.map(doc => Number(doc.id)))
 
   for (const doc of instances) {
     const templateId = Number(doc.document_template_id)
@@ -244,47 +269,42 @@ function enrichHistoryTemplatesWithDocumentInstances (
   }
 
   for (const stage of historyData.stages) {
-    if (stage.id_document_instance && stage.generated_pdf_path) {
-      unused.delete(Number(stage.id_document_instance))
+    if (!Array.isArray(stage.templates) || !stage.templates.length) {
       continue
     }
 
-    const stageName = String(stage.stage_name || stage.form_name || '')
-      .toUpperCase()
-    const looksLikeGeneratePdf =
-      stageName.includes('GENERATE_PDF') ||
-      stage.id_document_instance != null ||
-      stage.generated_pdf_path != null
+    stage.templates = stage.templates.map(template => {
+      const templateId = Number(template.id_template)
+      const matched = byTemplateId.get(templateId)
 
-    if (!looksLikeGeneratePdf) {
-      continue
-    }
+      if (!matched) {
+        return {
+          id_template: template.id_template,
+          value: template.value && typeof template.value === 'object'
+            ? template.value
+            : {}
+        }
+      }
 
-    let matched = null
+      const pdfMeta = {
+        id_document_instance: Number(matched.id),
+        generated_pdf_path: matched.generated_pdf_path,
+        generated_pdf_url: toPublicFileUrl(matched.generated_pdf_path)
+      }
 
-    if (stage.id_document_instance) {
-      matched = instances.find(
-        doc => Number(doc.id) === Number(stage.id_document_instance)
-      )
-    }
+      const prevValue =
+        template.value && typeof template.value === 'object'
+          ? template.value
+          : {}
 
-    if (!matched && byTemplateId.size === 1) {
-      matched = [...byTemplateId.values()][0]
-    }
-
-    if (!matched && unused.size === 1) {
-      const onlyId = [...unused][0]
-      matched = instances.find(doc => Number(doc.id) === onlyId)
-    }
-
-    if (!matched) {
-      continue
-    }
-
-    stage.id_document_instance = Number(matched.id)
-    stage.generated_pdf_path = matched.generated_pdf_path
-    stage.generated_pdf_url = toPublicFileUrl(matched.generated_pdf_path)
-    unused.delete(Number(matched.id))
+      return {
+        id_template: template.id_template,
+        value: {
+          ...prevValue,
+          ...pdfMeta
+        }
+      }
+    })
   }
 
   return historyData

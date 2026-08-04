@@ -309,6 +309,52 @@ async function getProcessesWithMissingStageConfig (paginationInput) {
   }
 }
 
+async function getProcessesByType (typeTransID, paginationInput) {
+  const allTypes = isAllAuthTypesRequest(typeTransID)
+
+  if (!allTypes) {
+    const typeTrans = await typeTransRepository.findById(typeTransID)
+
+    if (!typeTrans) {
+      throw new Error('لا يوجد هذا النوع')
+    }
+  }
+
+  const cacheKey = allTypes
+    ? KEYS.processesByTypeActiveAll()
+    : KEYS.processesByTypeActive(Number(typeTransID))
+
+  console.log(
+    `${LOG_PREFIX} GET /api/process_definitions/type/${typeTransID} — cache key: api:${cacheKey}`
+  )
+
+  const processes = await getOrLoad(
+    cacheKey,
+    () => allTypes
+      ? processRepository.findAllProcessesByTypeActive()
+      : processRepository.findProcessesByType(Number(typeTransID)),
+    {
+      label: `ProcessDefinition GET /api/process_definitions/type/${typeTransID}`,
+      ttlSeconds: PROCESS_CACHE_TTL_SECONDS
+    }
+  )
+
+  const items = sortAuthProcessesByPriority(processes).map(
+    toAdminProcessByTypeItem
+  )
+  const { items: pageItems, pagination } = paginateArray(items, paginationInput)
+
+  return {
+    message: allTypes
+      ? 'تم جلب كل عمليات الأنواع بنجاح'
+      : 'تم جلب عمليات النوع بنجاح',
+    data: {
+      items: pageItems,
+      pagination
+    }
+  }
+}
+
 async function getProcessesByTypeForAdmin (typeTransID, paginationInput) {
   const allTypes = isAllAuthTypesRequest(typeTransID)
 
@@ -346,8 +392,8 @@ async function getProcessesByTypeForAdmin (typeTransID, paginationInput) {
 
   return {
     message: allTypes
-      ? 'تم جلب كل عمليات الأنواع بنجاح'
-      : 'تم جلب عمليات النوع بنجاح',
+      ? 'تم جلب كل عمليات الأنواع المعتمدة بنجاح'
+      : 'تم جلب عمليات النوع المعتمدة بنجاح',
     data: {
       items: pageItems,
       pagination
@@ -615,6 +661,7 @@ module.exports = {
   getAuthProcesses,
   getUnapprovedOrInactiveProcesses,
   getProcessesWithMissingStageConfig,
+  getProcessesByType,
   getProcessesByTypeForAdmin,
   updateProcessActiveStatus,
   getComplaintProcessesForAdmin,

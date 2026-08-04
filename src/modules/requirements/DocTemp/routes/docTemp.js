@@ -82,7 +82,7 @@ const { authMiddleware, authorize } = require('../../../../core/middleware/authM
 router.post(
   '/',
   authMiddleware,
-  authorize('CREATE'),
+  authorize('PROCESS_PUBLISH_MANAGE'),
   createDocumentTemplate
 )
 
@@ -157,7 +157,7 @@ router.post(
 router.get(
   '/',
   authMiddleware,
-  authorize('VIEW_ALL'),
+  authorize('PROCESS_PUBLISH_MANAGE'),
   getAllActiveDocumentTemplates
 )
 
@@ -249,7 +249,7 @@ router.post(
   authMiddleware,
   uploadFileLimiter,
   runMulterUpload(uploadDocumentTemplate.single('file')),
-  authorize('TEMPLATE_EXTRACT_FIELDS'),
+  authorize('PROCESS_PUBLISH_MANAGE'),
   extractTemplateFieldsFromUpload
 )
 
@@ -280,7 +280,7 @@ router.post(
 router.get(
   'admin/:id',
   authMiddleware,
-  authorize('VIEW_ONE'),
+  authorize('PROCESS_PUBLISH_MANAGE'),
   getOneActiveDocumentTemplate
 )
 /**
@@ -310,7 +310,37 @@ router.get(
 router.get(
   '/:id',
   authMiddleware,
-  authorize('TEMPLETE_VIEW_ONE'),
+  authorize('TASK_SIGNING'),
+  getOneActiveDocumentTemplate
+)
+/**
+ * @swagger
+ * /api/document-templates/citizen/{id}:
+ *   get:
+ *     summary: Get one active document template => (المسؤول التقني)
+ *     tags: [Document Templates]
+ *     security:
+ *       - bearerAuth: []
+ *
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         example: 1
+ *
+ *     responses:
+ *       200:
+ *         description: تم جلب القالب بنجاح
+ *
+ *       404:
+ *         description: القالب غير موجود
+ */
+router.get(
+  '/citizen/:id',
+  authMiddleware,
+  authorize('TRANSACTION_SUBMIT'),
   getOneActiveDocumentTemplate
 )
 // /**

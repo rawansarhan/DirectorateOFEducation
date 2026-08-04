@@ -38,7 +38,7 @@ const { authMiddleware ,authorize } = require('../../../../core/middleware/authM
 router.post(
   '/',
   authMiddleware,
-  authorize('CREATE'),
+  authorize('PROCESS_PUBLISH_MANAGE'),
   createTypeProcess
 )
 
@@ -73,8 +73,31 @@ router.post(
 router.put(
   '/:id',
   authMiddleware,
-  authorize('UPDATE'),
+  authorize('PROCESS_PUBLISH_MANAGE'),
   updateTypeProcess
+)
+
+/**
+ * @swagger
+ * /api/typeProcess/employee:
+ *   get:
+ *     summary: جلب كل أنواع العمليات
+ *     tags: [TypeProcess]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: list
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/TypeProcessListEnvelope'
+ */
+router.get(
+  '/employee',
+  authMiddleware,
+  authorize('GET_ORGANIZATIONAL_STRUCTURE'),
+  getAlltype
 )
 
 /**
@@ -96,31 +119,10 @@ router.put(
 router.get(
   '/',
   authMiddleware,
-  authorize('GET_ORGANIZATIONAL_STRUCTURE'),
+  authorize('TRANSACTION_SUBMIT'),
   getAlltype
 )
-/**
- * @swagger
- * /api/typeProcess/admin:
- *   get:
- *     summary: جلب كل أنواع العمليات
- *     tags: [TypeProcess]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: list
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/TypeProcessListEnvelope'
- */
-router.get(
-  '/admin',
-  authMiddleware,
-  authorize('VIEW_ALL'),
-  getAlltype
-)
+
 /**
  * @swagger
  * /api/typeProcess/all:
@@ -141,7 +143,7 @@ router.get(
 router.get(
   '/all',
   authMiddleware,
-  authorize('VIEW_ALL'),
+  authorize('PROCESS_PUBLISH_MANAGE'),
   getEverytype
 )
 

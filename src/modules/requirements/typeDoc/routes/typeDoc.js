@@ -37,7 +37,7 @@ const { authMiddleware, authorize } = require('../../../../core/middleware/authM
  */
 router.post('/',
    authMiddleware,
-   authorize('CREATE'),
+   authorize('PROCESS_PUBLISH_MANAGE'),
    createTypeDoc)
 
 /**
@@ -60,7 +60,7 @@ router.post('/',
  */
 router.put('/:id', 
   authMiddleware, 
-  authorize('UPDATE'),
+  authorize('PROCESS_PUBLISH_MANAGE'),
   updateTypeDoc)
 
 /**
@@ -90,7 +90,7 @@ router.put('/:id',
  */
 router.get('/',
    authMiddleware,
-   authorize('VIEW_ALL'),
+   authorize('PROCESS_PUBLISH_MANAGE'),
     getAllTypeDocs)
 
 /**
@@ -113,7 +113,7 @@ router.get('/',
  */
 router.get('/:id',
    authMiddleware,
-   authorize('VIEW_ONE'),
+   authorize('PROCESS_PUBLISH_MANAGE'),
    getTypeDocById)
 
 module.exports = router

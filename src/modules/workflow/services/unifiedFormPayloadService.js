@@ -11,6 +11,7 @@ const {
 const {
   validateAndNormalizeTemplates
 } = require('../validators/templateSubmissionValidator')
+const { toPublicFileUrl } = require('../../../core/utils/filePath')
 
 const formWidgetWithValueSchema = Joi.object({
   widget_type: Joi.string()
@@ -221,10 +222,40 @@ function extractGatewayValue (configJson = {}, widgets = []) {
 }
 
 function mapTemplatesForHistory (templates = []) {
-  return (templates || []).map(item => ({
-    id_template: item.id_template ?? item.id ?? item.template_id ?? null,
-    value: item.values ?? item.value ?? {}
-  }))
+  return (templates || []).map(item => {
+    const value = item.values ?? item.value ?? {}
+    const idTemplate = item.id_template ?? item.id ?? item.template_id ?? null
+
+    const generatedPdfPath =
+      (value && typeof value === 'object' ? value.generated_pdf_path : null) ??
+      item.generated_pdf_path ??
+      null
+    const documentInstanceId =
+      (value && typeof value === 'object' ? value.id_document_instance : null) ??
+      item.id_document_instance ??
+      null
+    const generatedPdfUrl =
+      (value && typeof value === 'object' ? value.generated_pdf_url : null) ??
+      item.generated_pdf_url ??
+      (generatedPdfPath ? toPublicFileUrl(generatedPdfPath) : null)
+
+    const nextValue =
+      value && typeof value === 'object' && !Array.isArray(value)
+        ? { ...value }
+        : {}
+
+    if (documentInstanceId != null || generatedPdfPath) {
+      nextValue.id_document_instance =
+        documentInstanceId != null ? Number(documentInstanceId) : null
+      nextValue.generated_pdf_path = generatedPdfPath
+      nextValue.generated_pdf_url = generatedPdfUrl
+    }
+
+    return {
+      id_template: idTemplate,
+      value: nextValue
+    }
+  })
 }
 
 // يستخرج معرّفات القوالب المطلوبة من stage_config.config_json.template

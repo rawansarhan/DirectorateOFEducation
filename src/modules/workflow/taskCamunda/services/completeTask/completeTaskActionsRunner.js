@@ -8,7 +8,7 @@ const {
   normalizeActionPayload,
   resolveActionsForStage
 } = require('../../../actions/actionHelpers')
-const { extractPdfFieldsFromActionResults } = require('../../utils/generatedPdfHistory')
+const { extractPdfFieldsFromActionResults, attachGeneratedPdfsFromActionResults } = require('../../utils/generatedPdfHistory')
 const { logStep } = require('./completeTaskHelpers')
 
 const { SERVICE_TASK_SYNC_STALE_MS } = require('../../../../../core/config/env')
@@ -297,6 +297,13 @@ async function executePendingServiceTasks ({
       last_activity_instance_id: activityInstanceId,
       ...pdfFields
     }
+
+    // خزّن PDF داخل templates[] لمرحلة USER_TASK المرتبطة بنفس template_id
+    const attached = attachGeneratedPdfsFromActionResults(
+      transactionData,
+      actionResults
+    )
+    transactionData = attached.data
   }
 
   return transactionData

@@ -5,6 +5,8 @@ const router = express.Router()
 
 const {
   listPermissionsController,
+  listEmployeePermissionsController,
+  listAdminPermissionsController,
   getRolePermissionsController,
   createRolePermissionsController,
   updateRolePermissionsController
@@ -33,13 +35,71 @@ const { authMiddleware, authorize } = require('../../../../core/middleware/authM
  *       401:
  *         description: غير مصرح
  *       403:
- *         description: لا يملك صلاحية PERMISSION_READ
+ *         description: لا يملك صلاحية PERMISSION_MANAGE
  */
 router.get(
   '/permissions',
   authMiddleware,
-  authorize('PERMISSION_READ'),
+  authorize('PERMISSION_MANAGE'),
   listPermissionsController
+)
+
+/**
+ * @swagger
+ * /api/auth/permissions/employee:
+ *   get:
+ *     tags: [Permissions]
+ *     summary: صلاحيات الموظف (وما يشترك فيه المواطن/الموظف/الإدارة)
+ *     description: |
+ *       يعرض الصلاحيات حيث:
+ *       - `type = employee`
+ *       - أو `type = employee,citizen,admin`
+ *
+ *       مع Redis cache (`auth:permissions:audience:employee`).
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: قائمة صلاحيات الموظف
+ *       401:
+ *         description: غير مصرح
+ *       403:
+ *         description: لا يملك صلاحية PERMISSION_MANAGE
+ */
+router.get(
+  '/permissions/employee',
+  authMiddleware,
+  authorize('PERMISSION_MANAGE'),
+  listEmployeePermissionsController
+)
+
+/**
+ * @swagger
+ * /api/auth/permissions/admin:
+ *   get:
+ *     tags: [Permissions]
+ *     summary: صلاحيات الإدارة (وما يشترك فيه المواطن/الموظف/الإدارة)
+ *     description: |
+ *       يعرض الصلاحيات حيث:
+ *       - `type = admin`
+ *       - أو `type = employee,citizen,admin`
+ *
+ *       مع Redis cache (`auth:permissions:audience:admin`).
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: قائمة صلاحيات الإدارة
+ *       401:
+ *         description: غير مصرح
+ *       403:
+ *         description: لا يملك صلاحية PERMISSION_MANAGE
+ */
+router.get(
+  '/permissions/admin',
+  authMiddleware,
+  authorize('PERMISSION_MANAGE'),
+  listAdminPermissionsController
 )
 
 /**
@@ -89,7 +149,7 @@ router.get(
 router.get(
   '/role-permissions',
   authMiddleware,
-  authorize('ROLE_PERMISSION_READ'),
+  authorize('PERMISSION_MANAGE'),
   getRolePermissionsController
 )
 
@@ -150,7 +210,7 @@ router.get(
 router.post(
   '/role-permissions',
   authMiddleware,
-  authorize('ROLE_PERMISSION_CREATE'),
+  authorize('PERMISSION_MANAGE'),
   createRolePermissionsController
 )
 
@@ -211,7 +271,7 @@ router.post(
 router.put(
   '/role-permissions',
   authMiddleware,
-  authorize('ROLE_PERMISSION_UPDATE'),
+  authorize('PERMISSION_MANAGE'),
   updateRolePermissionsController
 )
 

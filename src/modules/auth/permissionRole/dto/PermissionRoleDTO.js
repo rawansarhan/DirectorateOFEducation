@@ -4,8 +4,8 @@ class PermissionOutputDTO {
   constructor (row = {}) {
     this.id = row.id ?? null
     this.name = row.name ?? null
-    // الاسم المعروض؛ يقع الاحتياط على الكود التقني عند غياب الترجمة
-    this.display_name = row.display_name ?? row.name ?? null
+    this.code = row.code ?? null
+    this.type = row.type ?? null
     this.created_at = row.created_at ?? null
     this.updated_at = row.updated_at ?? null
   }
@@ -27,7 +27,8 @@ class RolePermissionOutputDTO {
     this.permissions = permissions.map(item => ({
       id: item.id ?? item.permission_id ?? null,
       name: item.name ?? null,
-      display_name: item.display_name ?? item.name ?? null
+      code: item.code ?? null,
+      type: item.type ?? null
     }))
   }
 }

@@ -200,7 +200,7 @@ const {
 router.post(
   '/create',
   authMiddleware,
-  authorize('CREATE'),
+  authorize('PROCESS_PUBLISH_MANAGE'),
   createStageConfig
 )
  /**

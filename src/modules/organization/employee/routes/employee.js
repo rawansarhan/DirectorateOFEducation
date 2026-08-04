@@ -57,7 +57,7 @@ const { authMiddleware, authorize } = require('../../../../core/middleware/authM
 router.get(
   '/',
   authMiddleware,
-  authorize('EMPLOYEE_VIEW'),
+  authorize('ORGANIZATIONAL_STRUCTURE_CREATE'),
   getAllEmployees
 )
 
@@ -318,7 +318,137 @@ router.get(
 router.get(
   '/by-org-dept-role',
   authMiddleware,
-  authorize('EMPLOYEE_VIEW'),
+  authorize('GET_ORGANIZATIONAL_STRUCTURE'),
+  getUsersByOrgRoleDept
+)
+
+/**
+ * @swagger
+ * /api/employees/admin/by-org-dept-role:
+ *   get:
+ *     summary: جلب المستخدمين حسب مؤسسة + دور + دائرة
+ *     description: |
+ *       يستقبل `organization_id` و `role_id` و `department_id`، يبحث عن سجل
+ *       `organization_department_roles` المطابق، ثم يعيد كل المستخدمين المرتبطين به
+ *       من جدول `user_role_assignments` (التعيينات الفعّالة فقط).
+ *
+ *       إن لم يوجد OrgDepRole مطابق: `404` — «لا يوجد دور لدائرة ضمن هذه المنظمة».
+ *
+ *       **هذا الـ API يدعم Caching + Retry limit:**
+ *       - **Caching:** Redis key = `employees:by-odr:org{organizationId}:role{roleId}:dept{departmentId}` — TTL = `API_CACHE_TTL_SECONDS`
+ *       - **Retry limit:** `retryWithBackoff` — عدد المحاولات = `RETRY_MAX_ATTEMPTS`
+ *
+ *       **شكل الاستجابة:** `{ success, status_code, message, data }`
+ *     tags: [Employee]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: organization_id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *         example: 1
+ *       - in: query
+ *         name: role_id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *         example: 4
+ *       - in: query
+ *         name: department_id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *         example: 7
+ *     responses:
+ *       200:
+ *         description: قائمة المستخدمين لنفس OrgDepRole
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/EmployeesByOrgDeptRoleEnvelope'
+ *             example:
+ *               success: true
+ *               status_code: 200
+ *               message: تم جلب المستخدمين حسب دور المؤسسة/القسم بنجاح
+ *               data:
+ *                 organization_id: 1
+ *                 role_id: 4
+ *                 department_id: 7
+ *                 organization_department_roles_id: 12
+ *                 total: 2
+ *                 items:
+ *                   - assignment_id: 101
+ *                     organization_department_roles_id: 12
+ *                     priority: 1
+ *                     is_active: true
+ *                     user:
+ *                       id: 22
+ *                       userName: ahmad.h
+ *                       email: ahmad@example.com
+ *                       phone_number: '0912345678'
+ *                       first_name: أحمد
+ *                       last_name: الحسن
+ *                       father_name: محمد
+ *                       mother_name: فاطمة
+ *                       national_id: '01234567890'
+ *                       is_active: true
+ *                       created_at: '2026-01-10T08:00:00.000Z'
+ *                       updated_at: '2026-06-01T12:30:00.000Z'
+ *                     created_at: '2026-02-01T09:00:00.000Z'
+ *                     updated_at: '2026-02-01T09:00:00.000Z'
+ *                   - assignment_id: 102
+ *                     organization_department_roles_id: 12
+ *                     priority: 2
+ *                     is_active: true
+ *                     user:
+ *                       id: 23
+ *                       userName: sara.y
+ *                       email: sara@example.com
+ *                       phone_number: '0987654321'
+ *                       first_name: سارة
+ *                       last_name: يعقوب
+ *                       father_name: خالد
+ *                       mother_name: لينا
+ *                       national_id: '09876543210'
+ *                       is_active: true
+ *                       created_at: '2026-01-15T10:00:00.000Z'
+ *                       updated_at: '2026-05-20T11:00:00.000Z'
+ *                     created_at: '2026-02-05T10:00:00.000Z'
+ *                     updated_at: '2026-02-05T10:00:00.000Z'
+ *       400:
+ *         description: معاملات الاستعلام غير صالحة
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ApiErrorResponse'
+ *             example:
+ *               success: false
+ *               status_code: 400
+ *               message: organization_id مطلوب
+ *               error: organization_id مطلوب
+ *               data: null
+ *       404:
+ *         description: لا يوجد دور لدائرة ضمن هذه المنظمة
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ApiErrorResponse'
+ *             example:
+ *               success: false
+ *               status_code: 404
+ *               message: لا يوجد دور لدائرة ضمن هذه المنظمة
+ *               error: لا يوجد دور لدائرة ضمن هذه المنظمة
+ *               data: null
+ */
+router.get(
+  'admin/by-org-dept-role',
+  authMiddleware,
+  authorize('ORGANIZATIONAL_STRUCTURE_CREATE'),
   getUsersByOrgRoleDept
 )
 
@@ -345,7 +475,7 @@ router.get(
 router.get(
   'admin/:id',
   authMiddleware,
-  authorize('VIEW_ONE'),
+  authorize('ORGANIZATIONAL_STRUCTURE_CREATE'),
   getEmployeeById
 )
 
@@ -372,7 +502,7 @@ router.get(
 router.get(
   '/:id',
   authMiddleware,
-  authorize('EMPLOYEE_VIEW_ONE'),
+  authorize('GET_ORGANIZATIONAL_STRUCTURE'),
   getEmployeeById
 )
 /**
@@ -434,7 +564,7 @@ router.get(
 router.put(
   'admin/:id',
   authMiddleware,
-  authorize('UPDATE'),
+  authorize('ORGANIZATIONAL_STRUCTURE_CREATE'),
   updateEmployee
 )
 

@@ -2,6 +2,12 @@
 
 const { toPublicFileUrl } = require('../../../../core/utils/filePath')
 
+const PDF_META_KEYS = new Set([
+  'id_document_instance',
+  'generated_pdf_path',
+  'generated_pdf_url'
+])
+
 function buildGeneratedPdfHistoryFields ({
   documentInstanceId = null,
   generatedPdfPath = null
@@ -91,7 +97,9 @@ function findGeneratePdfStageKey (transactionData = {}, templateId = null) {
       }
 
       const actionTemplateId = Number(
-        action.template_id ?? action.result?.template_id
+        action.template_id ??
+        action.payload?.template_id ??
+        action.result?.template_id
       )
 
       return actionTemplateId === numericTemplateId
@@ -105,9 +113,169 @@ function findGeneratePdfStageKey (transactionData = {}, templateId = null) {
   return null
 }
 
+function templateMatchesId (item, templateId) {
+  const id = Number(item?.id_template ?? item?.id ?? item?.template_id)
+  return Number.isInteger(id) && id > 0 && id === Number(templateId)
+}
+
+function mergePdfIntoTemplateItem (item, pdfFields) {
+  const prevValue = item.values ?? item.value ?? {}
+  const baseValue =
+    prevValue && typeof prevValue === 'object' && !Array.isArray(prevValue)
+      ? { ...prevValue }
+      : {}
+
+  const nextValue = {
+    ...baseValue,
+    ...pdfFields
+  }
+
+  const {
+    id_document_instance: _a,
+    generated_pdf_path: _b,
+    generated_pdf_url: _c,
+    ...rest
+  } = item
+
+  return {
+    ...rest,
+    value: nextValue,
+    values: nextValue
+  }
+}
+
+/**
+ * يخزّن نتيجة GENERATE_PDF داخل templates[] لمرحلة USER_TASK
+ * التي تحتوي نفس template_id — ضمن value + حقول القالب.
+ */
+function attachGeneratedPdfToUserTaskTemplates (
+  transactionData = {},
+  {
+    templateId = null,
+    documentInstanceId = null,
+    generatedPdfPath = null
+  } = {}
+) {
+  const numericTemplateId = Number(templateId)
+  const pdfFields = buildGeneratedPdfHistoryFields({
+    documentInstanceId,
+    generatedPdfPath
+  })
+
+  if (
+    !pdfFields ||
+    !Number.isInteger(numericTemplateId) ||
+    numericTemplateId <= 0
+  ) {
+    return {
+      data: transactionData,
+      updated: false
+    }
+  }
+
+  const nextData = { ...(transactionData || {}) }
+  let updated = false
+
+  if (Array.isArray(nextData.templates)) {
+    nextData.templates = nextData.templates.map(item => {
+      if (!templateMatchesId(item, numericTemplateId)) {
+        return item
+      }
+
+      updated = true
+      return mergePdfIntoTemplateItem(item, pdfFields)
+    })
+  }
+
+  for (const [key, stage] of Object.entries(nextData)) {
+    if (!stage || typeof stage !== 'object' || Array.isArray(stage)) {
+      continue
+    }
+
+    if (!Array.isArray(stage.templates) || !stage.templates.length) {
+      continue
+    }
+
+    let stageUpdated = false
+    const nextTemplates = stage.templates.map(item => {
+      if (!templateMatchesId(item, numericTemplateId)) {
+        return item
+      }
+
+      stageUpdated = true
+      return mergePdfIntoTemplateItem(item, pdfFields)
+    })
+
+    if (stageUpdated) {
+      nextData[key] = {
+        ...stage,
+        templates: nextTemplates
+      }
+      updated = true
+    }
+  }
+
+  return {
+    data: nextData,
+    updated
+  }
+}
+
+function attachGeneratedPdfsFromActionResults (transactionData = {}, actionResults = []) {
+  let nextData = transactionData
+  let updated = false
+
+  for (const action of actionResults || []) {
+    if (String(action?.name || '').toUpperCase() !== 'GENERATE_PDF') {
+      continue
+    }
+
+    const result = action.result || {}
+    const templateId =
+      result.template_id ??
+      action.template_id ??
+      action.payload?.template_id ??
+      null
+
+    const attached = attachGeneratedPdfToUserTaskTemplates(nextData, {
+      templateId,
+      documentInstanceId:
+        result.document_instance_id ?? result.id_document_instance ?? null,
+      generatedPdfPath: result.generated_pdf_path ?? null
+    })
+
+    nextData = attached.data
+    updated = updated || attached.updated
+  }
+
+  return {
+    data: nextData,
+    updated
+  }
+}
+
+/** يحذف حقول PDF المساعدة من value قبل استخدامه لملء قالب جديد */
+function stripPdfMetaFromTemplateValues (values) {
+  if (!values || typeof values !== 'object' || Array.isArray(values)) {
+    return values
+  }
+
+  const cleaned = { ...values }
+
+  for (const key of PDF_META_KEYS) {
+    delete cleaned[key]
+  }
+
+  return cleaned
+}
+
 module.exports = {
+  PDF_META_KEYS,
   buildGeneratedPdfHistoryFields,
   extractPdfFieldsFromActionResults,
   resolveStagePdfFields,
-  findGeneratePdfStageKey
+  findGeneratePdfStageKey,
+  attachGeneratedPdfToUserTaskTemplates,
+  attachGeneratedPdfsFromActionResults,
+  stripPdfMetaFromTemplateValues
 }

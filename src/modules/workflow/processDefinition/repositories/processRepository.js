@@ -171,10 +171,22 @@ class ProcessRepository {
     )
   }
 
-  _buildProcessesByTypeAdminQuery ({ typeTransId = null, allTypes = false } = {}) {
+  _buildProcessesByTypeQuery ({
+    typeTransId = null,
+    allTypes = false,
+    activeOnly = true,
+    approvedOnly = false
+  } = {}) {
     const where = {
-      is_complaint: false,
-      is_active: true
+      is_complaint: false
+    }
+
+    if (activeOnly) {
+      where.is_active = true
+    }
+
+    if (approvedOnly) {
+      where.approval_status = 'APPROVED'
     }
 
     if (!allTypes) {
@@ -196,15 +208,40 @@ class ProcessRepository {
     }
   }
 
+  /** GET /type/:id — نشطة فقط (السلوك السابق) */
+  async findProcessesByType (typeTransId) {
+    return ProcessDefinition.findAll(
+      this._buildProcessesByTypeQuery({ typeTransId, activeOnly: true })
+    )
+  }
+
+  async findAllProcessesByTypeActive () {
+    return ProcessDefinition.findAll(
+      this._buildProcessesByTypeQuery({ allTypes: true, activeOnly: true })
+    )
+  }
+
+  /**
+   * GET /admin/type/:id —
+   * معتمدة فقط (approval_status=APPROVED) سواء is_active true أو false
+   */
   async findProcessesByTypeForAdmin (typeTransId) {
     return ProcessDefinition.findAll(
-      this._buildProcessesByTypeAdminQuery({ typeTransId })
+      this._buildProcessesByTypeQuery({
+        typeTransId,
+        activeOnly: false,
+        approvedOnly: true
+      })
     )
   }
 
   async findAllProcessesForAdmin () {
     return ProcessDefinition.findAll(
-      this._buildProcessesByTypeAdminQuery({ allTypes: true })
+      this._buildProcessesByTypeQuery({
+        allTypes: true,
+        activeOnly: false,
+        approvedOnly: true
+      })
     )
   }
 

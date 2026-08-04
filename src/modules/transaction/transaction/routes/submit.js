@@ -8,7 +8,7 @@ const {
   submitEncryptedTransactionController
 } = require('../controllers/transactionController')
 
-const { authMiddleware } = require('../../../../core/middleware/authMiddleware')
+const { authMiddleware , authorize} = require('../../../../core/middleware/authMiddleware')
 const {
   submitTransactionLimiter,
   signingChallengeLimiter,
@@ -80,6 +80,7 @@ const {
 router.post(
   '/submit/process/:processId',
   authMiddleware,
+  authorize('TRANSACTION_SUBMIT'),
   submitTransactionLimiter,
   submitTransactionController
 )
@@ -150,6 +151,7 @@ router.post(
 router.post(
   '/submit/process/:processId/encrypted',
   authMiddleware,
+  authorize('TRANSACTION_SUBMIT'),
   submitTransactionLimiter,
   submitEncryptedTransactionController
 )
@@ -197,7 +199,10 @@ router.post(
 router.post(
   '/process/:processId/submit-documents/signing-challenge',
   authMiddleware,
+  authorize('TASK_SIGNING'),
+
   signingChallengeLimiter,
+
   createDocumentSubmitSigningChallengeByProcessController
 )
 
@@ -231,6 +236,7 @@ router.post(
 router.post(
   '/:transactionId/submit-documents/signing-challenge',
   authMiddleware,
+  authorize('TASK_SIGNING'),
   signingChallengeLimiter,
   createDocumentSubmitSigningChallengeByTransactionController
 )
@@ -276,6 +282,7 @@ router.post(
   '/:transactionId/submit-documents/complete',
   authMiddleware,
   completeTaskLimiter,
+  authorize('TASK_SIGNING'),
   completeDocumentSubmitByTransactionController
 )
 

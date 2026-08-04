@@ -3,7 +3,7 @@
 const express = require('express')
 const router = express.Router()
 
-const { authMiddleware } = require('../../../../core/middleware/authMiddleware')
+const { authMiddleware, authorize } = require('../../../../core/middleware/authMiddleware')
 const {
   verifyDocumentController,
   getDocumentVerifyDetailsController,
@@ -136,7 +136,10 @@ router.get('/document', verifyDocumentController)
  *       404:
  *         description: المعاملة غير موجودة
  */
-router.get('/document/details', authMiddleware, getDocumentVerifyDetailsController)
+router.get('/document/details',
+   authMiddleware,
+   authorize('DOCUMENT_VERIFY_BY_CODE'), 
+   getDocumentVerifyDetailsController)
 
 /**
  * @swagger
@@ -149,6 +152,11 @@ router.get('/document/details', authMiddleware, getDocumentVerifyDetailsControll
  *
  *       يعيد: الموقّعين، طالب المعاملة، transaction_history، final_document،
  *       تاريخ الطلب وتاريخ الإكمال/الرفض.
+ *
+ *       **transaction_history.stages:** مراحل USER_TASK فقط.
+ *       ملفات GENERATE_PDF تظهر داخل `templates[].value` للمرحلة المالكة للقالب:
+ *       `{ id_template, value: { ...fields, id_document_instance, generated_pdf_path, generated_pdf_url } }`
+ *       بدون مرحلة SERVICE_TASK مستقلة.
  *     tags: [IntegrityChain]
  *     security:
  *       - bearerAuth: []
@@ -204,6 +212,7 @@ router.get('/document/details', authMiddleware, getDocumentVerifyDetailsControll
 router.get(
   '/document/details/by-transaction',
   authMiddleware,
+  authorize(''),
   getDocumentVerifyDetailsByTransactionController
 )
 

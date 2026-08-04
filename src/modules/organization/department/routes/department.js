@@ -41,7 +41,7 @@ const { authMiddleware, authorize } = require('../../../../core/middleware/authM
 router.post(
   '/',
   authMiddleware,
-  authorize('CREATE'),
+  authorize('ORGANIZATIONAL_STRUCTURE_CREATE'),
   createDepartment
 )
 
@@ -128,7 +128,7 @@ router.post(
 router.get(
   '/',
   authMiddleware,
-  authorize('VIEW_ALL'),
+  authorize('ORGANIZATIONAL_STRUCTURE_CREATE'),
   getAllDepartments
 )
 
@@ -186,6 +186,7 @@ router.get(
 router.get(
   '/accessible-scope',
   authMiddleware,
+  authorize('GET_TASK_COMPLETED_BY_DEPARTMENT'),
   getAccessibleDepartments
 )
 
@@ -246,7 +247,7 @@ router.get(
 router.get(
   '/by-organization/:organizationId/leaves',
   authMiddleware,
-  authorize('DEPARTMENT_LEAVES'),
+  authorize('GET_ORGANIZATIONAL_STRUCTURE'),
   getLeafDepartmentsByOrganization
 )
 /**
@@ -306,7 +307,7 @@ router.get(
 router.get(
   'admin/by-organization/:organizationId/leaves',
   authMiddleware,
-  authorize('VIEW_ALL'),
+  authorize('ORGANIZATIONAL_STRUCTURE_CREATE'),
   getLeafDepartmentsByOrganization
 )
 
@@ -336,7 +337,7 @@ router.get(
 router.patch(
   '/:id/toggle-status',
   authMiddleware,
-  authorize('UPDATE'),
+  authorize('ORGANIZATIONAL_STRUCTURE_CREATE'),
   toggleDepartmentStatus
 )
 
@@ -364,7 +365,7 @@ router.patch(
 router.get(
   '/:id/overview',
   authMiddleware,
-  authorize('DEPARTMENT_OVERVIEW'),
+  authorize('ORGANIZATIONAL_STRUCTURE_CREATE'),
   getDepartmentOverview
 )
 
@@ -393,7 +394,7 @@ router.get(
 router.get(
   '/:id',
   authMiddleware,
-  authorize('VIEW_ONE'),
+  authorize('ORGANIZATIONAL_STRUCTURE_CREATE'),
   getDepartmentById
 )
 

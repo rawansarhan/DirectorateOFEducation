@@ -198,7 +198,7 @@ router.get(
 router.get(
   '/by-department/:departmentId',
   authMiddleware,
-  authorize('ROLE_VIEW_BY_DEPARTMENT'),
+  authorize('GET_ORGANIZATIONAL_STRUCTURE'),
   getRolesByDepartment
 )
 /**
@@ -263,7 +263,7 @@ router.get(
 router.get(
   'admin/by-department/:departmentId',
   authMiddleware,
-  authorize('VIEW_ALL'),
+  authorize('ORGANIZATIONAL_STRUCTURE_CREATE'),
   getRolesByDepartment
 )
 /**
@@ -293,7 +293,7 @@ router.get(
 router.patch(
   '/:id/toggle-status',
   authMiddleware,
-  authorize('UPDATE'),
+  authorize('ORGANIZATIONAL_STRUCTURE_CREATE'),
   toggleRoleStatus
 )
 
@@ -322,7 +322,7 @@ router.patch(
 router.get(
   '/:id',
   authMiddleware,
-  authorize('VIEW_ONE'),
+  authorize('ORGANIZATIONAL_STRUCTURE_CREATE'),
   getRoleById
 )
 

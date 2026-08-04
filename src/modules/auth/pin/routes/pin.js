@@ -10,7 +10,7 @@ const {
   deletePinUser
 } = require('../controllers/PinController')
 
-const { authMiddleware } = require('../../../../core/middleware/authMiddleware')
+const { authMiddleware , authorize} = require('../../../../core/middleware/authMiddleware')
 const accountLockMiddleware = require('../../../../core/security/accountLockMiddleware')
 const { authSensitiveLimiter } = require('../../../../core/security/rateLimitMiddleware')
 

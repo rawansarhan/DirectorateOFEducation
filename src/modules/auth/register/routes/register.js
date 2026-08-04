@@ -49,7 +49,7 @@ router.post(
   '/register/employee',
   authMiddleware,
   accountLockMiddleware,
-  authorize('admin_register_employee'),
+  authorize('ORGANIZATIONAL_STRUCTURE_CREATE'),
   registerEmployeeUser
 )
 

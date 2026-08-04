@@ -21,16 +21,21 @@ module.exports = (sequelize, DataTypes) => {
         autoIncrement: true,
         primaryKey: true
       },
-      // الكود التقني المستخدم في فحص الصلاحيات — لا يُعرض للمستخدم
+      // الاسم العربي المعروض في الواجهة
       name: {
+        type: DataTypes.STRING,
+        allowNull: false
+      },
+      // الكود التقني المستخدم في authorize() — فريد
+      code: {
         type: DataTypes.STRING,
         allowNull: false,
         unique: true
       },
-      // الاسم العربي المعروض في الواجهة؛ يقع الاحتياط على name عند غيابه
-      display_name: {
+      // admin | employee | citizen | employee,citizen,admin
+      type: {
         type: DataTypes.STRING,
-        allowNull: true
+        allowNull: false
       },
       created_at: {
         type: DataTypes.DATE,

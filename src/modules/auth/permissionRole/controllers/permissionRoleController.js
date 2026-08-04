@@ -4,6 +4,7 @@ const asyncHandler = require('../../../../core/middleware/asyncHandler')
 const ApiResponder = require('../../../../core/utils/apiResponder')
 const {
   listPermissions,
+  listPermissionsByAudience,
   getRolePermissions,
   createRolePermissions,
   updateRolePermissions
@@ -12,6 +13,32 @@ const {
 const listPermissionsController = asyncHandler(async (req, res) => {
   try {
     const result = await listPermissions()
+    return ApiResponder.okResponse(res, result.data, result.message)
+  } catch (err) {
+    return ApiResponder.error(res, {
+      message: err.message,
+      statusCode: err.statusCode || 400,
+      error: err.code || null
+    })
+  }
+})
+
+const listEmployeePermissionsController = asyncHandler(async (req, res) => {
+  try {
+    const result = await listPermissionsByAudience('employee')
+    return ApiResponder.okResponse(res, result.data, result.message)
+  } catch (err) {
+    return ApiResponder.error(res, {
+      message: err.message,
+      statusCode: err.statusCode || 400,
+      error: err.code || null
+    })
+  }
+})
+
+const listAdminPermissionsController = asyncHandler(async (req, res) => {
+  try {
+    const result = await listPermissionsByAudience('admin')
     return ApiResponder.okResponse(res, result.data, result.message)
   } catch (err) {
     return ApiResponder.error(res, {
@@ -63,6 +90,8 @@ const updateRolePermissionsController = asyncHandler(async (req, res) => {
 
 module.exports = {
   listPermissionsController,
+  listEmployeePermissionsController,
+  listAdminPermissionsController,
   getRolePermissionsController,
   createRolePermissionsController,
   updateRolePermissionsController

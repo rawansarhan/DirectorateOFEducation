@@ -44,8 +44,12 @@ const KEYS = {
   authProcessesByType: (typeTransId) => `process:auth:typed:${typeTransId}`,
   authProcessesAll: () => 'process:auth:all',
   authComplaintProcesses: () => 'process:auth:complaint:all',
-  adminProcessesByType: (typeTransId) => `process:admin:typed:${typeTransId}`,
-  adminProcessesAll: () => 'process:admin:all',
+  // GET /process_definitions/type/:id — نشطة فقط
+  processesByTypeActive: (typeTransId) => `process:by-type:active:${typeTransId}`,
+  processesByTypeActiveAll: () => 'process:by-type:active:all',
+  // GET /process_definitions/admin/type/:id — معتمدة فقط (أي is_active)
+  adminProcessesByType: (typeTransId) => `process:admin:typed:approved:${typeTransId}`,
+  adminProcessesAll: () => 'process:admin:all:approved',
   adminComplaintProcessesActive: () => 'process:admin:complaint:active',
   adminComplaintProcessesAllStatuses: () => 'process:admin:complaint:all-statuses',
   technicalOfficerUserIds: () => 'notification:technical-officer-user-ids',
@@ -82,6 +86,7 @@ const KEYS = {
   // صلاحيات المستخدم كاملة — مفتاح واحد لكل user (أفضل من كاش لكل permission)
   userPermissions: (userId) => `auth:user-permissions:${userId}`,
   permissionsAll: () => 'auth:permissions:all',
+  permissionsByAudience: (audience) => `auth:permissions:audience:${audience}`,
   rolePermissionsByOrgDeptRole: (orgDeptRoleId) =>
     `auth:role-permissions:odr:${orgDeptRoleId}`
 }
@@ -534,8 +539,12 @@ async function invalidateAllAuthProcessCaches () {
   const complaintKey = KEYS.authComplaintProcesses()
   const complaintDeleted = await deleteKey(complaintKey)
 
+  const byTypeActiveCount = await deleteKeysByPattern('process:by-type:active:*')
+  const byTypeActiveAllDeleted = await deleteKey(KEYS.processesByTypeActiveAll())
   const adminTypedCount = await deleteKeysByPattern('process:admin:typed:*')
   const adminAllDeleted = await deleteKey(KEYS.adminProcessesAll())
+  // مفاتيح قديمة قبل الفصل (is_active فقط)
+  await deleteKey('process:admin:all')
   const adminComplaintActiveDeleted = await deleteKey(KEYS.adminComplaintProcessesActive())
   const adminComplaintAllStatusesDeleted = await deleteKey(
     KEYS.adminComplaintProcessesAllStatuses()
@@ -544,6 +553,9 @@ async function invalidateAllAuthProcessCaches () {
 
   console.log(
     `${LOG_PREFIX} invalidate all auth process caches — typed: ${typedCount} key(s), all: ${allDeleted} key(s), complaint: ${complaintDeleted} key(s) — redis: ${redisStatusLabel()}`
+  )
+  console.log(
+    `${LOG_PREFIX} invalidate process-by-type active caches — typed: ${byTypeActiveCount} key(s), all: ${byTypeActiveAllDeleted} key(s)`
   )
   console.log(
     `${LOG_PREFIX} invalidate all admin process caches — typed: ${adminTypedCount} key(s), all: ${adminAllDeleted} key(s), complaintActive: ${adminComplaintActiveDeleted} key(s), complaintAllStatuses: ${adminComplaintAllStatusesDeleted} key(s) — redis: ${redisStatusLabel()}`
@@ -778,9 +790,11 @@ async function invalidateUserPermissionCaches () {
 }
 
 async function invalidatePermissionsAll () {
-  const deleted = await deleteKey(KEYS.permissionsAll())
+  const allDeleted = await deleteKey(KEYS.permissionsAll())
+  const employeeDeleted = await deleteKey(KEYS.permissionsByAudience('employee'))
+  const adminDeleted = await deleteKey(KEYS.permissionsByAudience('admin'))
   console.log(
-    `${LOG_PREFIX} invalidate permissions all (${deleted ? 1 : 0} key)`
+    `${LOG_PREFIX} invalidate permissions — all: ${allDeleted ? 1 : 0}, employee: ${employeeDeleted ? 1 : 0}, admin: ${adminDeleted ? 1 : 0}`
   )
 }
 

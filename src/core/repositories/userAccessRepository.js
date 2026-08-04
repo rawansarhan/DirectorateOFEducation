@@ -59,7 +59,7 @@ async function findPermissionNamesByOrgDeptRoleIds (orgDeptRoleIds = []) {
       {
         model: Permission,
         as: 'permissions',
-        attributes: ['name'],
+        attributes: ['code'],
         required: true
       },
       {
@@ -75,7 +75,7 @@ async function findPermissionNamesByOrgDeptRoleIds (orgDeptRoleIds = []) {
   return [
     ...new Set(
       rows
-        .map(row => row.permissions?.name)
+        .map(row => row.permissions?.code)
         .filter(Boolean)
     )
   ]

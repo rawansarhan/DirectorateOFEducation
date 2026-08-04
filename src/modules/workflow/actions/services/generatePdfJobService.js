@@ -10,7 +10,9 @@ const {
 } = require('../../../transaction/public')
 const {
   buildGeneratedPdfHistoryFields,
-  findGeneratePdfStageKey
+  findGeneratePdfStageKey,
+  attachGeneratedPdfToUserTaskTemplates,
+  stripPdfMetaFromTemplateValues
 } = require('../../taskCamunda/utils/generatedPdfHistory')
 
 function extractTemplateValuesFromList (templates, templateId) {
@@ -21,7 +23,7 @@ function extractTemplateValuesFromList (templates, templateId) {
       const values = item.values ?? item.value ?? null
 
       if (values && typeof values === 'object') {
-        return values
+        return stripPdfMetaFromTemplateValues(values)
       }
     }
   }
@@ -124,18 +126,28 @@ async function applyGeneratedPdfToTransactionHistory ({
     return null
   }
 
-  const transactionData = { ...(transaction.data || {}) }
+  let transactionData = { ...(transaction.data || {}) }
+
+  // 1) خزّن الملف داخل template value في مرحلة USER_TASK المالكة للقالب
+  const attached = attachGeneratedPdfToUserTaskTemplates(transactionData, {
+    templateId,
+    documentInstanceId,
+    generatedPdfPath
+  })
+  transactionData = attached.data
+
+  // 2) أبقِ الحقول أيضاً على مرحلة SERVICE_TASK GENERATE_PDF (توافق خلفي)
   const stageKey =
     (stageCode && transactionData[stageCode] ? stageCode : null) ||
     findGeneratePdfStageKey(transactionData, templateId)
 
-  if (!stageKey) {
+  if (stageKey) {
+    transactionData[stageKey] = {
+      ...transactionData[stageKey],
+      ...pdfFields
+    }
+  } else if (!attached.updated) {
     return null
-  }
-
-  transactionData[stageKey] = {
-    ...transactionData[stageKey],
-    ...pdfFields
   }
 
   return transactionRepository.updateDataOptimistic(

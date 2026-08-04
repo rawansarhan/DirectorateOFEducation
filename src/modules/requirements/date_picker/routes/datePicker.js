@@ -49,7 +49,7 @@ const {
 router.get(
   '/',
   authMiddleware,
-  authorize('VIEW_ALL'),
+  authorize('PROCESS_PUBLISH_MANAGE'),
   getAllDatePickers
 )
 
@@ -90,7 +90,7 @@ router.get(
 router.post(
   '/',
   authMiddleware,
-  authorize('CREATE'),
+  authorize('PROCESS_PUBLISH_MANAGE'),
   createDatePicker
 )
 
@@ -117,7 +117,7 @@ router.post(
 router.get(
   '/:id',
   authMiddleware,
-  authorize('VIEW_ONE'),
+  authorize('PROCESS_PUBLISH_MANAGE'),
   getDatePickerById
 )
 

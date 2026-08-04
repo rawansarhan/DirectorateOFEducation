@@ -53,6 +53,11 @@ async function assertPermissionIdsExist (permissionIds) {
   return found
 }
 
+const PERMISSION_AUDIENCES = {
+  employee: ['employee', 'employee,citizen,admin'],
+  admin: ['admin', 'employee,citizen,admin']
+}
+
 async function listPermissions () {
   const rows = await getOrLoad(
     KEYS.permissionsAll(),
@@ -62,6 +67,31 @@ async function listPermissions () {
 
   return {
     message: 'تم جلب الصلاحيات بنجاح',
+    data: toPermissionDTOList(rows)
+  }
+}
+
+async function listPermissionsByAudience (audience) {
+  const types = PERMISSION_AUDIENCES[audience]
+
+  if (!types) {
+    throw createHttpError('نوع عرض الصلاحيات غير صالح', 400, 'VALIDATION_ERROR')
+  }
+
+  const rows = await getOrLoad(
+    KEYS.permissionsByAudience(audience),
+    () => permissionRepository.findByTypes(types),
+    {
+      label: `auth.permissions.audience:${audience}`,
+      ttlSeconds: 300
+    }
+  )
+
+  return {
+    message:
+      audience === 'admin'
+        ? 'تم جلب صلاحيات الإدارة بنجاح'
+        : 'تم جلب صلاحيات الموظف بنجاح',
     data: toPermissionDTOList(rows)
   }
 }
@@ -165,6 +195,7 @@ async function updateRolePermissions (body) {
 
 module.exports = {
   listPermissions,
+  listPermissionsByAudience,
   getRolePermissions,
   createRolePermissions,
   updateRolePermissions
