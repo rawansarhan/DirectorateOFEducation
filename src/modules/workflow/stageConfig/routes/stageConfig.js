@@ -15,6 +15,12 @@ const {
  *     description: |
  *       ينشئ `stage_config` لعدة مراحل مع `assignments` (stage_assignments).
  *
+ *       **date_picker — min_date / max_date:**
+ *       - `YYYY-MM-DD` ثابت (السلوك القديم)
+ *       - `"today"` أو `{ type: today }`
+ *       - `{ type: relative, years, months, days }` (سالب = قبل اليوم)
+ *       انظر المثال `with_date_picker_all_bounds` لكل الحالات.
+ *
  *       **SEND_NOTIFICATION payload:**
  *       - `message` (مطلوب)
  *       - `title` (اختياري)
@@ -165,6 +171,124 @@ const {
  *                       - organization_id: 1
  *                         department_id: 3
  *                         role_id: 2
+ *             with_date_picker_all_bounds:
+ *               summary: date_picker — مطلق + today + relative (سنوات/أشهر/أيام)
+ *               description: |
+ *                 min_date / max_date يقبلان:
+ *                 - YYYY-MM-DD ثابت (السلوك القديم)
+ *                 - "today" أو { type: today }
+ *                 - { type: relative, years, months, days }  (سالب=قبل اليوم)
+ *                 عند عرض الاستمارة تُحسب إلى YYYY-MM-DD حسب تاريخ اليوم.
+ *               value:
+ *                 stages:
+ *                   - stage_id: 1
+ *                     config_json:
+ *                       form_id: civil_dates_demo
+ *                       form_name: استمارة حدود التاريخ (شامل)
+ *                       widgets:
+ *                         - widget_type: date_picker
+ *                           data:
+ *                             id: birth_date
+ *                             label: تاريخ الولادة
+ *                             is_required: true
+ *                             min_date: "1900-01-01"
+ *                             max_date: today
+ *                         - widget_type: date_picker
+ *                           data:
+ *                             id: adult_birth_date
+ *                             label: تاريخ ولادة (عمر ≥ 18)
+ *                             is_required: true
+ *                             min_date:
+ *                               type: relative
+ *                               years: -120
+ *                               months: 0
+ *                               days: 0
+ *                             max_date:
+ *                               type: relative
+ *                               years: -18
+ *                               months: 0
+ *                               days: 0
+ *                         - widget_type: date_picker
+ *                           data:
+ *                             id: window_months
+ *                             label: نافذة أشهر حول اليوم
+ *                             is_required: true
+ *                             min_date:
+ *                               type: relative
+ *                               years: 0
+ *                               months: -4
+ *                               days: 0
+ *                             max_date:
+ *                               type: relative
+ *                               years: 0
+ *                               months: 7
+ *                               days: 0
+ *                         - widget_type: date_picker
+ *                           data:
+ *                             id: window_years
+ *                             label: قبل 5 سنوات → بعد 10 سنوات
+ *                             is_required: false
+ *                             min_date:
+ *                               type: relative
+ *                               years: -5
+ *                             max_date:
+ *                               type: relative
+ *                               years: 10
+ *                         - widget_type: date_picker
+ *                           data:
+ *                             id: last_30_days
+ *                             label: خلال آخر 30 يوماً
+ *                             is_required: false
+ *                             min_date:
+ *                               type: relative
+ *                               days: -30
+ *                             max_date:
+ *                               type: today
+ *                         - widget_type: date_picker
+ *                           data:
+ *                             id: mixed_units
+ *                             label: مزيج وحدات (سنة+شهر+يوم)
+ *                             is_required: false
+ *                             min_date:
+ *                               type: relative
+ *                               years: -1
+ *                               months: -2
+ *                               days: -3
+ *                             max_date:
+ *                               type: relative
+ *                               months: 6
+ *                               days: 10
+ *                         - widget_type: date_picker
+ *                           data:
+ *                             id: from_today_forward
+ *                             label: من اليوم فصاعداً (سنة)
+ *                             is_required: false
+ *                             min_date:
+ *                               type: today
+ *                             max_date:
+ *                               type: relative
+ *                               years: 1
+ *                         - widget_type: date_picker
+ *                           data:
+ *                             id: fixed_period
+ *                             label: فترة إدارية ثابتة
+ *                             is_required: true
+ *                             min_date: "2026-09-01"
+ *                             max_date: "2026-09-30"
+ *                         - widget_type: date_picker
+ *                           data:
+ *                             id: absolute_and_today
+ *                             label: مطلق + اليوم
+ *                             is_required: false
+ *                             min_date: "2020-01-01"
+ *                             max_date:
+ *                               type: today
+ *                       template: []
+ *                       is_assignment: false
+ *                     assignments:
+ *                       - organization_id: null
+ *                         department_id: null
+ *                         role_id: null
  *     responses:
  *       200:
  *         description: تم إعداد المراحل بنجاح

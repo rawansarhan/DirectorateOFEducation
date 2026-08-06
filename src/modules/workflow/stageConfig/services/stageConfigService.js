@@ -46,6 +46,9 @@ const {
 } = require('../../../../core/middleware/httpStatusCodes')
 
 const { retryWithBackoff } = require('../../../../core/utils/retryWithBackoff')
+const {
+  resolveDatePickerBoundsInConfig
+} = require('../../../../core/utils/dateBound')
 
 function formatJoiError (error) {
   const lines = error.details.map(d => {
@@ -482,7 +485,10 @@ async function getConfig_json (processId, { userId } = {}) {
 
   return {
     message: 'تم جلب إعدادات العملية بنجاح',
-    data
+    data: {
+      ...data,
+      config_json: resolveDatePickerBoundsInConfig(data.config_json)
+    }
   }
 }
 async function loadComplaintConfigPayload () {
@@ -579,7 +585,10 @@ async function getComplaintConfigForUser (userId) {
 
   return {
     message: 'تم جلب استمارة الشكوى بنجاح',
-    data
+    data: {
+      ...data,
+      config_json: resolveDatePickerBoundsInConfig(data.config_json)
+    }
   }
 }
 

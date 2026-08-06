@@ -22,11 +22,11 @@ module.exports = (sequelize, DataTypes) => {
         defaultValue: false
       },
       min_date: {
-        type: DataTypes.DATEONLY,
+        type: DataTypes.STRING(255),
         allowNull: false
       },
       max_date: {
-        type: DataTypes.DATEONLY,
+        type: DataTypes.STRING(255),
         allowNull: false
       },
       is_active: {

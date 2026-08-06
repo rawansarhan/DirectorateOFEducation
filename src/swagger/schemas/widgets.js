@@ -234,14 +234,41 @@ module.exports = {
         "example": true
       },
       "min_date": {
-        "type": "string",
-        "format": "date",
-        "example": "1940-01-01"
+        "description": "YYYY-MM-DD أو today أو relative",
+        "oneOf": [
+          { "type": "string", "example": "1900-01-01" },
+          { "type": "string", "enum": ["today"] },
+          {
+            "type": "object",
+            "properties": {
+              "type": { "type": "string", "enum": ["today", "relative"] },
+              "years": { "type": "integer", "example": -5 },
+              "months": { "type": "integer", "example": -4 },
+              "days": { "type": "integer", "example": 0 }
+            }
+          }
+        ],
+        "example": "1900-01-01"
       },
       "max_date": {
-        "type": "string",
-        "format": "date",
-        "example": "2026-06-04"
+        "description": "YYYY-MM-DD أو today أو relative",
+        "oneOf": [
+          { "type": "string", "example": "today" },
+          {
+            "type": "object",
+            "example": { "type": "today" }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": { "type": "string", "enum": ["relative"] },
+              "years": { "type": "integer", "example": 10 },
+              "months": { "type": "integer", "example": 7 },
+              "days": { "type": "integer", "example": 0 }
+            }
+          }
+        ],
+        "example": "today"
       },
       "created_at": {
         "type": "string",
@@ -251,6 +278,14 @@ module.exports = {
         "type": "string",
         "format": "date-time"
       }
+    },
+    "example": {
+      "id": 1,
+      "id_widget": "date_picker1",
+      "label": "تاريخ الولادة",
+      "is_required": true,
+      "min_date": "1900-01-01",
+      "max_date": "today"
     }
   },
   "FilePickerWidget": {

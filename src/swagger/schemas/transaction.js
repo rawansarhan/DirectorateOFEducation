@@ -669,7 +669,7 @@ module.exports = {
         }
       },
       "date_picker": {
-        "summary": "date_picker",
+        "summary": "date_picker — مطلق",
         "value": {
           "widget_type": "date_picker",
           "data": {
@@ -680,6 +680,85 @@ module.exports = {
             "max_date": "2010-12-31"
           },
           "value": "2000-05-15"
+        }
+      },
+      "date_picker_today": {
+        "summary": "date_picker — max=today",
+        "value": {
+          "widget_type": "date_picker",
+          "data": {
+            "id": "birth_date",
+            "label": "تاريخ الولادة",
+            "is_required": true,
+            "min_date": "1900-01-01",
+            "max_date": "today"
+          },
+          "value": "2000-05-15"
+        }
+      },
+      "date_picker_relative_months": {
+        "summary": "date_picker — قبل 4 أشهر / بعد 7 أشهر",
+        "value": {
+          "widget_type": "date_picker",
+          "data": {
+            "id": "window_months",
+            "label": "نافذة أشهر حول اليوم",
+            "is_required": true,
+            "min_date": {
+              "type": "relative",
+              "years": 0,
+              "months": -4,
+              "days": 0
+            },
+            "max_date": {
+              "type": "relative",
+              "years": 0,
+              "months": 7,
+              "days": 0
+            }
+          },
+          "value": "2026-06-01"
+        }
+      },
+      "date_picker_relative_years": {
+        "summary": "date_picker — عمر ≥ 18",
+        "value": {
+          "widget_type": "date_picker",
+          "data": {
+            "id": "adult_birth_date",
+            "label": "تاريخ ولادة (عمر ≥ 18)",
+            "is_required": true,
+            "min_date": {
+              "type": "relative",
+              "years": -120
+            },
+            "max_date": {
+              "type": "relative",
+              "years": -18
+            }
+          },
+          "value": "2000-05-15"
+        }
+      },
+      "date_picker_mixed": {
+        "summary": "date_picker — مزيج وحدات + today",
+        "value": {
+          "widget_type": "date_picker",
+          "data": {
+            "id": "mixed_units",
+            "label": "مزيج سنوات/أشهر/أيام",
+            "is_required": false,
+            "min_date": {
+              "type": "relative",
+              "years": -1,
+              "months": -2,
+              "days": -3
+            },
+            "max_date": {
+              "type": "today"
+            }
+          },
+          "value": "2026-01-10"
         }
       },
       "dropdown": {

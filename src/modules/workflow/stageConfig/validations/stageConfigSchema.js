@@ -2,6 +2,10 @@
 
 const Joi = require('joi')
 const { pickTypeDocIdFromObject } = require('../../../../core/utils/typeDocId')
+const {
+  resolveDateBound,
+  compareDateOnly
+} = require('../../../../core/utils/dateBound')
 
 const WIDGET_TYPES = [
   'text_field',
@@ -39,6 +43,26 @@ const dateOnlySchema = Joi.string()
     'string.pattern.base': 'التاريخ يجب أن يكون بصيغة YYYY-MM-DD'
   })
 
+/** مطلق YYYY-MM-DD | today | relative من اليوم (سنوات/أشهر/أيام) */
+const dateBoundSchema = Joi.alternatives()
+  .try(
+    dateOnlySchema,
+    Joi.string().valid('today'),
+    Joi.object({
+      type: Joi.string().valid('today').required()
+    }).unknown(false),
+    Joi.object({
+      type: Joi.string().valid('relative').required(),
+      years: Joi.number().integer().default(0),
+      months: Joi.number().integer().default(0),
+      days: Joi.number().integer().default(0)
+    }).unknown(false)
+  )
+  .messages({
+    'alternatives.match':
+      'حد التاريخ يجب أن يكون YYYY-MM-DD أو today أو كائن relative بالسنوات/الأشهر/الأيام'
+  })
+
 const widgetIdSchema = Joi.string().trim().min(1).max(128).required()
 const widgetLabelSchema = Joi.string().trim().min(1).max(255).required()
 
@@ -58,8 +82,8 @@ const datePickerDataSchema = Joi.object({
   id: widgetIdSchema,
   label: widgetLabelSchema,
   is_required: Joi.boolean().default(false),
-  min_date: dateOnlySchema.required(),
-  max_date: dateOnlySchema.required()
+  min_date: dateBoundSchema.required(),
+  max_date: dateBoundSchema.required()
 }).unknown(false)
 
 const dropdownDataSchema = Joi.object({
@@ -256,11 +280,15 @@ function validateWidgetsBusinessRules (widgets = []) {
     }
 
     if (widget.widget_type === 'date_picker') {
-      const min = new Date(`${data.min_date}T00:00:00Z`)
-      const max = new Date(`${data.max_date}T00:00:00Z`)
+      try {
+        const min = resolveDateBound(data.min_date)
+        const max = resolveDateBound(data.max_date)
 
-      if (min > max) {
-        return `min_date يجب أن يكون قبل أو يساوي max_date للودجت "${widgetId}"`
+        if (compareDateOnly(min, max) > 0) {
+          return `min_date يجب أن يكون قبل أو يساوي max_date للودجت "${widgetId}"`
+        }
+      } catch (_) {
+        return `حدود التاريخ غير صالحة للودجت "${widgetId}"`
       }
     }
 

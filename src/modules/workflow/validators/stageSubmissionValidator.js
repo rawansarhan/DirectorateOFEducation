@@ -1,5 +1,9 @@
 'use strict'
 
+const {
+  assertDateWithinBounds
+} = require('../../../core/utils/dateBound')
+
 const FILE_WIDGET_TYPES = new Set(['file_picker'])
 
 const FIELD_WIDGET_TYPES = new Set([
@@ -124,25 +128,55 @@ function assertFilesMatchConfig (files = [], configJson = {}) {
   }
 }
 
+function assertDatePickerValue (widget, value) {
+  const data = widget.data || {}
+  const label = data.label || data.id
+
+  if (value === null || value === undefined || value === '') {
+    if (data.is_required) {
+      throw new Error(`الحقل "${label}" مطلوب`)
+    }
+
+    return
+  }
+
+  const rangeError = assertDateWithinBounds(
+    value,
+    data.min_date,
+    data.max_date
+  )
+
+  if (rangeError) {
+    throw new Error(`"${label}": ${rangeError}`)
+  }
+}
+
 function assertWidgetRules (widgets, fieldMap, fileMap) {
   for (const widget of widgets) {
     const data = widget.data || {}
     const widgetId = data.id
     const label = data.label || widgetId
 
-    if (!data.is_required) {
-      continue
-    }
-
     if (FILE_WIDGET_TYPES.has(widget.widget_type)) {
-      if (!fileMap[widgetId]) {
+      if (data.is_required && !fileMap[widgetId]) {
         throw new Error(`الملف "${label}" مطلوب`)
       }
       continue
     }
 
     if (widget.widget_type === 'check_list') {
-      assertCheckListValue(widget, fieldMap[widgetId])
+      if (data.is_required) {
+        assertCheckListValue(widget, fieldMap[widgetId])
+      }
+      continue
+    }
+
+    if (widget.widget_type === 'date_picker') {
+      assertDatePickerValue(widget, normalizeFieldValue(fieldMap[widgetId]))
+      continue
+    }
+
+    if (!data.is_required) {
       continue
     }
 

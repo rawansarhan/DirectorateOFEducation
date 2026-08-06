@@ -1,6 +1,7 @@
 'use strict'
 
 const Joi = require('joi')
+const { assertDateWithinBounds } = require('../../../../core/utils/dateBound')
 const {
   WIDGET_TYPES,
   validateWidgetsBusinessRules,
@@ -152,23 +153,14 @@ function validateDatePickerValue (data, value, label) {
     return null
   }
 
-  const text = String(value)
+  const rangeError = assertDateWithinBounds(
+    value,
+    data.min_date,
+    data.max_date
+  )
 
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) {
-    return `"${label}" يجب أن يكون بصيغة YYYY-MM-DD`
-  }
-
-  const date = new Date(`${text}T00:00:00Z`)
-
-  if (Number.isNaN(date.getTime())) {
-    return `"${label}" يحتوي تاريخاً غير صالح`
-  }
-
-  const min = new Date(`${data.min_date}T00:00:00Z`)
-  const max = new Date(`${data.max_date}T00:00:00Z`)
-
-  if (date < min || date > max) {
-    return `"${label}" يجب أن يكون بين ${data.min_date} و ${data.max_date}`
+  if (rangeError) {
+    return `"${label}": ${rangeError}`
   }
 
   return null

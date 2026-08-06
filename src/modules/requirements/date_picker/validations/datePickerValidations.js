@@ -1,14 +1,36 @@
 'use strict'
 
 const Joi = require('joi')
+const {
+  resolveDateBound,
+  compareDateOnly,
+  serializeDateBound
+} = require('../../../../core/utils/dateBound')
 
 const dateOnlySchema = Joi.string()
   .trim()
   .pattern(/^\d{4}-\d{2}-\d{2}$/)
-  .required()
   .messages({
-    'string.pattern.base': 'التاريخ يجب أن يكون بصيغة YYYY-MM-DD',
-    'any.required': 'التاريخ مطلوب'
+    'string.pattern.base': 'التاريخ يجب أن يكون بصيغة YYYY-MM-DD'
+  })
+
+const dateBoundSchema = Joi.alternatives()
+  .try(
+    dateOnlySchema,
+    Joi.string().valid('today'),
+    Joi.object({
+      type: Joi.string().valid('today').required()
+    }).unknown(false),
+    Joi.object({
+      type: Joi.string().valid('relative').required(),
+      years: Joi.number().integer().default(0),
+      months: Joi.number().integer().default(0),
+      days: Joi.number().integer().default(0)
+    }).unknown(false)
+  )
+  .messages({
+    'alternatives.match':
+      'حد التاريخ يجب أن يكون YYYY-MM-DD أو today أو كائن relative بالسنوات/الأشهر/الأيام'
   })
 
 const datePickerBodySchema = Joi.object({
@@ -25,11 +47,11 @@ const datePickerBodySchema = Joi.object({
   is_required: Joi.boolean()
     .default(false),
 
-  min_date: dateOnlySchema.messages({
+  min_date: dateBoundSchema.required().messages({
     'any.required': 'min_date مطلوب'
   }),
 
-  max_date: dateOnlySchema.messages({
+  max_date: dateBoundSchema.required().messages({
     'any.required': 'max_date مطلوب'
   })
 }).messages({
@@ -37,18 +59,18 @@ const datePickerBodySchema = Joi.object({
 })
 
 function validateDateRange (minDate, maxDate) {
-  const min = new Date(`${minDate}T00:00:00Z`)
-  const max = new Date(`${maxDate}T00:00:00Z`)
+  try {
+    const min = resolveDateBound(minDate)
+    const max = resolveDateBound(maxDate)
 
-  if (Number.isNaN(min.getTime()) || Number.isNaN(max.getTime())) {
+    if (compareDateOnly(min, max) > 0) {
+      return 'min_date يجب أن يكون قبل أو يساوي max_date'
+    }
+
+    return null
+  } catch (_) {
     return 'تاريخ غير صالح'
   }
-
-  if (min > max) {
-    return 'min_date يجب أن يكون قبل أو يساوي max_date'
-  }
-
-  return null
 }
 
 function validateCreateDatePicker (data) {
@@ -77,7 +99,9 @@ function validateCreateDatePicker (data) {
     error: null,
     value: {
       ...value,
-      is_required: Boolean(value.is_required)
+      is_required: Boolean(value.is_required),
+      min_date: serializeDateBound(value.min_date),
+      max_date: serializeDateBound(value.max_date)
     }
   }
 }

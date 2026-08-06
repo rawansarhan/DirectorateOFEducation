@@ -273,14 +273,38 @@ module.exports = {
             "example": true
           },
           "min_date": {
-            "type": "string",
-            "format": "date",
+            "description": "YYYY-MM-DD ثابت، أو today، أو relative من اليوم",
+            "oneOf": [
+              { "type": "string", "example": "1940-01-01" },
+              { "type": "string", "enum": ["today"] },
+              {
+                "type": "object",
+                "properties": {
+                  "type": { "type": "string", "enum": ["relative"] },
+                  "years": { "type": "integer", "example": 0 },
+                  "months": { "type": "integer", "example": -4 },
+                  "days": { "type": "integer", "example": 0 }
+                }
+              }
+            ],
             "example": "1940-01-01"
           },
           "max_date": {
-            "type": "string",
-            "format": "date",
-            "example": "2026-06-04"
+            "description": "YYYY-MM-DD ثابت، أو today، أو relative من اليوم",
+            "oneOf": [
+              { "type": "string", "example": "2026-06-04" },
+              { "type": "string", "enum": ["today"] },
+              {
+                "type": "object",
+                "properties": {
+                  "type": { "type": "string", "enum": ["relative"] },
+                  "years": { "type": "integer", "example": 0 },
+                  "months": { "type": "integer", "example": 7 },
+                  "days": { "type": "integer", "example": 0 }
+                }
+              }
+            ],
+            "example": { "type": "today" }
           }
         }
       }
@@ -291,8 +315,88 @@ module.exports = {
         "id": "birth_date",
         "label": "تاريخ الولادة",
         "is_required": true,
-        "min_date": "1940-01-01",
-        "max_date": "2026-06-04"
+        "min_date": "1900-01-01",
+        "max_date": "today"
+      }
+    },
+    "examples": {
+      "absolute": {
+        "summary": "مطلق YYYY-MM-DD (السلوك القديم)",
+        "value": {
+          "widget_type": "date_picker",
+          "data": {
+            "id": "fixed_period",
+            "label": "فترة إدارية ثابتة",
+            "is_required": true,
+            "min_date": "2026-09-01",
+            "max_date": "2026-09-30"
+          }
+        }
+      },
+      "today_max": {
+        "summary": "max = اليوم (ولادة)",
+        "value": {
+          "widget_type": "date_picker",
+          "data": {
+            "id": "birth_date",
+            "label": "تاريخ الولادة",
+            "is_required": true,
+            "min_date": "1900-01-01",
+            "max_date": "today"
+          }
+        }
+      },
+      "relative_months": {
+        "summary": "قبل 4 أشهر → بعد 7 أشهر",
+        "value": {
+          "widget_type": "date_picker",
+          "data": {
+            "id": "window_months",
+            "label": "نافذة أشهر حول اليوم",
+            "is_required": true,
+            "min_date": { "type": "relative", "years": 0, "months": -4, "days": 0 },
+            "max_date": { "type": "relative", "years": 0, "months": 7, "days": 0 }
+          }
+        }
+      },
+      "relative_years": {
+        "summary": "قبل 5 سنوات → بعد 10 سنوات",
+        "value": {
+          "widget_type": "date_picker",
+          "data": {
+            "id": "window_years",
+            "label": "نافذة سنوات",
+            "is_required": false,
+            "min_date": { "type": "relative", "years": -5 },
+            "max_date": { "type": "relative", "years": 10 }
+          }
+        }
+      },
+      "age_at_least_18": {
+        "summary": "عمر ≥ 18 (max = today-18y)",
+        "value": {
+          "widget_type": "date_picker",
+          "data": {
+            "id": "adult_birth_date",
+            "label": "تاريخ ولادة (عمر ≥ 18)",
+            "is_required": true,
+            "min_date": { "type": "relative", "years": -120 },
+            "max_date": { "type": "relative", "years": -18 }
+          }
+        }
+      },
+      "mixed_units": {
+        "summary": "مزيج سنوات + أشهر + أيام",
+        "value": {
+          "widget_type": "date_picker",
+          "data": {
+            "id": "mixed_units",
+            "label": "مزيج وحدات",
+            "is_required": false,
+            "min_date": { "type": "relative", "years": -1, "months": -2, "days": -3 },
+            "max_date": { "type": "relative", "months": 6, "days": 10 }
+          }
+        }
       }
     }
   },

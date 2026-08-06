@@ -32,6 +32,9 @@ const {
 const {
   buildAssignmentsResponseFromConfig
 } = require('./taskAssignmentRoutingService')
+const {
+  resolveDatePickerBoundsInConfig
+} = require('../../../../core/utils/dateBound')
 
 function createTaskDetailsError (code, message) {
   const error = new Error(message)
@@ -232,7 +235,7 @@ async function loadTaskDetailsContext ({ taskId, userId }) {
 }
 
 async function getTaskDetails ({ taskId, userId }) {
-  return getOrLoad(
+  const result = await getOrLoad(
     KEYS.taskDetails(taskId, userId),
     async () => {
       const { details, task_lock } = await loadTaskDetailsContext({ taskId, userId })
@@ -250,6 +253,22 @@ async function getTaskDetails ({ taskId, userId }) {
       ttlSeconds: TASK_DETAILS_CACHE_TTL_SECONDS
     }
   )
+
+  // حل حدود التاريخ بعد الكاش حتى لا تتجمّد قيم today/relative
+  if (result?.data?.currentStage?.config) {
+    return {
+      ...result,
+      data: {
+        ...result.data,
+        currentStage: {
+          ...result.data.currentStage,
+          config: resolveDatePickerBoundsInConfig(result.data.currentStage.config)
+        }
+      }
+    }
+  }
+
+  return result
 }
 
 async function pickupTask ({ taskId, userId }) {
