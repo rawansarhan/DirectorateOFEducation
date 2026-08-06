@@ -261,7 +261,7 @@ router.get(
  *               $ref: '#/components/schemas/ApiErrorResponse'
  */
 router.get(
-  'admin/by-department/:departmentId',
+  '/admin/by-department/:departmentId',
   authMiddleware,
   authorize('ORGANIZATIONAL_STRUCTURE_CREATE'),
   getRolesByDepartment
