@@ -48,8 +48,8 @@ router.use(authSensitiveLimiter)
 router.post(
   '/register/employee',
   authMiddleware,
-  accountLockMiddleware,
   authorize('ORGANIZATIONAL_STRUCTURE_CREATE'),
+  accountLockMiddleware,
   registerEmployeeUser
 )
 

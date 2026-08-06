@@ -305,7 +305,7 @@ router.get(
  *               $ref: '#/components/schemas/ApiErrorResponse'
  */
 router.get(
-  'admin/by-organization/:organizationId/leaves',
+  '/admin/by-organization/:organizationId/leaves',
   authMiddleware,
   authorize('ORGANIZATIONAL_STRUCTURE_CREATE'),
   getLeafDepartmentsByOrganization
