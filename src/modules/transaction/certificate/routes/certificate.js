@@ -38,6 +38,7 @@ const { authMiddleware, authorize } = require('../../../../core/middleware/authM
  *           type: integer
  *           minimum: 1
  *           default: 1
+ *         example: 1
  *       - in: query
  *         name: limit
  *         schema:
@@ -45,9 +46,76 @@ const { authMiddleware, authorize } = require('../../../../core/middleware/authM
  *           minimum: 1
  *           maximum: 70
  *           default: 20
+ *         example: 20
  *     responses:
  *       200:
  *         description: تم جلب الوثائق النهائية بنجاح
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/ApiSuccessResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       $ref: '#/components/schemas/MyFinalDocumentsResponse'
+ *             examples:
+ *               with_items:
+ *                 summary: قائمة وثائق نهائية مع ترقيم
+ *                 value:
+ *                   success: true
+ *                   status_code: 200
+ *                   message: تم جلب الوثائق النهائية لمعاملاتك بنجاح
+ *                   data:
+ *                     items:
+ *                       - id: 3
+ *                         transaction_id: 12
+ *                         file_path: /uploads/final-documents/final-txn-12.pdf
+ *                         file_url: /uploads/final-documents/final-txn-12.pdf
+ *                         original_name: certificate-12.pdf
+ *                         mime_type: application/pdf
+ *                         file_size_bytes: 245760
+ *                         generated_at: "2026-08-05T18:30:00.000Z"
+ *                         transaction:
+ *                           id: 12
+ *                           id_process: 4
+ *                           code: LEAVE_PROCESS_01
+ *                           status: completed
+ *                       - id: 2
+ *                         transaction_id: 9
+ *                         file_path: /uploads/final-documents/final-txn-9.pdf
+ *                         file_url: /uploads/final-documents/final-txn-9.pdf
+ *                         original_name: certificate-9.pdf
+ *                         mime_type: application/pdf
+ *                         file_size_bytes: 198432
+ *                         generated_at: "2026-08-01T10:15:00.000Z"
+ *                         transaction:
+ *                           id: 9
+ *                           id_process: 2
+ *                           code: CIVIL_REG_01
+ *                           status: completed
+ *                     pagination:
+ *                       page: 1
+ *                       limit: 20
+ *                       total: 2
+ *                       total_pages: 1
+ *                       has_next: false
+ *                       has_prev: false
+ *               empty:
+ *                 summary: لا توجد وثائق نهائية بعد
+ *                 value:
+ *                   success: true
+ *                   status_code: 200
+ *                   message: تم جلب الوثائق النهائية لمعاملاتك بنجاح
+ *                   data:
+ *                     items: []
+ *                     pagination:
+ *                       page: 1
+ *                       limit: 20
+ *                       total: 0
+ *                       total_pages: 0
+ *                       has_next: false
+ *                       has_prev: false
  *       401:
  *         description: Unauthorized
  */
@@ -163,6 +231,16 @@ router.get(
  *                 type: string
  *                 description: JSON string — snapshot QR عند الطباعة (اختياري)
  *                 example: '{"v":1,"tx":12,"genesis":"abc","head":"def","links":2}'
+ *           examples:
+ *             upload_pdf_only:
+ *               summary: رفع PDF فقط (بدون qr_payload)
+ *               value:
+ *                 file: (binary PDF)
+ *             upload_with_qr:
+ *               summary: رفع PDF مع qr_payload
+ *               value:
+ *                 file: (binary PDF)
+ *                 qr_payload: '{"v":1,"tx":12,"genesis":"a1b2c3","head":"d4e5f6","links":2,"pin":"482193"}'
  *     responses:
  *       200:
  *         description: تم حفظ الوثيقة النهائية بنجاح
@@ -175,16 +253,76 @@ router.get(
  *                   properties:
  *                     data:
  *                       $ref: '#/components/schemas/FinalDocumentRecord'
+ *             examples:
+ *               saved:
+ *                 summary: وثيقة نهائية محفوظة
+ *                 value:
+ *                   success: true
+ *                   status_code: 200
+ *                   message: تم حفظ الوثيقة النهائية بنجاح
+ *                   data:
+ *                     id: 3
+ *                     file_path: /uploads/final-documents/final-txn-12.pdf
+ *                     file_url: /uploads/final-documents/final-txn-12.pdf
+ *                     original_name: certificate-12.pdf
+ *                     mime_type: application/pdf
+ *                     file_size_bytes: 245760
+ *                     generated_at: "2026-08-05T18:30:00.000Z"
+ *                     qr_payload_snapshot:
+ *                       v: 1
+ *                       tx: 12
+ *                       genesis: a1b2c3
+ *                       head: d4e5f6
+ *                       links: 2
+ *                       pin: "482193"
  *       400:
  *         description: الملف مفقود أو المعاملة ليست completed
  *         content:
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/ApiErrorResponse'
+ *             examples:
+ *               missing_file:
+ *                 summary: الملف مفقود
+ *                 value:
+ *                   success: false
+ *                   status_code: 400
+ *                   message: ملف PDF مطلوب
+ *                   error: VALIDATION_ERROR
+ *                   data: null
+ *               not_completed:
+ *                 summary: المعاملة ليست مكتملة
+ *                 value:
+ *                   success: false
+ *                   status_code: 400
+ *                   message: لا يمكن حفظ الوثيقة النهائية إلا بعد اكتمال المعاملة
+ *                   error: BAD_REQUEST
+ *                   data: null
  *       403:
  *         description: لا تملك صلاحية الوصول (لست مالك المعاملة)
+ *         content:
+ *           application/json:
+ *             examples:
+ *               not_owner:
+ *                 summary: لست مالك المعاملة
+ *                 value:
+ *                   success: false
+ *                   status_code: 403
+ *                   message: لا تملك صلاحية الوصول لهذه المعاملة
+ *                   error: FORBIDDEN
+ *                   data: null
  *       404:
  *         description: المعاملة غير موجودة
+ *         content:
+ *           application/json:
+ *             examples:
+ *               not_found:
+ *                 value:
+ *                   success: false
+ *                   status_code: 404
+ *                   message: المعاملة غير موجودة
+ *                   error: TRANSACTION_NOT_FOUND
+ *                   data: null
  */
 router.post(
   '/:transactionId/final-document',

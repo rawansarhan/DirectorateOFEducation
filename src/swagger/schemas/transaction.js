@@ -1631,11 +1631,11 @@ module.exports = {
       },
       "file_path": {
         "type": "string",
-        "example": "/uploads/final-txn-12.pdf"
+        "example": "/uploads/final-documents/final-txn-12.pdf"
       },
       "file_url": {
         "type": "string",
-        "example": "/uploads/final-txn-12.pdf"
+        "example": "/uploads/final-documents/final-txn-12.pdf"
       },
       "original_name": {
         "type": "string",
@@ -1652,7 +1652,8 @@ module.exports = {
       },
       "generated_at": {
         "type": "string",
-        "format": "date-time"
+        "format": "date-time",
+        "example": "2026-08-05T18:30:00.000Z"
       },
       "qr_payload_snapshot": {
         "oneOf": [
@@ -1663,6 +1664,156 @@ module.exports = {
             "type": "null"
           }
         ]
+      }
+    },
+    "example": {
+      "id": 3,
+      "file_path": "/uploads/final-documents/final-txn-12.pdf",
+      "file_url": "/uploads/final-documents/final-txn-12.pdf",
+      "original_name": "certificate-12.pdf",
+      "mime_type": "application/pdf",
+      "file_size_bytes": 245760,
+      "generated_at": "2026-08-05T18:30:00.000Z",
+      "qr_payload_snapshot": {
+        "v": 1,
+        "tx": 12,
+        "genesis": "a1b2c3",
+        "head": "d4e5f6",
+        "links": 2
+      }
+    }
+  },
+  "MyFinalDocumentListItem": {
+    "type": "object",
+    "description": "وثيقة نهائية لمعاملة يملكها المستخدم المسجّل",
+    "properties": {
+      "id": {
+        "type": "integer",
+        "example": 3
+      },
+      "transaction_id": {
+        "type": "integer",
+        "example": 12
+      },
+      "file_path": {
+        "type": "string",
+        "example": "/uploads/final-documents/final-txn-12.pdf"
+      },
+      "file_url": {
+        "type": "string",
+        "example": "/uploads/final-documents/final-txn-12.pdf"
+      },
+      "original_name": {
+        "type": "string",
+        "nullable": true,
+        "example": "certificate-12.pdf"
+      },
+      "mime_type": {
+        "type": "string",
+        "example": "application/pdf"
+      },
+      "file_size_bytes": {
+        "type": "integer",
+        "nullable": true,
+        "example": 245760
+      },
+      "generated_at": {
+        "type": "string",
+        "format": "date-time",
+        "example": "2026-08-05T18:30:00.000Z"
+      },
+      "transaction": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 12
+          },
+          "id_process": {
+            "type": "integer",
+            "nullable": true,
+            "example": 4
+          },
+          "code": {
+            "type": "string",
+            "nullable": true,
+            "example": "LEAVE_PROCESS_01"
+          },
+          "status": {
+            "type": "string",
+            "nullable": true,
+            "example": "completed"
+          }
+        }
+      }
+    }
+  },
+  "MyFinalDocumentsResponse": {
+    "type": "object",
+    "description": "قائمة الوثائق النهائية لمعاملات المستخدم مع ترقيم صفحات",
+    "properties": {
+      "items": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/MyFinalDocumentListItem"
+        }
+      },
+      "pagination": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "integer",
+            "example": 1
+          },
+          "limit": {
+            "type": "integer",
+            "example": 20
+          },
+          "total": {
+            "type": "integer",
+            "example": 2
+          },
+          "total_pages": {
+            "type": "integer",
+            "example": 1
+          },
+          "has_next": {
+            "type": "boolean",
+            "example": false
+          },
+          "has_prev": {
+            "type": "boolean",
+            "example": false
+          }
+        }
+      }
+    },
+    "example": {
+      "items": [
+        {
+          "id": 3,
+          "transaction_id": 12,
+          "file_path": "/uploads/final-documents/final-txn-12.pdf",
+          "file_url": "/uploads/final-documents/final-txn-12.pdf",
+          "original_name": "certificate-12.pdf",
+          "mime_type": "application/pdf",
+          "file_size_bytes": 245760,
+          "generated_at": "2026-08-05T18:30:00.000Z",
+          "transaction": {
+            "id": 12,
+            "id_process": 4,
+            "code": "LEAVE_PROCESS_01",
+            "status": "completed"
+          }
+        }
+      ],
+      "pagination": {
+        "page": 1,
+        "limit": 20,
+        "total": 1,
+        "total_pages": 1,
+        "has_next": false,
+        "has_prev": false
       }
     }
   },
