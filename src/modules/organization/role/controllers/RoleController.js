@@ -59,7 +59,7 @@ const toggleRoleStatus = asyncHandler(async (req, res) => {
 // ================= GET ALL =================
 const getAllRoles = asyncHandler(async (req, res) => {
   try {
-    const result = await getAllRolesService()
+    const result = await getAllRolesService(req.query.organization_id)
     return ApiResponder.okResponse(res, result, 'تم جلب البيانات بنجاح')
   } catch (err) {
     return ApiResponder.error(res, { message: err.message, statusCode: err.statusCode || 400 })

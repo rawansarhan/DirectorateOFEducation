@@ -43,7 +43,7 @@ const { authMiddleware, authorize } = require('../../../../core/middleware/authM
 router.post(
   '/',
   authMiddleware,
-  authorize('CREATE'),
+  authorize('ORGANIZATIONAL_STRUCTURE_CREATE'),
   createRole
 )
 
@@ -117,10 +117,23 @@ router.post(
  * @swagger
  * /api/role:
  *   get:
- *     summary: جلب كل سجلات ربط الأدوار
+ *     summary: جلب سجلات ربط الأدوار لمؤسسة محددة
+ *     description: |
+ *       يعيد نفس شكل قائمة `organization_department_roles` مع العلاقات
+ *       (role / organization / department / parent)،
+ *       لكن فقط للسجلات حيث `organization_id` يساوي القيمة المرسلة.
  *     tags: [Role]
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: organization_id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *         example: 1
+ *         description: معرّف المؤسسة — إلزامي
  *     responses:
  *       200:
  *         description: list
@@ -128,11 +141,36 @@ router.post(
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/RoleListEnvelope'
+ *             example:
+ *               success: true
+ *               status_code: 200
+ *               message: تم جلب البيانات بنجاح
+ *               data:
+ *                 - id: 12
+ *                   role_id: 2
+ *                   organization_id: 1
+ *                   department_id: 5
+ *                   parent_id: null
+ *                   is_active: true
+ *                   camunda_group_key: ACCOUNTING_MANAGER__ORG1__DEPT5
+ *                   role:
+ *                     id: 2
+ *                     name: مدير المحاسبة
+ *                     code: ACCOUNTING_MANAGER
+ *                   organization:
+ *                     id: 1
+ *                     name: مديرية التربية
+ *                   department:
+ *                     id: 5
+ *                     name: قسم المحاسبة
+ *                   parent: null
+ *       400:
+ *         description: organization_id مفقود أو غير صالح
  */
 router.get(
   '/',
   authMiddleware,
-  authorize('VIEW_ALL'),
+  authorize('ORGANIZATIONAL_STRUCTURE_CREATE'),
   getAllRoles
 )
 

@@ -79,6 +79,14 @@ async function findAll() {
   })
 }
 
+async function findAllByOrganizationId (organizationId) {
+  return OrgDeptRole.findAll({
+    where: { organization_id: organizationId },
+    order: [['id', 'ASC']],
+    include: fullIncludes
+  })
+}
+
 async function findActiveByDepartmentIdWithRole(departmentId) {
   return OrgDeptRole.findAll({
     where: { department_id: departmentId, is_active: true },
@@ -154,6 +162,7 @@ module.exports = {
   findActiveByRoleOrgDept,
   findActiveByCamundaGroupKey,
   findAll,
+  findAllByOrganizationId,
   findActiveByDepartmentIdWithRole,
   findDescendantSubtreeByRootIds,
   create,

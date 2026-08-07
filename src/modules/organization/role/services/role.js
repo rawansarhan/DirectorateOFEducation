@@ -335,9 +335,17 @@ async function deleteRoleService (id) {
   return { id: orgDeptRoleId }
 }
 
-// ================= GET ALL =================
-async function getAllRolesService () {
-  const rows = await orgDeptRoleRepository.findAll()
+// ================= GET ALL (filtered by organization) =================
+async function getAllRolesService (organizationId) {
+  const orgId = parseInt(organizationId, 10)
+
+  if (!Number.isInteger(orgId) || orgId < 1) {
+    const err = new Error('organization_id مطلوب ويجب أن يكون رقماً صحيحاً موجباً')
+    err.statusCode = 400
+    throw err
+  }
+
+  const rows = await orgDeptRoleRepository.findAllByOrganizationId(orgId)
   return toDTOList(rows)
 }
 
