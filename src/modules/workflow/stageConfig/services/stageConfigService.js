@@ -438,6 +438,7 @@ async function loadAuthStageConfigPayload (numericProcessId) {
     )
   }
 
+  const assignments = await stageAssignmentRepository.findByStageIds([stage.id])
   const stageConfig = await stageConfigRepository.findByStageId(stage.id)
 
   if (!stageConfig) {
@@ -449,14 +450,47 @@ async function loadAuthStageConfigPayload (numericProcessId) {
   }
 
   const configJson = stageConfig.config_json || {}
+  let citizenConfig = configJson
 
   if (configJson.is_assignment || configJson.assignments) {
-    const { is_assignment, assignments, ...citizenConfig } = configJson
-    return { config_json: citizenConfig }
+    const { is_assignment, assignments: _a, ...rest } = configJson
+    citizenConfig = rest
   }
 
   return {
-    config_json: configJson
+    config_json: citizenConfig,
+    // للتحقق من الصلاحية خارج الكاش — لا يُعاد في الاستجابة
+    assigned_odr_ids: (assignments || []).map(
+      a => a.organization_department_roles_id
+    )
+  }
+}
+
+async function assertUserCanSubmitAuthStage (userId, assignedOdrIds = []) {
+  if (!userId) {
+    throw createHttpError(
+      'Unauthorized',
+      HTTP_STATUS.UNAUTHORIZED,
+      'UNAUTHORIZED'
+    )
+  }
+
+  const { getUserRoles } = require('../../../auth/public')
+  const userOdrIds = await getUserRoles(userId)
+  const assignedSet = new Set(
+    (assignedOdrIds || [])
+      .map(id => Number(id))
+      .filter(id => Number.isInteger(id) && id > 0)
+  )
+
+  const hasAccess = (userOdrIds || []).some(id => assignedSet.has(Number(id)))
+
+  if (!hasAccess) {
+    throw createHttpError(
+      'هذه المعاملة غير مخول لك التقديم عليها',
+      HTTP_STATUS.FORBIDDEN,
+      'FORBIDDEN'
+    )
   }
 }
 
@@ -483,11 +517,15 @@ async function getConfig_json (processId, { userId } = {}) {
     }
   )
 
+  await assertUserCanSubmitAuthStage(userId, data.assigned_odr_ids)
+
+  const { assigned_odr_ids: _assigned, ...publicData } = data
+
   return {
     message: 'تم جلب إعدادات العملية بنجاح',
     data: {
-      ...data,
-      config_json: resolveDatePickerBoundsInConfig(data.config_json)
+      ...publicData,
+      config_json: resolveDatePickerBoundsInConfig(publicData.config_json)
     }
   }
 }

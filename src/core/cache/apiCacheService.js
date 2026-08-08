@@ -53,7 +53,7 @@ const KEYS = {
   adminComplaintProcessesActive: () => 'process:admin:complaint:active',
   adminComplaintProcessesAllStatuses: () => 'process:admin:complaint:all-statuses',
   technicalOfficerUserIds: () => 'notification:technical-officer-user-ids',
-  stageConfig: (processId) => `stage-config:process:${processId}`,
+  stageConfig: (processId) => `stage-config:process:v2:${processId}`,
   complaintStageConfigActive: () => 'stage-config:complaint:active',
   currentStage: (processDefinitionId, taskDefinitionKey) =>
     `current-stage:${processDefinitionId}:${taskDefinitionKey}`,

@@ -433,9 +433,12 @@ router.get(
  *   get:
  *     summary: Get config_json for process (AUTH stage) — استمارة التقديم للمواطن
  *     description: |
- *       يجلب استمارة التقديم للمواطن من مرحلة AUTH:
- *       - يُعاد `stageConfig.config_json` (القالب)
- *       - إن وُجد `is_assignment` يُحذف من الاستجابة — اختيار الوجهة للموظف عند `POST /complete` فقط
+ *       يجلب استمارة التقديم من مرحلة AUTH:
+ *       - يُعاد `stageConfig.config_json` (القالب) بنفس شكل الرد السابق
+ *       - إن وُجد `is_assignment` / `assignments` يُحذفان من الاستجابة
+ *       - يتحقق أن `organization_department_roles_id` في `stage_assignments`
+ *         لمرحلة AUTH موجود أيضاً في `user_role_assignments` لصاحب التوكن
+ *       - التحقق خارج الكاش؛ الكاش يخزّن القالب فقط مع معرفات التعيين الداخلية
  *     tags: [Stage Config]
  *     security:
  *       - bearerAuth: []
@@ -511,6 +514,18 @@ router.get(
  *               status_code: 401
  *               message: Unauthorized
  *               error: UNAUTHORIZED
+ *               data: null
+ *       403:
+ *         description: المستخدم غير مخوّل للتقديم على هذه المعاملة
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ApiErrorResponse'
+ *             example:
+ *               success: false
+ *               status_code: 403
+ *               message: هذه المعاملة غير مخول لك التقديم عليها
+ *               error: FORBIDDEN
  *               data: null
  *       404:
  *         description: العملية أو مرحلة AUTH أو استمارة التقديم غير موجودة
