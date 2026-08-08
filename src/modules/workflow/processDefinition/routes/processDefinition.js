@@ -401,7 +401,7 @@ router.get(
 router.patch(
   '/admin/:id/status',
   authMiddleware,
-  authorize('UPDATE'),
+  authorize('PROCESS_PUBLISH_MANAGE'),
   updateProcessActiveStatusController
 )
 
