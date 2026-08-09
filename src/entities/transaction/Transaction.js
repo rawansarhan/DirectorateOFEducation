@@ -33,6 +33,11 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: 'transaction_id',
         as: 'final_document'
       })
+
+      Transaction.hasMany(models.DocumentSignature, {
+        foreignKey: 'transaction_id',
+        as: 'document_signatures'
+      })
     }
   }
 

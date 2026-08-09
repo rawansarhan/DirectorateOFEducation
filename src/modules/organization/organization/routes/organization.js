@@ -11,6 +11,8 @@ const {
 
 const { authMiddleware, authorize } = require('../../../../core/middleware/authMiddleware')
 
+// يجب قبل مسارات /:id
+router.use(require('./searchStructure'))
 
 /**
  * @swagger

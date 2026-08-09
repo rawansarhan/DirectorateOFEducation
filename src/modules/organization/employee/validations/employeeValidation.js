@@ -142,6 +142,27 @@ function validateListEmployeesQuery (query) {
   return schema.validate(query, { abortEarly: false, allowUnknown: false })
 }
 
+function validateSearchEmployeesQuery (query) {
+  const schema = Joi.object({
+    cursor: Joi.string().trim().max(500).allow('', null).optional(),
+    limit: Joi.number().integer().min(1).max(70).optional(),
+
+    search: Joi.string().trim().allow('').max(100)
+      .messages({ 'string.max': 'نص البحث يجب ألا يتجاوز 100 حرف' }),
+    q: Joi.string().trim().allow('').max(100)
+      .messages({ 'string.max': 'نص البحث يجب ألا يتجاوز 100 حرف' })
+  }).messages({ 'object.unknown': 'الحقل {#label} غير مسموح به' })
+
+  const result = schema.validate(query, { abortEarly: false, allowUnknown: false })
+  if (!result.error && result.value) {
+    if (!result.value.search && result.value.q) {
+      result.value.search = result.value.q
+    }
+    delete result.value.q
+  }
+  return result
+}
+
 function validateUsersByOrgRoleDeptQuery (query) {
   const idField = (label) =>
     Joi.number().integer().min(1).required().messages({
@@ -163,5 +184,6 @@ function validateUsersByOrgRoleDeptQuery (query) {
 module.exports = {
   validateUpdateEmployee,
   validateListEmployeesQuery,
+  validateSearchEmployeesQuery,
   validateUsersByOrgRoleDeptQuery
 }

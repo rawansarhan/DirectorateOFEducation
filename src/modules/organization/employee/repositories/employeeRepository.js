@@ -59,7 +59,8 @@ async function findAllEmployees ({ limit, offset, search } = {}) {
   const where = {}
 
   if (search) {
-    const like = { [Op.iLike]: `%${search}%` }
+    const { likeContains } = require('../../../../core/utils/escapeLike')
+    const like = likeContains(search)
     where[Op.or] = [
       { userName: like },
       { email: like },
@@ -80,6 +81,41 @@ async function findAllEmployees ({ limit, offset, search } = {}) {
     distinct: true,
     subQuery: false
   })
+}
+
+async function findEmployeesWithCursor ({ limit, cursor = null, search } = {}) {
+  const and = []
+
+  if (search) {
+    const { likeContains } = require('../../../../core/utils/escapeLike')
+    const like = likeContains(search)
+    and.push({
+      [Op.or]: [
+        { userName: like },
+        { email: like },
+        { first_name: like },
+        { last_name: like },
+        { national_id: like }
+      ]
+    })
+  }
+
+  if (cursor?.k === 'emp' && Number.isFinite(Number(cursor.id))) {
+    and.push({ id: { [Op.gt]: Number(cursor.id) } })
+  }
+
+  const rows = await User.findAll({
+    where: and.length ? { [Op.and]: and } : {},
+    attributes: PUBLIC_USER_ATTRIBUTES,
+    include: [buildRoleInclude({ requireEmployee: true })],
+    order: [['id', 'ASC']],
+    limit: limit + 1,
+    distinct: true,
+    subQuery: false
+  })
+
+  const hasNext = rows.length > limit
+  return { rows: hasNext ? rows.slice(0, limit) : rows, hasNext }
 }
 
 // جلب موظف واحد بكامل علاقاته (الدور/القسم/المؤسسة + المفتاح العام الفعّال).
@@ -182,6 +218,7 @@ function getSequelize () {
 module.exports = {
   PUBLIC_USER_ATTRIBUTES,
   findAllEmployees,
+  findEmployeesWithCursor,
   findEmployeeById,
   findUsersByOrgDeptRoleId,
   findRawById,

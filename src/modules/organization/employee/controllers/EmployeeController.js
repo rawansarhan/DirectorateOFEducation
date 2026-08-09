@@ -3,6 +3,7 @@ const ApiResponder = require('../../../../core/utils/apiResponder')
 
 const {
   getAllEmployeesService,
+  searchEmployeesService,
   getEmployeeByIdService,
   getUsersByOrgRoleDeptService,
   updateEmployeeService
@@ -23,6 +24,15 @@ const getAllEmployees = asyncHandler(async (req, res) => {
   try {
     const result = await getAllEmployeesService(req.query)
     return ApiResponder.okResponse(res, result, 'تم جلب الموظفين بنجاح')
+  } catch (err) {
+    return ApiResponder.error(res, { message: err.message, statusCode: err.statusCode || 400 })
+  }
+})
+
+const searchEmployees = asyncHandler(async (req, res) => {
+  try {
+    const result = await searchEmployeesService(req.query)
+    return ApiResponder.okResponse(res, result, 'تم جلب نتائج بحث الموظفين بنجاح')
   } catch (err) {
     return ApiResponder.error(res, { message: err.message, statusCode: err.statusCode || 400 })
   }
@@ -91,6 +101,7 @@ const updateEmployee = asyncHandler(async (req, res) => {
 
 module.exports = {
   getAllEmployees,
+  searchEmployees,
   getEmployeeById,
   getEmployeesByDepartments,
   getUsersByOrgRoleDept,

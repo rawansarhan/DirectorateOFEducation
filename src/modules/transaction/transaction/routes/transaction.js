@@ -10,6 +10,7 @@ const router = express.Router()
 router.use(require('./draft'))
 router.use(require('./submit'))
 router.use(require('./myTransactions'))
+router.use(require('./searchTransactions'))
 router.use(require('./read'))
 
 module.exports = router

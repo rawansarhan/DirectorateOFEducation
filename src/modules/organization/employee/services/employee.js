@@ -34,8 +34,15 @@ const {
 const {
   validateUpdateEmployee,
   validateListEmployeesQuery,
+  validateSearchEmployeesQuery,
   validateUsersByOrgRoleDeptQuery
 } = require('../validations/employeeValidation')
+const {
+  parseCursorPaginationQuery,
+  buildCursorPaginationMeta,
+  emptyCursorPaginatedResult,
+  encodeCursor
+} = require('../../../../core/utils/pagination')
 const {
   toUpdateInput,
   toUpdateUserPayload,
@@ -90,6 +97,48 @@ async function getAllEmployeesService (query = {}) {
       hasNextPage: page < totalPages,
       hasPrevPage: page > 1
     }
+  }
+}
+
+// ================= SEARCH (cursor) =================
+async function searchEmployeesService (query = {}) {
+  const { error, value } = validateSearchEmployeesQuery(query)
+
+  if (error) {
+    throw fail(error.details.map(d => d.message).join(' | '), 400)
+  }
+
+  const { limit, cursor, decodedCursor } = parseCursorPaginationQuery(query, {
+    defaultLimit: 20
+  })
+
+  if (decodedCursor && decodedCursor.k !== 'emp') {
+    throw fail('cursor غير صالح لهذا البحث', 400)
+  }
+
+  const { rows, hasNext } = await employeeRepository.findEmployeesWithCursor({
+    limit,
+    cursor: decodedCursor,
+    search: value.search || undefined
+  })
+
+  if (!rows.length) {
+    return emptyCursorPaginatedResult({ limit, cursor })
+  }
+
+  const last = rows[rows.length - 1]
+  const nextCursor = hasNext
+    ? encodeCursor({ k: 'emp', id: Number(last.id) })
+    : null
+
+  return {
+    items: toDTOList(rows),
+    pagination: buildCursorPaginationMeta({
+      limit,
+      cursor,
+      nextCursor,
+      hasNext
+    })
   }
 }
 
@@ -337,6 +386,7 @@ async function updateEmployeeService (data, id) {
 
 module.exports = {
   getAllEmployeesService,
+  searchEmployeesService,
   getEmployeeByIdService,
   getUsersByOrgRoleDeptService,
   updateEmployeeService

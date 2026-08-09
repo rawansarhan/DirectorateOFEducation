@@ -5,6 +5,7 @@ const router = express.Router()
 
 const {
   getAllEmployees,
+  searchEmployees,
   getEmployeeById,
   getEmployeesByDepartments,
   getUsersByOrgRoleDept,
@@ -59,6 +60,46 @@ router.get(
   authMiddleware,
   authorize('ORGANIZATIONAL_STRUCTURE_CREATE'),
   getAllEmployees
+)
+
+/**
+ * @swagger
+ * /api/employees/search:
+ *   get:
+ *     summary: بحث الموظفين (Cursor Pagination)
+ *     description: |
+ *       بحث بالاسم / المستخدم / البريد / الوطني مع ترقيم cursor.
+ *       استخدم `pagination.next_cursor` للصفحة التالية. يدعم `q` أو `search`.
+ *     tags: [Employee]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: q
+ *         schema: { type: string, maxLength: 100 }
+ *         description: نص البحث (بديل عن search)
+ *       - in: query
+ *         name: search
+ *         schema: { type: string, maxLength: 100 }
+ *       - in: query
+ *         name: cursor
+ *         schema: { type: string }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 20, maximum: 70 }
+ *     responses:
+ *       200:
+ *         description: قائمة الموظفين المطابقة
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ */
+router.get(
+  '/search',
+  authMiddleware,
+  authorize('ORGANIZATIONAL_STRUCTURE_CREATE'),
+  searchEmployees
 )
 
 /**

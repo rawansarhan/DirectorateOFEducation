@@ -24,6 +24,8 @@ const {uploadBPMN,
   runMulterUpload} = require('../../../../core/middleware/upload')
 const { authMiddleware ,authorize } = require('../../../../core/middleware/authMiddleware')
 
+// يجب قبل مسارات /:id
+router.use(require('./searchProcesses'))
 
 /**
  * @swagger
@@ -935,7 +937,7 @@ router.get(
  *         description: العملية غير موجودة
  */
  router.get(
-  'admin/:id/details',
+  '/admin/:id/details',
   authMiddleware,
   authorize('PROCESS_PUBLISH_MANAGE'),
   getProcessDetails

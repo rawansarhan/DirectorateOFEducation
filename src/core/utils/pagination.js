@@ -143,6 +143,49 @@ function decodeCursor (rawValue) {
       }
     }
 
+    // Transaction search — created_at DESC, id DESC
+    if (kind === 'txn') {
+      if (
+        !createdAt ||
+        !Number.isFinite(id) ||
+        Number.isNaN(new Date(createdAt).getTime())
+      ) {
+        throw new Error('invalid transaction cursor fields')
+      }
+
+      return {
+        k: 'txn',
+        t: new Date(createdAt).toISOString(),
+        id
+      }
+    }
+
+    // Name + id ASC (process / organization / department search)
+    if (kind === 'proc' || kind === 'org' || kind === 'dept') {
+      const name = parsed.n
+      if (typeof name !== 'string' || !Number.isFinite(id)) {
+        throw new Error(`invalid ${kind} cursor fields`)
+      }
+
+      return {
+        k: kind,
+        n: name,
+        id
+      }
+    }
+
+    // id-only ASC (employee search / org-dept-role search)
+    if (kind === 'emp' || kind === 'odr') {
+      if (!Number.isFinite(id)) {
+        throw new Error(`invalid ${kind} cursor fields`)
+      }
+
+      return {
+        k: kind,
+        id
+      }
+    }
+
     // Merged employee task list (status=all) — offset-based cursor
     if (kind === 'all') {
       const offset = Number(parsed.o)
