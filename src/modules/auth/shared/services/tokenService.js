@@ -98,9 +98,23 @@ async function rotateRefreshToken (rawToken, clientMeta = {}) {
       throw buildAuthError('Refresh token غير معروف')
     }
 
-    // 3) كشف إعادة الاستخدام: توكن مُبطَل سابقاً يُستخدم مجدداً
-    //    => تسريب محتمل، نُبطل كل جلسات المستخدم
+    // 3) توكن مُبطَل يُستخدم مجدداً: إمّا إعادة إرسال شرعية بعد ضياع الاستجابة،
+    //    وإمّا تسريب حقيقي.
     if (stored.revoked_at) {
+      // نافذة سماح: التوكن أُبطل بتدوير (له replaced_by_id) قبل ثوانٍ معدودة
+      //   => العميل أرسل طلب التجديد ولم تصله الاستجابة (انقطاع شبكة/مهلة)،
+      //      فأعاد الإرسال بالتوكن القديم. نُصدر له زوجاً جديداً على رأس سلسلة
+      //      التدوير بدل إبادة الجلسات. لا يُضعف كشف التسريب: المهاجم بتوكن
+      //      مسروق يحتاج إصابة النافذة الضيقة نفسها، وأي استخدام بعدها يُعامل
+      //      كتسريب فيُنهي كل الجلسات.
+      const replayed = await resolveReplayWithinGrace(stored, { transaction })
+
+      if (replayed) {
+        await transaction.commit()
+        return replayed
+      }
+
+      // خارج النافذة (أو إبطال بـ logout/كشف سابق) => تسريب محتمل: إنهاء الجلسات.
       await refreshTokenRepository.revokeAllForUser(stored.user_id, {
         transaction
       })
@@ -153,6 +167,92 @@ async function rotateRefreshToken (rawToken, clientMeta = {}) {
     }
     throw error
   }
+}
+
+// ============================================================
+// نافذة السماح لإعادة الإرسال بعد ضياع الاستجابة
+// ============================================================
+
+// مهلة اعتبار إعادة الإرسال شرعية بعد التدوير. قصيرة عمداً: تغطّي مهلة العميل
+// (30ث) وإعادة محاولته، وتبقى أضيق من أن تفيد مهاجماً بتوكن مسروق.
+const REPLAY_GRACE_MS = 60 * 1000
+
+// يعالج توكناً مُبطلاً وصل ضمن نافذة السماح.
+// يُرجع زوج توكنات جديداً إن كانت الحالة إعادة إرسال شرعية، وإلّا `null` ليتابع
+// المستدعي إلى مسار كشف التسريب.
+async function resolveReplayWithinGrace (stored, { transaction }) {
+  // إبطال بلا خَلَف = logout أو كشف تسريب سابق، لا تدوير => ليست إعادة إرسال.
+  if (!stored.replaced_by_id) {
+    return null
+  }
+
+  if (Date.now() - new Date(stored.revoked_at).getTime() > REPLAY_GRACE_MS) {
+    return null
+  }
+
+  // نتتبّع سلسلة التدوير إلى آخر حلقة: قد يكون العميل أعاد الإرسال أكثر من مرة،
+  // فتكوّنت عدة حلقات، وآخرها وحدها هي الفعّالة.
+  const latest = await findLatestInChain(stored, { transaction })
+
+  // آخر الحلقة مُبطل أيضاً بلا خَلَف (logout أو إنهاء جلسات جرى بعد التدوير)
+  // أو منتهي الصلاحية => الجلسة انتهت فعلاً، لا نُحييها.
+  if (!latest || latest.revoked_at || new Date() > latest.expires_at) {
+    return null
+  }
+
+  // لا يمكن إعادة إرسال التوكن الأصلي: لا نخزّن إلا الـ hash. لذلك نُصدر خلَفاً
+  // جديداً ونُبطل الحلقة الأخيرة لصالحه — تبقى السلسلة متّصلة وواحدة فعّالة.
+  const accessToken = signAccessToken(latest.user_id)
+  const { token: newRefreshToken, expiresAt } = signRefreshToken(latest.user_id)
+
+  const newRecord = await refreshTokenRepository.create(
+    {
+      user_id: latest.user_id,
+      token_hash: hashToken(newRefreshToken),
+      expires_at: expiresAt,
+      user_agent: latest.user_agent,
+      ip_address: latest.ip_address
+    },
+    { transaction }
+  )
+
+  await refreshTokenRepository.revoke(latest, {
+    replacedById: newRecord.id,
+    transaction
+  })
+
+  return {
+    userId: latest.user_id,
+    accessToken,
+    refreshToken: newRefreshToken
+  }
+}
+
+// يتبع replaced_by_id حتى آخر حلقة في سلسلة التدوير.
+// السقف يحمي من الدوران اللانهائي لو فسدت السلسلة (حلقة مغلقة).
+async function findLatestInChain (token, { transaction }) {
+  const MAX_HOPS = 10
+
+  let current = token
+
+  for (let hop = 0; hop < MAX_HOPS; hop += 1) {
+    if (!current.replaced_by_id) {
+      return current
+    }
+
+    const next = await refreshTokenRepository.findById(current.replaced_by_id, {
+      transaction
+    })
+
+    // خَلَف مفقود (حُذف بالتنظيف مثلاً) => لا يمكن التحقق، عامله كفشل.
+    if (!next) {
+      return null
+    }
+
+    current = next
+  }
+
+  return null
 }
 
 // ============================================================
