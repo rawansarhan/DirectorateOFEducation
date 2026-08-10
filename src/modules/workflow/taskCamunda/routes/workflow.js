@@ -222,11 +222,30 @@ router.get('/tasks',
  *           enum: [all, pending_pickup, in_progress, completed, rejected, active]
  *           default: all
  *       - in: query
+ *         name: type_process_id
+ *         schema: { type: integer }
+ *         description: نوع المعاملة (type_trans.id)
+ *       - in: query
+ *         name: type_doc_id
+ *         schema: { type: integer }
+ *         description: مهام معاملتها تحتوي document_signature بهذا النوع
+ *       - in: query
+ *         name: process_definition_id
+ *         schema: { type: integer }
+ *       - in: query
  *         name: process_name
  *         schema: { type: string }
  *       - in: query
  *         name: id_process
  *         schema: { type: string }
+ *       - in: query
+ *         name: from_date
+ *         schema: { type: string, format: date }
+ *         description: بداية تاريخ إنشاء/تقديم المعاملة
+ *       - in: query
+ *         name: to_date
+ *         schema: { type: string, format: date }
+ *         description: نهاية تاريخ إنشاء/تقديم المعاملة
  *       - in: query
  *         name: cursor
  *         schema: { type: string }

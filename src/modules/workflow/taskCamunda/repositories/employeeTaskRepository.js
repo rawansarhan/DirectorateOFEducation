@@ -34,12 +34,12 @@ const LIST_INCLUDES = [
   {
     model: db.ProcessDefinition,
     as: 'process_definition',
-    attributes: ['id', 'name', 'priority'],
+    attributes: ['id', 'name', 'priority', 'type_trans_id'],
     include: [
       {
         model: db.TypeTrans,
         as: 'type_trans',
-        attributes: ['name', 'code']
+        attributes: ['id', 'name', 'code']
       }
     ]
   },
@@ -320,12 +320,12 @@ const TERMINAL_INCLUDES = [
   {
     model: db.ProcessDefinition,
     as: 'process_definition',
-    attributes: ['id', 'name', 'priority'],
+    attributes: ['id', 'name', 'priority', 'type_trans_id'],
     include: [
       {
         model: db.TypeTrans,
         as: 'type_trans',
-        attributes: ['name', 'code']
+        attributes: ['id', 'name', 'code']
       }
     ]
   },
@@ -641,12 +641,12 @@ const USER_STAGE_INCLUDES = [
           {
             model: db.ProcessDefinition,
             as: 'process_definition',
-            attributes: ['id', 'name', 'priority'],
+            attributes: ['id', 'name', 'priority', 'type_trans_id'],
             include: [
               {
                 model: db.TypeTrans,
                 as: 'type_trans',
-                attributes: ['name', 'code']
+                attributes: ['id', 'name', 'code']
               }
             ]
           }
@@ -661,13 +661,16 @@ async function getStagesCompletedByUser ({
   status,
   limit,
   cursor = null,
-  searchFilters = null
+  searchFilters = null,
+  fromDate = null,
+  toDate = null
 }) {
   const {
     buildTransactionFieldWhere,
-    buildProcessNameWhere,
+    buildProcessDefinitionWhere,
     buildApplicantNameOrConditions,
-    likeContains
+    likeContains,
+    normalizeTypeDocIds
   } = require('../utils/taskSearchFilters')
 
   const baseWhere = {
@@ -676,6 +679,18 @@ async function getStagesCompletedByUser ({
   }
 
   const whereConditions = [baseWhere]
+  const filters = searchFilters || {}
+
+  const typeDocIds = normalizeTypeDocIds(filters)
+  if (typeDocIds.length) {
+    const withDocs = await getTransactionIdsHavingTypeDocs(typeDocIds)
+    if (!withDocs.length) {
+      return { rows: [], hasNext: false }
+    }
+    whereConditions.push({
+      transaction_id: { [Op.in]: withDocs }
+    })
+  }
 
   if (cursor) {
     const createdAt = new Date(cursor.t)
@@ -693,9 +708,27 @@ async function getStagesCompletedByUser ({
     })
   }
 
-  const filters = searchFilters || {}
   const fieldAnd = buildTransactionFieldWhere({ ...filters, q: null })
-  const transactionWhere = fieldAnd.length ? { [Op.and]: fieldAnd } : undefined
+  const transactionWhereParts = [...fieldAnd]
+
+  if (fromDate || toDate || filters.from_date || filters.to_date) {
+    const created = {}
+    const from = fromDate || (filters.from_date
+      ? new Date(`${filters.from_date}T00:00:00.000`)
+      : null)
+    const to = toDate || (filters.to_date
+      ? new Date(`${filters.to_date}T23:59:59.999`)
+      : null)
+    if (from) created[Op.gte] = from
+    if (to) created[Op.lte] = to
+    if (Object.keys(created).length) {
+      transactionWhereParts.push({ created_at: created })
+    }
+  }
+
+  const transactionWhere = transactionWhereParts.length
+    ? { [Op.and]: transactionWhereParts }
+    : undefined
 
   if (filters.q) {
     const applicantOr = buildApplicantNameOrConditions(filters.q).map(cond => {
@@ -725,7 +758,7 @@ async function getStagesCompletedByUser ({
     })
   }
 
-  const processNameWhere = buildProcessNameWhere(filters)
+  const processWhere = buildProcessDefinitionWhere(filters)
 
   const includes = [
     {
@@ -738,8 +771,16 @@ async function getStagesCompletedByUser ({
           include: [
             {
               ...USER_STAGE_INCLUDES[0].include[1].include[0],
-              where: processNameWhere || undefined,
-              required: Boolean(processNameWhere)
+              attributes: [
+                ...(USER_STAGE_INCLUDES[0].include[1].include[0].attributes || [
+                  'id',
+                  'name',
+                  'priority'
+                ]),
+                'type_trans_id'
+              ],
+              where: processWhere || undefined,
+              required: Boolean(processWhere)
             }
           ]
         }
@@ -792,6 +833,39 @@ function prefixTransactionConditions (conditions = []) {
   })
 }
 
+async function getTransactionIdsHavingTypeDocs (typeDocIds = []) {
+  if (!typeDocIds.length) {
+    return null
+  }
+
+  const rows = await db.DocumentSignature.findAll({
+    attributes: ['transaction_id'],
+    where: {
+      type_doc_id:
+        typeDocIds.length === 1
+          ? typeDocIds[0]
+          : { [Op.in]: typeDocIds }
+    },
+    group: ['transaction_id'],
+    raw: true
+  })
+
+  return rows.map(row => Number(row.transaction_id)).filter(Boolean)
+}
+
+function intersectIds (baseIds, filterIds) {
+  if (filterIds == null) {
+    return baseIds
+  }
+
+  if (!filterIds.length) {
+    return []
+  }
+
+  const allowed = new Set(filterIds)
+  return baseIds.filter(id => allowed.has(Number(id)))
+}
+
 async function getTerminalInstancesByDepartments ({
   departmentIds,
   transactionStatus,
@@ -801,7 +875,7 @@ async function getTerminalInstancesByDepartments ({
   cursor = null,
   searchFilters = null
 }) {
-  const transactionIds = await getTransactionIdsPassedDepartments(departmentIds)
+  let transactionIds = await getTransactionIdsPassedDepartments(departmentIds)
 
   if (!transactionIds.length) {
     return { rows: [], hasNext: false }
@@ -809,12 +883,22 @@ async function getTerminalInstancesByDepartments ({
 
   const {
     buildTransactionFieldWhere,
-    buildProcessNameWhere,
+    buildProcessDefinitionWhere,
     buildApplicantNameOrConditions,
-    likeContains
+    likeContains,
+    normalizeTypeDocIds
   } = require('../utils/taskSearchFilters')
 
   const filters = searchFilters || {}
+  const typeDocIds = normalizeTypeDocIds(filters)
+  if (typeDocIds.length) {
+    const withDocs = await getTransactionIdsHavingTypeDocs(typeDocIds)
+    transactionIds = intersectIds(transactionIds, withDocs)
+    if (!transactionIds.length) {
+      return { rows: [], hasNext: false }
+    }
+  }
+
   const fieldFilters = { ...filters, q: null }
   const fieldAnd = buildTransactionFieldWhere(fieldFilters)
 
@@ -832,7 +916,7 @@ async function getTerminalInstancesByDepartments ({
     transactionWhere[Op.and] = fieldAnd
   }
 
-  const processWhere = buildProcessNameWhere(filters)
+  const processWhere = buildProcessDefinitionWhere(filters)
   const baseWhere = {
     status: 'completed',
     transaction_id: { [Op.in]: transactionIds }
@@ -886,6 +970,10 @@ async function getTerminalInstancesByDepartments ({
       TERMINAL_INCLUDES[0],
       {
         ...TERMINAL_INCLUDES[1],
+        attributes: [
+          ...TERMINAL_INCLUDES[1].attributes,
+          'type_trans_id'
+        ],
         where: processWhere || undefined,
         required: Boolean(processWhere)
       },
@@ -1008,5 +1096,6 @@ module.exports = {
   userHasDepartmentsAccess,
   countStagesByProcessDefinitionIds,
   countCompletedStagesByTransactionIds,
-  getCompletedStageCodesByTransactionIds
+  getCompletedStageCodesByTransactionIds,
+  getTransactionIdsHavingTypeDocs
 }

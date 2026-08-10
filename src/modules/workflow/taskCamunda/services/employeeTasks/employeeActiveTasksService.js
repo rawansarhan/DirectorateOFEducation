@@ -47,6 +47,20 @@ async function getRunningTasks ({
   offset = null,
   searchFilters = null
 }) {
+  const filters = searchFilters ? { ...searchFilters } : null
+
+  if (filters) {
+    const {
+      normalizeTypeDocIds
+    } = require('../../utils/taskSearchFilters')
+    const typeDocIds = normalizeTypeDocIds(filters)
+    if (typeDocIds.length) {
+      const ids = await employeeTaskRepository.getTransactionIdsHavingTypeDocs(
+        typeDocIds
+      )
+      filters._allowedTransactionIds = new Set(ids)
+    }
+  }
   const instanceMap = new Map()
 
   if (processDefinitionIds?.length) {
@@ -162,7 +176,7 @@ async function getRunningTasks ({
   const filteredPairs = enrichedPairs.filter(({ item }) =>
     matchesEmployeeStatusFilter(item, employeeStatusFilter)
   ).filter(({ item }) =>
-    !searchFilters || taskItemMatchesSearch(item, searchFilters)
+    !filters || taskItemMatchesSearch(item, filters)
   )
 
   if (page != null) {

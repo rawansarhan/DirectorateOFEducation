@@ -26,6 +26,11 @@ const {
 } = require('../../../../../core/utils/pagination')
 const { mergeTaskItemsByActivity } = require('./employeeTaskMappers')
 
+const optionalPositiveInt = Joi.number().integer().positive()
+const optionalDate = Joi.string()
+  .trim()
+  .pattern(/^\d{4}-\d{2}-\d{2}$/)
+
 const searchSchema = Joi.object({
   cursor: Joi.string().trim().max(500).allow('', null).optional(),
   limit: Joi.number().integer().min(1).max(70).optional(),
@@ -42,11 +47,46 @@ const searchSchema = Joi.object({
   mother_name: Joi.string().trim().max(100).allow('', null).optional(),
   national_id: Joi.string().trim().max(50).allow('', null).optional(),
   id_process: Joi.string().trim().max(32).allow('', null).optional(),
-  process_name: Joi.string().trim().max(255).allow('', null).optional()
+  process_name: Joi.string().trim().max(255).allow('', null).optional(),
+
+  type_process_id: optionalPositiveInt.optional(),
+  type_trans_id: optionalPositiveInt.optional(),
+  process_definition_id: optionalPositiveInt.optional(),
+
+  type_doc_id: optionalPositiveInt.optional(),
+  type_doc_ids: Joi.alternatives().try(
+    Joi.array().items(optionalPositiveInt).max(20),
+    Joi.string().trim()
+  ).optional(),
+
+  /** تاريخ إنشاء/تقديم المعاملة */
+  from_date: optionalDate.optional(),
+  to_date: optionalDate.optional()
 }).unknown(false)
+
+function parseTypeDocIds (value) {
+  const ids = []
+  if (value.type_doc_id) ids.push(Number(value.type_doc_id))
+  if (value.type_doc_ids == null || value.type_doc_ids === '') {
+    return [...new Set(ids.filter(n => Number.isInteger(n) && n > 0))]
+  }
+  if (Array.isArray(value.type_doc_ids)) {
+    ids.push(...value.type_doc_ids.map(Number))
+  } else {
+    ids.push(
+      ...String(value.type_doc_ids)
+        .split(',')
+        .map(s => parseInt(s.trim(), 10))
+    )
+  }
+  return [...new Set(ids.filter(n => Number.isInteger(n) && n > 0))]
+}
 
 function parseSearchFilters (value) {
   const q = value.q || value.search || null
+  const typeProcessId = value.type_process_id || value.type_trans_id || null
+  const typeDocIds = parseTypeDocIds(value)
+
   const filters = {
     q: q ? String(q).trim() : null,
     first_name: value.first_name || null,
@@ -55,7 +95,14 @@ function parseSearchFilters (value) {
     mother_name: value.mother_name || null,
     national_id: value.national_id || null,
     id_process: value.id_process || null,
-    process_name: value.process_name || null
+    process_name: value.process_name || null,
+    type_process_id: typeProcessId,
+    type_trans_id: typeProcessId,
+    process_definition_id: value.process_definition_id || null,
+    type_doc_id: typeDocIds.length === 1 ? typeDocIds[0] : null,
+    type_doc_ids: typeDocIds.length ? typeDocIds : null,
+    from_date: value.from_date || null,
+    to_date: value.to_date || null
   }
 
   return hasAnySearchFilter(filters) ? filters : null
@@ -129,6 +176,14 @@ async function searchEmployeeTasks ({ userId, query = {} }) {
     )
   }
 
+  if (value.from_date && value.to_date && value.from_date > value.to_date) {
+    throw createHttpError(
+      'from_date يجب أن يكون قبل أو يساوي to_date',
+      HTTP_STATUS.BAD_REQUEST,
+      'VALIDATION_ERROR'
+    )
+  }
+
   const { limit, cursor } = parseCursorPaginationQuery(query, {
     defaultLimit: 20
   })
@@ -175,7 +230,6 @@ async function searchEmployeeTasks ({ userId, query = {} }) {
     }
   }
 
-  // status=all
   if (!searchFilters) {
     const result = await getAllTasks({ userId, cursor, limit, status: 'all' })
     return {

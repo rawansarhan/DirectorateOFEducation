@@ -37,6 +37,9 @@ class EmployeeTaskOutputDTO {
     this.transaction_number = transaction?.id_process ?? null
     this.type = typeTrans?.name ?? processDefinitionName
     this.type_code = typeTrans?.code ?? null
+    this.type_trans_id = processDefinition?.type_trans_id ?? typeTrans?.id ?? null
+    this.type_process_id = this.type_trans_id
+    this.process_definition_id = processDefinition?.id ?? processInstance?.process_definition_id ?? null
     this.applicant_name = buildApplicantName(transaction, user)
     this.department = departmentName || processDefinitionName || null
     this.date = formatTransactionDate(transaction?.created_at)

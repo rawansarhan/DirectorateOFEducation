@@ -22,11 +22,11 @@ const searchLimiter = createRateLimiter({
  *   get:
  *     summary: بحث المعاملات المنجزة التي مرّت بدائرة/شعب
  *     description: |
- *       نفس نطاق `GET /api/workflow/tasks/completed/by-department`
- *       مع فلاتر بحث نصية (اسم طالب / وطني / رقم معاملة / اسم عملية).
+ *       نفس نطاق `GET /api/workflow/tasks/completed/by-department` + فلاتر بحث.
  *
- *       **يفرض** `transaction.status = completed` ودوائر مرّت بها المعاملة.
- *       شكل النتائج مطابق لقائمة المهام (Employee Task item).
+ *       - `type_process_id` / `type_trans_id`: نوع المعاملة
+ *       - `type_doc_id`: معاملات فيها `document_signature` بنفس النوع
+ *       - `from_date` / `to_date`: تاريخ إنشاء المعاملة
  *
  *       **Auth:** Bearer + `GET_TASK_COMPLETED_BY_DEPARTMENT`
  *     tags: [Transaction]
@@ -42,25 +42,30 @@ const searchLimiter = createRateLimiter({
  *         schema: { type: string, maxLength: 120 }
  *         example: سارة محمد
  *       - in: query
- *         name: first_name
- *         schema: { type: string }
+ *         name: type_process_id
+ *         schema: { type: integer }
+ *         description: نوع المعاملة (type_trans.id) — alias لـ type_trans_id
  *       - in: query
- *         name: last_name
- *         schema: { type: string }
+ *         name: type_trans_id
+ *         schema: { type: integer }
  *       - in: query
- *         name: father_name
- *         schema: { type: string }
+ *         name: type_doc_id
+ *         schema: { type: integer }
+ *         description: معاملات تحتوي document_signature بهذا type_doc_id
  *       - in: query
- *         name: mother_name
- *         schema: { type: string }
+ *         name: type_doc_ids
+ *         schema: { type: string, example: '1,2' }
  *       - in: query
- *         name: national_id
+ *         name: process_definition_id
+ *         schema: { type: integer }
+ *       - in: query
+ *         name: process_name
  *         schema: { type: string }
  *       - in: query
  *         name: id_process
  *         schema: { type: string }
  *       - in: query
- *         name: process_name
+ *         name: national_id
  *         schema: { type: string }
  *       - in: query
  *         name: from_date
@@ -76,7 +81,7 @@ const searchLimiter = createRateLimiter({
  *         schema: { type: integer, default: 20, maximum: 70 }
  *     responses:
  *       200:
- *         description: نتائج البحث (Cursor) — نفس شكل completed/by-department
+ *         description: نتائج البحث (Cursor)
  *       403:
  *         description: لا صلاحية لإحدى الدوائر
  */
@@ -94,9 +99,7 @@ router.get(
  *   get:
  *     summary: بحث المعاملات المرفوضة التي مرّت بدائرة/شعب
  *     description: |
- *       نفس نطاق `GET /api/workflow/tasks/rejected/by-department`
- *       مع فلاتر بحث نصية.
- *
+ *       نفس نطاق `rejected/by-department` + `type_process_id` و `type_doc_id` وتواريخ.
  *       **Auth:** Bearer + `GET_TASK_REJECTED_BY_DEPARTMENT`
  *     tags: [Transaction]
  *     security:
@@ -110,8 +113,11 @@ router.get(
  *         name: q
  *         schema: { type: string, maxLength: 120 }
  *       - in: query
- *         name: process_name
- *         schema: { type: string }
+ *         name: type_process_id
+ *         schema: { type: integer }
+ *       - in: query
+ *         name: type_doc_id
+ *         schema: { type: integer }
  *       - in: query
  *         name: from_date
  *         schema: { type: string, format: date }
@@ -126,7 +132,7 @@ router.get(
  *         schema: { type: integer, default: 20, maximum: 70 }
  *     responses:
  *       200:
- *         description: نتائج البحث (Cursor) — نفس شكل rejected/by-department
+ *         description: نتائج البحث (Cursor)
  *       403:
  *         description: لا صلاحية لإحدى الدوائر
  */

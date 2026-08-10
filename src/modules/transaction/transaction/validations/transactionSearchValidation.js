@@ -28,6 +28,17 @@ const searchFieldsSchema = {
   code: Joi.string().trim().max(128).allow('', null).optional(),
   process_name: Joi.string().trim().max(255).allow('', null).optional(),
 
+  // نوع المعاملة (جدول type_trans) — type_process_id alias شائع من الواجهة
+  type_process_id: optionalPositiveInt.optional(),
+  type_trans_id: optionalPositiveInt.optional(),
+  process_definition_id: optionalPositiveInt.optional(),
+
+  type_doc_id: optionalPositiveInt.optional(),
+  type_doc_ids: Joi.alternatives().try(
+    Joi.array().items(optionalPositiveInt).max(20),
+    Joi.string().trim()
+  ).optional(),
+
   from_date: optionalDate.optional(),
   to_date: optionalDate.optional(),
 
@@ -52,6 +63,24 @@ function parseDepartmentIdsRaw (raw) {
         .filter(n => Number.isInteger(n) && n > 0)
     )
   ]
+}
+
+function parseTypeDocIds (value) {
+  const ids = []
+  if (value.type_doc_id) ids.push(Number(value.type_doc_id))
+  if (value.type_doc_ids == null || value.type_doc_ids === '') {
+    return [...new Set(ids.filter(n => Number.isInteger(n) && n > 0))]
+  }
+  if (Array.isArray(value.type_doc_ids)) {
+    ids.push(...value.type_doc_ids.map(Number))
+  } else {
+    ids.push(
+      ...String(value.type_doc_ids)
+        .split(',')
+        .map(s => parseInt(s.trim(), 10))
+    )
+  }
+  return [...new Set(ids.filter(n => Number.isInteger(n) && n > 0))]
 }
 
 function validateDepartmentTransactionSearchQuery (query = {}) {
@@ -84,6 +113,8 @@ function validateDepartmentTransactionSearchQuery (query = {}) {
   }
 
   const textQ = value.q || value.search || value.applicant_q || null
+  const typeProcessId = value.type_process_id || value.type_trans_id || null
+  const typeDocIds = parseTypeDocIds(value)
 
   return {
     error: null,
@@ -100,7 +131,12 @@ function validateDepartmentTransactionSearchQuery (query = {}) {
         national_id: value.national_id || null,
         id_process: value.id_process || null,
         code: value.code || null,
-        process_name: value.process_name || null
+        process_name: value.process_name || null,
+        type_process_id: typeProcessId,
+        type_trans_id: typeProcessId,
+        process_definition_id: value.process_definition_id || null,
+        type_doc_id: typeDocIds.length === 1 ? typeDocIds[0] : null,
+        type_doc_ids: typeDocIds.length ? typeDocIds : null
       }
     }
   }

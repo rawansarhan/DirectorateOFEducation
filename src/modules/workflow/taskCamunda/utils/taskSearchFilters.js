@@ -101,10 +101,45 @@ function buildTransactionFieldWhere (filters = {}) {
 }
 
 function buildProcessNameWhere (filters = {}) {
+  return buildProcessDefinitionWhere(filters)
+}
+
+/**
+ * شروط على process_definitions: اسم / نوع معاملة / معرف تعريف.
+ * type_process_id alias لـ type_trans_id
+ */
+function buildProcessDefinitionWhere (filters = {}) {
+  const where = {}
+
   if (filters.process_name) {
-    return { name: likeContains(filters.process_name) }
+    where.name = likeContains(filters.process_name)
   }
-  return null
+
+  const typeProcessId = filters.type_process_id || filters.type_trans_id
+  if (typeProcessId) {
+    where.type_trans_id = Number(typeProcessId)
+  }
+
+  if (filters.process_definition_id) {
+    where.id = Number(filters.process_definition_id)
+  }
+
+  return Object.keys(where).length ? where : null
+}
+
+function normalizeTypeDocIds (filters = {}) {
+  const ids = []
+  if (filters.type_doc_id) ids.push(Number(filters.type_doc_id))
+  if (Array.isArray(filters.type_doc_ids)) {
+    ids.push(...filters.type_doc_ids.map(Number))
+  } else if (filters.type_doc_ids) {
+    ids.push(
+      ...String(filters.type_doc_ids)
+        .split(',')
+        .map(s => parseInt(s.trim(), 10))
+    )
+  }
+  return [...new Set(ids.filter(n => Number.isInteger(n) && n > 0))]
 }
 
 /**
@@ -130,7 +165,6 @@ function taskItemMatchesSearch (item, filters = {}) {
       !hayProcess.includes(q) &&
       !hayNumber.includes(q)
     ) {
-      // أيضاً طابق كل كلمة على حدة داخل الاسم
       const tokens = q.split(/\s+/).filter(Boolean)
       const allInName = tokens.every(t => hayApplicant.includes(t))
       if (!allInName) return false
@@ -162,9 +196,43 @@ function taskItemMatchesSearch (item, filters = {}) {
   }
 
   if (filters.national_id) {
-    // لا يظهر في DTO دائماً — نتخطى إن لم يكن متاحاً عبر transaction_number فقط
     const needle = String(filters.national_id).trim().toLowerCase()
     if (needle && !hayApplicant.includes(needle) && !hayNumber.includes(needle)) {
+      return false
+    }
+  }
+
+  const typeProcessId = filters.type_process_id || filters.type_trans_id
+  if (typeProcessId != null) {
+    const itemTypeId = item?.type_trans_id ?? item?.type_process_id
+    if (Number(itemTypeId) !== Number(typeProcessId)) {
+      return false
+    }
+  }
+
+  if (filters.process_definition_id != null) {
+    if (Number(item?.process_definition_id) !== Number(filters.process_definition_id)) {
+      return false
+    }
+  }
+
+  if (filters.from_date || filters.to_date) {
+    const activityAt = item?.activity_at || item?.date
+    if (!activityAt) return false
+    const t = new Date(activityAt).getTime()
+    if (filters.from_date) {
+      const from = new Date(`${filters.from_date}T00:00:00.000`).getTime()
+      if (t < from) return false
+    }
+    if (filters.to_date) {
+      const to = new Date(`${filters.to_date}T23:59:59.999`).getTime()
+      if (t > to) return false
+    }
+  }
+
+  if (filters._allowedTransactionIds instanceof Set) {
+    const tid = Number(item?.transaction_id)
+    if (!filters._allowedTransactionIds.has(tid)) {
       return false
     }
   }
@@ -182,7 +250,14 @@ function hasAnySearchFilter (filters = {}) {
     filters.national_id ||
     filters.id_process ||
     filters.code ||
-    filters.process_name
+    filters.process_name ||
+    filters.type_process_id ||
+    filters.type_trans_id ||
+    filters.type_doc_id ||
+    (filters.type_doc_ids && filters.type_doc_ids.length) ||
+    filters.process_definition_id ||
+    filters.from_date ||
+    filters.to_date
   )
 }
 
@@ -192,6 +267,8 @@ module.exports = {
   buildApplicantNameOrConditions,
   buildTransactionFieldWhere,
   buildProcessNameWhere,
+  buildProcessDefinitionWhere,
+  normalizeTypeDocIds,
   taskItemMatchesSearch,
   hasAnySearchFilter
 }
