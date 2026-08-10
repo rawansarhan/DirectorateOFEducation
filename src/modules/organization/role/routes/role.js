@@ -236,7 +236,7 @@ router.get(
 router.get(
   '/by-department/:departmentId',
   authMiddleware,
-  authorize('GET_ORGANIZATIONAL_STRUCTURE'),
+  authorize('TASK_SIGNING'),
   getRolesByDepartment
 )
 /**

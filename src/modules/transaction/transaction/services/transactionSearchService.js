@@ -1,40 +1,34 @@
 'use strict'
 
-const transactionSearchRepository = require('../repositories/transactionSearchRepository')
 const {
-  validateTransactionSearchQuery
+  validateDepartmentTransactionSearchQuery
 } = require('../validations/transactionSearchValidation')
 const {
-  TransactionSearchListItemDTO
-} = require('../dto/TransactionSearchListItemDTO')
-const {
-  parseCursorPaginationQuery,
-  buildCursorPaginationMeta,
-  emptyCursorPaginatedResult,
-  encodeCursor
+  parseCursorPaginationQuery
 } = require('../../../../core/utils/pagination')
-const { retryWithBackoff } = require('../../../../core/utils/retryWithBackoff')
+const { parseDateRange } = require('../../../workflow/taskCamunda/services/employeeTasks/employeeTaskQueryParsers')
+const {
+  getCompletedByDepartment,
+  getRejectedByDepartment
+} = require('../../../workflow/taskCamunda/services/employeeTasks/employeeDepartmentTasksService')
 const { createTransactionError } = require('../utils/transactionErrors')
+const { hasAnySearchFilter } = require('../../../workflow/taskCamunda/utils/taskSearchFilters')
 
-function buildTransactionCursor (row) {
-  const plain = row && typeof row.get === 'function' ? row.get({ plain: true }) : row
-  const createdAt = plain.created_at
-    ? new Date(plain.created_at).toISOString()
-    : null
-
-  if (!createdAt || !Number.isFinite(Number(plain.id))) {
-    return null
-  }
-
-  return encodeCursor({
-    k: 'txn',
-    t: createdAt,
-    id: Number(plain.id)
+function toDateRange (filters) {
+  return parseDateRange({
+    query: {
+      from_date: filters.from_date || undefined,
+      to_date: filters.to_date || undefined
+    }
   })
 }
-
-async function searchTransactions (query = {}) {
-  const { error, value: filters } = validateTransactionSearchQuery(query)
+//هذه الدالة للبحث عن المعاملات حسب الحالة المحدد 
+async function searchDepartmentTransactions ({
+  userId,
+  query = {},
+  transactionStatus
+}) {
+  const { error, value } = validateDepartmentTransactionSearchQuery(query)
 
   if (error) {
     throw createTransactionError('VALIDATION_ERROR', error)
@@ -42,71 +36,62 @@ async function searchTransactions (query = {}) {
 
   let limit
   let cursor
-  let decodedCursor
 
   try {
-    ;({ limit, cursor, decodedCursor } = parseCursorPaginationQuery(query, {
+    ;({ limit, cursor } = parseCursorPaginationQuery(query, {
       defaultLimit: 20
     }))
   } catch (err) {
     throw createTransactionError('VALIDATION_ERROR', err.message)
   }
 
-  if (decodedCursor && decodedCursor.k !== 'txn') {
-    throw createTransactionError('VALIDATION_ERROR', 'cursor غير صالح لهذا البحث')
-  }
+  const { fromDate, toDate } = toDateRange(value)
+  const searchFilters = hasAnySearchFilter(value.searchFilters)
+    ? value.searchFilters
+    : null
 
-  const { rows, hasNext } = await retryWithBackoff(
-    () =>
-      transactionSearchRepository.searchWithCursor(filters, {
-        limit,
-        cursor: decodedCursor
-      }),
-    { label: 'transaction.searchWithCursor' }
-  )
+  const loader =
+    transactionStatus === 'rejected'
+      ? getRejectedByDepartment
+      : getCompletedByDepartment
 
-  if (!rows.length) {
-    return {
-      message: 'تم جلب نتائج البحث بنجاح',
-      data: {
-        ...emptyCursorPaginatedResult({ limit, cursor }),
-        filters_applied: buildFiltersApplied(filters)
-      }
+  try {
+    return await loader({
+      userId,
+      departmentIds: value.department_ids,
+      fromDate,
+      toDate,
+      cursor,
+      limit,
+      searchFilters
+    })
+  } catch (err) {
+    if (err.code === 'FORBIDDEN') {
+      const e = createTransactionError('FORBIDDEN', err.message)
+      e.statusCode = 403
+      throw e
     }
-  }
-
-  const nextCursor = hasNext ? buildTransactionCursor(rows[rows.length - 1]) : null
-
-  return {
-    message: 'تم جلب نتائج البحث بنجاح',
-    data: {
-      items: rows.map(row => new TransactionSearchListItemDTO(row)),
-      pagination: buildCursorPaginationMeta({
-        limit,
-        cursor,
-        nextCursor,
-        hasNext
-      }),
-      filters_applied: buildFiltersApplied(filters)
-    }
+    throw err
   }
 }
 
-function buildFiltersApplied (filters) {
-  return {
-    q: filters.q || null,
-    status: filters.status || null,
-    statuses: filters.statuses || null,
-    process_name: filters.process_name || null,
-    type_doc_id: filters.type_doc_id || null,
-    type_doc_ids: filters.type_doc_ids || null,
-    has_final_document:
-      filters.has_final_document == null ? null : filters.has_final_document,
-    from_date: filters.from_date || null,
-    to_date: filters.to_date || null
-  }
+async function searchCompletedTransactions (userId, query = {}) {
+  return searchDepartmentTransactions({
+    userId,
+    query,
+    transactionStatus: 'completed'
+  })
+}
+
+async function searchRejectedTransactions (userId, query = {}) {
+  return searchDepartmentTransactions({
+    userId,
+    query,
+    transactionStatus: 'rejected'
+  })
 }
 
 module.exports = {
-  searchTransactions
+  searchCompletedTransactions,
+  searchRejectedTransactions
 }

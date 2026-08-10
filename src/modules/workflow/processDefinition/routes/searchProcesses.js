@@ -21,8 +21,11 @@ const searchLimiter = createRateLimiter({
  *   get:
  *     summary: بحث تعاريف العمليات / المعاملات
  *     description: |
- *       بحث بسيط وآمن بالاسم أو الرمز أو مفتاح Camunda.
+ *       بحث بسيط وآمن بالاسم أو الرمز أو مفتاح Camunda مع **Cursor Pagination**.
  *       الافتراضي: `approval_status=APPROVED` و `is_active=true`.
+ *
+ *       **الترقيم:** أرسل الطلب الأول بدون `cursor`، ثم مرّر `pagination.next_cursor`
+ *       في `cursor` للصفحة التالية.
  *
  *       **Auth:** Bearer + `GET_ORGANIZATIONAL_STRUCTURE`
  *     tags: [Process Definition]
@@ -65,6 +68,26 @@ const searchLimiter = createRateLimiter({
  *     responses:
  *       200:
  *         description: نتائج البحث (Cursor Pagination)
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: true
+ *               status_code: 200
+ *               message: تم جلب نتائج البحث بنجاح
+ *               data:
+ *                 items:
+ *                   - id: 6
+ *                     name: طلب إجازة
+ *                     code: LEAVE_01
+ *                     is_active: true
+ *                     approval_status: APPROVED
+ *                     type_trans_name: إجازات
+ *                 pagination:
+ *                   limit: 20
+ *                   cursor: null
+ *                   next_cursor: eyJrIjoicHJvYyIsIm4iOiLYqtmI2KjbjCDIp9mE2K_ZhdivIiwiaWQiOjZ9
+ *                   has_next: true
+ *                   has_prev: false
  *       401:
  *         description: Unauthorized
  *       403:

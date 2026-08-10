@@ -1,6 +1,9 @@
 'use strict'
 
-const { searchTransactions } = require('../services/transactionSearchService')
+const {
+  searchCompletedTransactions,
+  searchRejectedTransactions
+} = require('../services/transactionSearchService')
 const {
   successResponse,
   errorResponse
@@ -10,9 +13,9 @@ const {
   httpStatusForError
 } = require('../utils/transactionErrors')
 
-async function searchTransactionsController (req, res) {
+async function searchCompletedTransactionsController (req, res) {
   try {
-    const result = await searchTransactions(req.query)
+    const result = await searchCompletedTransactions(req.user.id, req.query)
 
     return successResponse(res, {
       message: result.message,
@@ -20,7 +23,25 @@ async function searchTransactionsController (req, res) {
     })
   } catch (err) {
     return errorResponse(res, {
-      statusCode: httpStatusForError(err),
+      statusCode: err.statusCode || httpStatusForError(err),
+      message: mapErrorToArabic(err),
+      error: err.code || 'REQUEST_ERROR',
+      data: null
+    })
+  }
+}
+
+async function searchRejectedTransactionsController (req, res) {
+  try {
+    const result = await searchRejectedTransactions(req.user.id, req.query)
+
+    return successResponse(res, {
+      message: result.message,
+      data: result.data
+    })
+  } catch (err) {
+    return errorResponse(res, {
+      statusCode: err.statusCode || httpStatusForError(err),
       message: mapErrorToArabic(err),
       error: err.code || 'REQUEST_ERROR',
       data: null
@@ -29,5 +50,8 @@ async function searchTransactionsController (req, res) {
 }
 
 module.exports = {
-  searchTransactionsController
+  searchCompletedTransactionsController,
+  searchRejectedTransactionsController,
+  // توافق مع الاسم القديم
+  searchTransactionsController: searchCompletedTransactionsController
 }

@@ -247,7 +247,7 @@ router.get(
 router.get(
   '/by-organization/:organizationId/leaves',
   authMiddleware,
-  authorize('GET_ORGANIZATIONAL_STRUCTURE'),
+  authorize('TASK_SIGNING'),
   getLeafDepartmentsByOrganization
 )
 /**

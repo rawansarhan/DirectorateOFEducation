@@ -113,6 +113,20 @@ async function getAllTasksController (req, res) {
   }
 }
 
+async function searchEmployeeTasksController (req, res) {
+  try {
+    const result = await getAllTasksService.searchEmployeeTasks({
+      userId: req.user.id,
+      query: req.query
+    })
+
+    return sendWorkflowSuccess(res, result.data, result.message)
+  } catch (error) {
+    const status = error.code === 'VALIDATION_ERROR' ? 400 : error.statusCode || 500
+    return handleWorkflowError(res, error, status)
+  }
+}
+
 async function getCompletedByDepartmentController (req, res) {
   try {
     const { limit, cursor } = parseCursorPaginationQuery(req.query)
@@ -272,6 +286,7 @@ module.exports = {
   createSigningChallengeController,
   completeTaskController,
   getAllTasksController,
+  searchEmployeeTasksController,
   getCompletedByDepartmentController,
   getRejectedByDepartmentController,
   getCompletedLastMonthStatsController,

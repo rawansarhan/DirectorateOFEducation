@@ -19,6 +19,9 @@ const {
   matchesEmployeeStatusFilter
 } = require('./employeeTaskConstants')
 const {
+  taskItemMatchesSearch
+} = require('../../utils/taskSearchFilters')
+const {
   mapInstanceToTask,
   buildProgressMaps,
   buildStageNameMap,
@@ -41,7 +44,8 @@ async function getRunningTasks ({
   cursor = null,
   decodedCursor = null,
   page = null,
-  offset = null
+  offset = null,
+  searchFilters = null
 }) {
   const instanceMap = new Map()
 
@@ -157,6 +161,8 @@ async function getRunningTasks ({
 
   const filteredPairs = enrichedPairs.filter(({ item }) =>
     matchesEmployeeStatusFilter(item, employeeStatusFilter)
+  ).filter(({ item }) =>
+    !searchFilters || taskItemMatchesSearch(item, searchFilters)
   )
 
   if (page != null) {
@@ -208,7 +214,8 @@ async function loadActiveEmployeeTasks ({
   limit,
   offset,
   cursor,
-  employeeStatusFilter
+  employeeStatusFilter,
+  searchFilters = null
 }) {
   const context = await loadEmployeeStageContext(userId)
 
@@ -228,7 +235,8 @@ async function loadActiveEmployeeTasks ({
     offset,
     cursor,
     decodedCursor: cursor ? decodeCursor(cursor) : null,
-    employeeStatusFilter
+    employeeStatusFilter,
+    searchFilters
   })
 }
 

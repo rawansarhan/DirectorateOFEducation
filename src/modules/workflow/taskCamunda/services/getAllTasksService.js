@@ -38,5 +38,6 @@ module.exports = {
   getAllTasks,
   getActiveEmployeeTasks,
   getCompletedByDepartment,
-  getRejectedByDepartment
+  getRejectedByDepartment,
+  searchEmployeeTasks: require('./employeeTasks/employeeTasksSearchService').searchEmployeeTasks
 }

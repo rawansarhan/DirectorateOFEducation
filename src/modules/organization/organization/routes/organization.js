@@ -132,6 +132,29 @@ router.get(
 
 /**
  * @swagger
+ * /api/organization/employee:
+ *   get:
+ *     summary: جلب كل المؤسسات
+ *     tags: [Organization]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: list
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/OrganizationListEnvelope'
+ */
+router.get(
+  '/employee',
+  authMiddleware,
+  authorize('TASK_SIGNING'),
+  getAllOrganizations
+)
+
+/**
+ * @swagger
  * /api/organization/{id}:
  *   get:
  *     summary: جلب مؤسسة حسب المعرف

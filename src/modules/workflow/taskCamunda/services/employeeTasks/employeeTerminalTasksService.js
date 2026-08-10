@@ -21,14 +21,16 @@ async function getUserCompletedStages ({
   status,
   cursor = null,
   decodedCursor = null,
-  limit
+  limit,
+  searchFilters = null
 }) {
   const { rows, hasNext } =
     await employeeTaskRepository.getStagesCompletedByUser({
       userId,
       status,
       limit,
-      cursor: decodedCursor
+      cursor: decodedCursor,
+      searchFilters
     })
 
   if (!rows.length) {
@@ -73,7 +75,8 @@ async function loadTerminalEmployeeTasks ({
   cursor,
   limit,
   status,
-  useCache = true
+  useCache = true,
+  searchFilters = null
 }) {
   const loader = () =>
     getUserCompletedStages({
@@ -81,10 +84,11 @@ async function loadTerminalEmployeeTasks ({
       status,
       cursor,
       decodedCursor: cursor ? decodeCursor(cursor) : null,
-      limit
+      limit,
+      searchFilters
     })
 
-  if (!useCache) {
+  if (!useCache || searchFilters) {
     return loader()
   }
 

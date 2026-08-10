@@ -93,6 +93,7 @@ function httpStatusForError (error) {
 
   if (
     error?.code === 'UNAUTHORIZED' ||
+    error?.code === 'FORBIDDEN' ||
     error?.code === 'EMPLOYEE_FORBIDDEN_CITIZEN_ROUTE' ||
     msg.includes('Unauthorized')
   ) {

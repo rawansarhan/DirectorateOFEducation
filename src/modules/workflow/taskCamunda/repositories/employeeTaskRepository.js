@@ -656,7 +656,20 @@ const USER_STAGE_INCLUDES = [
   }
 ]
 
-async function getStagesCompletedByUser ({ userId, status, limit, cursor = null }) {
+async function getStagesCompletedByUser ({
+  userId,
+  status,
+  limit,
+  cursor = null,
+  searchFilters = null
+}) {
+  const {
+    buildTransactionFieldWhere,
+    buildProcessNameWhere,
+    buildApplicantNameOrConditions,
+    likeContains
+  } = require('../utils/taskSearchFilters')
+
   const baseWhere = {
     assigned_to: userId,
     status
@@ -680,6 +693,60 @@ async function getStagesCompletedByUser ({ userId, status, limit, cursor = null 
     })
   }
 
+  const filters = searchFilters || {}
+  const fieldAnd = buildTransactionFieldWhere({ ...filters, q: null })
+  const transactionWhere = fieldAnd.length ? { [Op.and]: fieldAnd } : undefined
+
+  if (filters.q) {
+    const applicantOr = buildApplicantNameOrConditions(filters.q).map(cond => {
+      if (cond[Op.and]) {
+        return {
+          [Op.and]: cond[Op.and].map(inner => {
+            const out = {}
+            for (const [k, v] of Object.entries(inner)) {
+              out[`$transaction.${k}$`] = v
+            }
+            return out
+          })
+        }
+      }
+      const out = {}
+      for (const [k, v] of Object.entries(cond)) {
+        out[`$transaction.${k}$`] = v
+      }
+      return out
+    })
+
+    whereConditions.push({
+      [Op.or]: [
+        ...applicantOr,
+        { '$transaction.process_instance.process_definition.name$': likeContains(filters.q) }
+      ]
+    })
+  }
+
+  const processNameWhere = buildProcessNameWhere(filters)
+
+  const includes = [
+    {
+      ...USER_STAGE_INCLUDES[0],
+      where: transactionWhere,
+      include: [
+        USER_STAGE_INCLUDES[0].include[0],
+        {
+          ...USER_STAGE_INCLUDES[0].include[1],
+          include: [
+            {
+              ...USER_STAGE_INCLUDES[0].include[1].include[0],
+              where: processNameWhere || undefined,
+              required: Boolean(processNameWhere)
+            }
+          ]
+        }
+      ]
+    }
+  ]
+
   const where =
     whereConditions.length === 1
       ? baseWhere
@@ -687,9 +754,10 @@ async function getStagesCompletedByUser ({ userId, status, limit, cursor = null 
 
   const rows = await db.ProcessInstanceStage.findAll({
     where,
-    include: USER_STAGE_INCLUDES,
+    include: includes,
     order: [['created_at', 'DESC'], ['id', 'DESC']],
-    limit: limit + 1
+    limit: limit + 1,
+    subQuery: false
   })
 
   const hasNext = rows.length > limit
@@ -698,13 +766,40 @@ async function getStagesCompletedByUser ({ userId, status, limit, cursor = null 
   return { rows: pageRows, hasNext }
 }
 
+function prefixTransactionConditions (conditions = []) {
+  return conditions.map(cond => {
+    if (cond[Op.and]) {
+      return {
+        [Op.and]: cond[Op.and].map(inner => {
+          const out = {}
+          for (const [k, v] of Object.entries(inner)) {
+            out[`$transaction.${k}$`] = v
+          }
+          return out
+        })
+      }
+    }
+
+    if (cond[Op.or]) {
+      return { [Op.or]: prefixTransactionConditions(cond[Op.or]) }
+    }
+
+    const out = {}
+    for (const [k, v] of Object.entries(cond)) {
+      out[`$transaction.${k}$`] = v
+    }
+    return out
+  })
+}
+
 async function getTerminalInstancesByDepartments ({
   departmentIds,
   transactionStatus,
   fromDate = null,
   toDate = null,
   limit,
-  cursor = null
+  cursor = null,
+  searchFilters = null
 }) {
   const transactionIds = await getTransactionIdsPassedDepartments(departmentIds)
 
@@ -712,34 +807,41 @@ async function getTerminalInstancesByDepartments ({
     return { rows: [], hasNext: false }
   }
 
+  const {
+    buildTransactionFieldWhere,
+    buildProcessNameWhere,
+    buildApplicantNameOrConditions,
+    likeContains
+  } = require('../utils/taskSearchFilters')
+
+  const filters = searchFilters || {}
+  const fieldFilters = { ...filters, q: null }
+  const fieldAnd = buildTransactionFieldWhere(fieldFilters)
+
   const transactionWhere = {
     status: transactionStatus
   }
 
   if (fromDate || toDate) {
     transactionWhere.created_at = {}
-
-    if (fromDate) {
-      transactionWhere.created_at[Op.gte] = fromDate
-    }
-
-    if (toDate) {
-      transactionWhere.created_at[Op.lte] = toDate
-    }
+    if (fromDate) transactionWhere.created_at[Op.gte] = fromDate
+    if (toDate) transactionWhere.created_at[Op.lte] = toDate
   }
 
+  if (fieldAnd.length) {
+    transactionWhere[Op.and] = fieldAnd
+  }
+
+  const processWhere = buildProcessNameWhere(filters)
   const baseWhere = {
     status: 'completed',
-    transaction_id: {
-      [Op.in]: transactionIds
-    }
+    transaction_id: { [Op.in]: transactionIds }
   }
 
   const whereConditions = [baseWhere]
 
   if (cursor) {
     const createdAt = new Date(cursor.t)
-
     whereConditions.push({
       [Op.or]: [
         { '$process_definition.priority$': { [Op.lt]: cursor.p } },
@@ -760,6 +862,18 @@ async function getTerminalInstancesByDepartments ({
     })
   }
 
+  if (filters.q) {
+    const applicantOr = prefixTransactionConditions(
+      buildApplicantNameOrConditions(filters.q)
+    )
+    whereConditions.push({
+      [Op.or]: [
+        ...applicantOr,
+        { '$process_definition.name$': likeContains(filters.q) }
+      ]
+    })
+  }
+
   const where =
     whereConditions.length === 1
       ? baseWhere
@@ -770,10 +884,20 @@ async function getTerminalInstancesByDepartments ({
     attributes: ['id', 'process_definition_id', 'current_stage_id', 'created_at', 'updated_at'],
     include: [
       TERMINAL_INCLUDES[0],
-      TERMINAL_INCLUDES[1],
+      {
+        ...TERMINAL_INCLUDES[1],
+        where: processWhere || undefined,
+        required: Boolean(processWhere)
+      },
       {
         ...TERMINAL_INCLUDES[2],
-        where: transactionWhere
+        where: transactionWhere,
+        attributes: [
+          ...TERMINAL_INCLUDES[2].attributes,
+          'mother_name',
+          'national_id',
+          'code'
+        ]
       }
     ],
     order: [
@@ -786,9 +910,7 @@ async function getTerminalInstancesByDepartments ({
   })
 
   const hasNext = rows.length > limit
-  const pageRows = hasNext ? rows.slice(0, limit) : rows
-
-  return { rows: pageRows, hasNext }
+  return { rows: hasNext ? rows.slice(0, limit) : rows, hasNext }
 }
 
 async function countStagesByProcessDefinitionIds (processDefinitionIds = []) {

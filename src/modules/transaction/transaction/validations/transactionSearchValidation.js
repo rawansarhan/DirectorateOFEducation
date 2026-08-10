@@ -2,13 +2,6 @@
 
 const Joi = require('joi')
 
-const STATUSES = [
-  'submitted',
-  'in_progress',
-  'completed',
-  'rejected'
-]
-
 const optionalPositiveInt = Joi.number().integer().positive()
 const optionalDate = Joi.string()
   .trim()
@@ -17,11 +10,10 @@ const optionalDate = Joi.string()
     'string.pattern.base': 'التاريخ يجب أن يكون بصيغة YYYY-MM-DD'
   })
 
-const searchQuerySchema = Joi.object({
+const searchFieldsSchema = {
   cursor: Joi.string().trim().max(500).allow('', null).optional(),
   limit: Joi.number().integer().min(1).max(70).optional(),
 
-  // بحث نصي عام / هوية
   q: Joi.string().trim().max(120).allow('', null).optional(),
   search: Joi.string().trim().max(120).allow('', null).optional(),
   applicant_q: Joi.string().trim().max(120).allow('', null).optional(),
@@ -34,48 +26,36 @@ const searchQuerySchema = Joi.object({
 
   id_process: Joi.string().trim().max(32).allow('', null).optional(),
   code: Joi.string().trim().max(128).allow('', null).optional(),
-
-  status: Joi.string().valid(...STATUSES).optional(),
-  statuses: Joi.alternatives().try(
-    Joi.array().items(Joi.string().valid(...STATUSES)).max(4),
-    Joi.string().trim()
-  ).optional(),
-
   process_name: Joi.string().trim().max(255).allow('', null).optional(),
-  process_definition_id: optionalPositiveInt.optional(),
-  type_trans_id: optionalPositiveInt.optional(),
-  organization_id: optionalPositiveInt.optional(),
-  is_complaint: Joi.boolean().truthy('true', '1').falsy('false', '0').optional(),
-
-  type_doc_id: optionalPositiveInt.optional(),
-  type_doc_ids: Joi.alternatives().try(
-    Joi.array().items(optionalPositiveInt).max(20),
-    Joi.string().trim()
-  ).optional(),
-
-  has_final_document: Joi.boolean().truthy('true', '1').falsy('false', '0').optional(),
 
   from_date: optionalDate.optional(),
-  to_date: optionalDate.optional()
-}).unknown(false)
+  to_date: optionalDate.optional(),
 
-function parseCsvOrArray (raw, mapFn) {
-  if (raw == null || raw === '') {
-    return null
-  }
-
-  if (Array.isArray(raw)) {
-    return raw.map(mapFn).filter(v => v != null)
-  }
-
-  return String(raw)
-    .split(',')
-    .map(part => mapFn(part.trim()))
-    .filter(v => v != null && v !== '')
+  department_ids: Joi.alternatives().try(
+    Joi.array().items(optionalPositiveInt).min(1).max(50),
+    Joi.string().trim()
+  ).required()
 }
 
-function validateTransactionSearchQuery (query = {}) {
-  const { error, value } = searchQuerySchema.validate(query, {
+const departmentSearchSchema = Joi.object(searchFieldsSchema).unknown(false)
+
+function parseDepartmentIdsRaw (raw) {
+  if (Array.isArray(raw)) {
+    return [...new Set(raw.map(Number).filter(n => Number.isInteger(n) && n > 0))]
+  }
+
+  return [
+    ...new Set(
+      String(raw || '')
+        .split(',')
+        .map(s => parseInt(s.trim(), 10))
+        .filter(n => Number.isInteger(n) && n > 0)
+    )
+  ]
+}
+
+function validateDepartmentTransactionSearchQuery (query = {}) {
+  const { error, value } = departmentSearchSchema.validate(query, {
     abortEarly: false,
     stripUnknown: true,
     convert: true
@@ -88,17 +68,13 @@ function validateTransactionSearchQuery (query = {}) {
     }
   }
 
-  const statuses = parseCsvOrArray(value.statuses, s => {
-    if (!STATUSES.includes(s)) return null
-    return s
-  })
-
-  const typeDocIds = parseCsvOrArray(value.type_doc_ids, s => {
-    const n = Number(s)
-    return Number.isInteger(n) && n > 0 ? n : null
-  })
-
-  const textQ = value.q || value.search || value.applicant_q || null
+  const departmentIds = parseDepartmentIdsRaw(value.department_ids)
+  if (!departmentIds.length) {
+    return {
+      error: 'department_ids مطلوب — مثال: ?department_ids=1,2,3',
+      value: null
+    }
+  }
 
   if (value.from_date && value.to_date && value.from_date > value.to_date) {
     return {
@@ -107,19 +83,29 @@ function validateTransactionSearchQuery (query = {}) {
     }
   }
 
+  const textQ = value.q || value.search || value.applicant_q || null
+
   return {
     error: null,
     value: {
-      ...value,
-      q: textQ ? String(textQ).trim() : null,
-      statuses: statuses && statuses.length ? [...new Set(statuses)] : null,
-      type_doc_ids: typeDocIds && typeDocIds.length ? [...new Set(typeDocIds)] : null,
-      status: value.status || null
+      department_ids: departmentIds,
+      from_date: value.from_date || null,
+      to_date: value.to_date || null,
+      searchFilters: {
+        q: textQ ? String(textQ).trim() : null,
+        first_name: value.first_name || null,
+        last_name: value.last_name || null,
+        father_name: value.father_name || null,
+        mother_name: value.mother_name || null,
+        national_id: value.national_id || null,
+        id_process: value.id_process || null,
+        code: value.code || null,
+        process_name: value.process_name || null
+      }
     }
   }
 }
 
 module.exports = {
-  STATUSES,
-  validateTransactionSearchQuery
+  validateDepartmentTransactionSearchQuery
 }

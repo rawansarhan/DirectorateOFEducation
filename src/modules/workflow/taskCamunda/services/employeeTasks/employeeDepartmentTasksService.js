@@ -26,7 +26,8 @@ async function getDepartmentTerminalTasks ({
   toDate = null,
   cursor = null,
   decodedCursor = null,
-  limit
+  limit,
+  searchFilters = null
 }) {
   const access = await employeeTaskRepository.userHasDepartmentsAccess(
     userId,
@@ -48,7 +49,8 @@ async function getDepartmentTerminalTasks ({
       fromDate,
       toDate,
       limit,
-      cursor: decodedCursor
+      cursor: decodedCursor,
+      searchFilters
     })
 
   if (!rows.length) {
@@ -92,8 +94,24 @@ async function loadCachedDepartmentTasks ({
   fromDate,
   toDate,
   cursor,
-  limit
+  limit,
+  searchFilters = null
 }) {
+  // لا كاش عند البحث النصي (نتائج متغيرة حسب q)
+  if (searchFilters && Object.values(searchFilters).some(v => v != null && v !== '')) {
+    return getDepartmentTerminalTasks({
+      userId,
+      departmentIds,
+      transactionStatus,
+      fromDate,
+      toDate,
+      cursor,
+      decodedCursor: cursor ? decodeCursor(cursor) : null,
+      limit,
+      searchFilters
+    })
+  }
+
   const cacheKey = KEYS.employeeTasksByDepartments(
     userId,
     departmentIds,
@@ -117,7 +135,8 @@ async function loadCachedDepartmentTasks ({
         toDate,
         cursor,
         decodedCursor: cursor ? decodeCursor(cursor) : null,
-        limit
+        limit,
+        searchFilters
       }),
     {
       label: `employee-tasks:depts:${deptLabel}:${transactionStatus}`,
@@ -132,7 +151,8 @@ async function getCompletedByDepartment ({
   fromDate,
   toDate,
   cursor,
-  limit
+  limit,
+  searchFilters = null
 }) {
   const data = await loadCachedDepartmentTasks({
     userId,
@@ -141,11 +161,14 @@ async function getCompletedByDepartment ({
     fromDate,
     toDate,
     cursor,
-    limit
+    limit,
+    searchFilters
   })
 
   return {
-    message: 'تم جلب المعاملات المنجزة للدوائر بنجاح',
+    message: searchFilters
+      ? 'تم جلب نتائج بحث المعاملات المنجزة بنجاح'
+      : 'تم جلب المعاملات المنجزة للدوائر بنجاح',
     data
   }
 }
@@ -156,7 +179,8 @@ async function getRejectedByDepartment ({
   fromDate,
   toDate,
   cursor,
-  limit
+  limit,
+  searchFilters = null
 }) {
   const data = await loadCachedDepartmentTasks({
     userId,
@@ -165,11 +189,14 @@ async function getRejectedByDepartment ({
     fromDate,
     toDate,
     cursor,
-    limit
+    limit,
+    searchFilters
   })
 
   return {
-    message: 'تم جلب المعاملات المرفوضة للدوائر بنجاح',
+    message: searchFilters
+      ? 'تم جلب نتائج بحث المعاملات المرفوضة بنجاح'
+      : 'تم جلب المعاملات المرفوضة للدوائر بنجاح',
     data
   }
 }

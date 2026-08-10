@@ -14,6 +14,8 @@ const {
 
   getAllTasksController,
 
+  searchEmployeeTasksController,
+
   getCompletedByDepartmentController,
 
   getRejectedByDepartmentController,
@@ -192,6 +194,55 @@ router.get('/tasks',
   authMiddleware,
   authorize('GET_ALL_TASK_FOR_EMPLOYEE'),
   getAllTasksController)
+
+/**
+ * @swagger
+ * /api/workflow/tasks/search:
+ *   get:
+ *     summary: بحث ضمن مهام الموظف (نفس نطاق GET /tasks)
+ *     description: |
+ *       يبحث فقط داخل مهام الموظف الحالية (بانتظار الاستلام / قيد المعالجة / منجزة / مرفوضة)،
+ *       وليس كل المعاملات في النظام.
+ *
+ *       نفس فلاتر `status` في `GET /api/workflow/tasks` + نص بحث `q`.
+ *
+ *       **Auth:** Bearer + `GET_ALL_TASK_FOR_EMPLOYEE`
+ *     tags: [Workflow]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: q
+ *         schema: { type: string, maxLength: 120 }
+ *         description: اسم طالب / رقم معاملة / اسم عملية
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [all, pending_pickup, in_progress, completed, rejected, active]
+ *           default: all
+ *       - in: query
+ *         name: process_name
+ *         schema: { type: string }
+ *       - in: query
+ *         name: id_process
+ *         schema: { type: string }
+ *       - in: query
+ *         name: cursor
+ *         schema: { type: string }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 20, maximum: 70 }
+ *     responses:
+ *       200:
+ *         description: نتائج البحث — نفس شكل قائمة المهام
+ */
+router.get(
+  '/tasks/search',
+  authMiddleware,
+  authorize('GET_ALL_TASK_FOR_EMPLOYEE'),
+  searchEmployeeTasksController
+)
 
 /**
 
