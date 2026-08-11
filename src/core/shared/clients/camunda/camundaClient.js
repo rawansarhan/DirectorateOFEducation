@@ -140,7 +140,12 @@ class CamundaClient {
         definitionId: def.id
       }
     } catch (err) {
-      console.error('CAMUNDA ERROR:', err.response?.data || err.message)
+      const exceptionLogger = require('../../../logging/exceptionLogger')
+      exceptionLogger.error({
+        message: 'camunda_deploy_failed',
+        err,
+        camunda_response: err.response?.data || null
+      })
 
       if (err.code === 'VALIDATION_ERROR' || err.statusCode) {
         throw err

@@ -21,7 +21,7 @@ function formatValidationError (error) {
 }
 
 // ================= CREATE =================
-async function createOrganizationService (data) {
+async function createOrganizationService (data, auditContext = {}) {
   const { error, value } = ValidateCreateOrganization(data)
 
   if (error) {
@@ -51,6 +51,27 @@ async function createOrganizationService (data) {
   }
 
   const organization = await organizationRepository.create(toCreatePayload(input))
+
+  const {
+    auditSuccess
+  } = require('../../../../core/security/safeAudit')
+  const {
+    AUDIT_ACTIONS
+  } = require('../../../../core/security/auditActions')
+
+  await auditSuccess({
+    userId: auditContext.actorUserId || null,
+    action: AUDIT_ACTIONS.ORGANIZATION_CREATED,
+    resourceType: 'organization',
+    resourceId: organization.id,
+    ipAddress: auditContext.ip || null,
+    userAgent: auditContext.userAgent || null,
+    details: {
+      organizationId: organization.id,
+      name: organization.name,
+      parent_id: organization.parent_id ?? null
+    }
+  })
 
   return toDTO(organization)
 }

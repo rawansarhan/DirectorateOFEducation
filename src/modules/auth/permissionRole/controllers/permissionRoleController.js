@@ -2,6 +2,7 @@
 
 const asyncHandler = require('../../../../core/middleware/asyncHandler')
 const ApiResponder = require('../../../../core/utils/apiResponder')
+const { getClientMeta } = require('../../../../core/security/securityConfig')
 const {
   listPermissions,
   listPermissionsByAudience,
@@ -9,6 +10,15 @@ const {
   createRolePermissions,
   updateRolePermissions
 } = require('../services/permissionRoleService')
+
+function buildAuditContext (req) {
+  const meta = getClientMeta(req)
+  return {
+    actorUserId: req.user?.id || null,
+    ip: meta.ip,
+    userAgent: meta.userAgent
+  }
+}
 
 const listPermissionsController = asyncHandler(async (req, res) => {
   try {
@@ -64,7 +74,7 @@ const getRolePermissionsController = asyncHandler(async (req, res) => {
 
 const createRolePermissionsController = asyncHandler(async (req, res) => {
   try {
-    const result = await createRolePermissions(req.body)
+    const result = await createRolePermissions(req.body, buildAuditContext(req))
     return ApiResponder.createdResponse(res, result.data, result.message)
   } catch (err) {
     return ApiResponder.error(res, {
@@ -77,7 +87,7 @@ const createRolePermissionsController = asyncHandler(async (req, res) => {
 
 const updateRolePermissionsController = asyncHandler(async (req, res) => {
   try {
-    const result = await updateRolePermissions(req.body)
+    const result = await updateRolePermissions(req.body, buildAuditContext(req))
     return ApiResponder.okResponse(res, result.data, result.message)
   } catch (err) {
     return ApiResponder.error(res, {

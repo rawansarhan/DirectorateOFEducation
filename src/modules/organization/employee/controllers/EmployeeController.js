@@ -1,5 +1,6 @@
 const asyncHandler = require('../../../../core/middleware/asyncHandler')
 const ApiResponder = require('../../../../core/utils/apiResponder')
+const { getClientMeta } = require('../../../../core/security/securityConfig')
 
 const {
   getAllEmployeesService,
@@ -92,7 +93,12 @@ const getUsersByOrgRoleDept = asyncHandler(async (req, res) => {
 // ================= UPDATE =================
 const updateEmployee = asyncHandler(async (req, res) => {
   try {
-    const result = await updateEmployeeService(req.body, req.params.id)
+    const meta = getClientMeta(req)
+    const result = await updateEmployeeService(req.body, req.params.id, {
+      actorUserId: req.user?.id || null,
+      ip: meta.ip,
+      userAgent: meta.userAgent
+    })
     return ApiResponder.okResponse(res, result, 'تم تعديل بيانات الموظف بنجاح')
   } catch (err) {
     return ApiResponder.error(res, { message: err.message, statusCode: err.statusCode || 400 })

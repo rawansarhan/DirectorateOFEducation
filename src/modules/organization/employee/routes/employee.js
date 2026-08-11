@@ -66,10 +66,10 @@ router.get(
  * @swagger
  * /api/employees/search:
  *   get:
- *     summary: بحث الموظفين (Cursor Pagination)
+ *     summary: بحث الموظفين (موظف — Cursor)
  *     description: |
- *       بحث بالاسم / المستخدم / البريد / الوطني مع ترقيم cursor.
- *       استخدم `pagination.next_cursor` للصفحة التالية. يدعم `q` أو `search`.
+ *       **Auth:** Bearer + صلاحية موظف `GET_ORGANIZATIONAL_STRUCTURE` (`type=employee`).
+ *       للأدمن استخدم `/api/employees/admin/search`.
  *     tags: [Employee]
  *     security:
  *       - bearerAuth: []
@@ -77,7 +77,6 @@ router.get(
  *       - in: query
  *         name: q
  *         schema: { type: string, maxLength: 100 }
- *         description: نص البحث (بديل عن search)
  *       - in: query
  *         name: search
  *         schema: { type: string, maxLength: 100 }
@@ -90,13 +89,47 @@ router.get(
  *     responses:
  *       200:
  *         description: قائمة الموظفين المطابقة
- *       401:
- *         description: Unauthorized
  *       403:
  *         description: Forbidden
  */
 router.get(
   '/search',
+  authMiddleware,
+  authorize('GET_ORGANIZATIONAL_STRUCTURE'),
+  searchEmployees
+)
+
+/**
+ * @swagger
+ * /api/employees/admin/search:
+ *   get:
+ *     summary: بحث الموظفين (أدمن — Cursor)
+ *     description: |
+ *       **Auth:** Bearer + صلاحية أدمن `ORGANIZATIONAL_STRUCTURE_CREATE` (`type=admin`).
+ *     tags: [Employee]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: q
+ *         schema: { type: string, maxLength: 100 }
+ *       - in: query
+ *         name: search
+ *         schema: { type: string, maxLength: 100 }
+ *       - in: query
+ *         name: cursor
+ *         schema: { type: string }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 20, maximum: 70 }
+ *     responses:
+ *       200:
+ *         description: قائمة الموظفين المطابقة
+ *       403:
+ *         description: Forbidden
+ */
+router.get(
+  '/admin/search',
   authMiddleware,
   authorize('ORGANIZATIONAL_STRUCTURE_CREATE'),
   searchEmployees

@@ -75,7 +75,7 @@ function sortAuthProcessesByPriority (processes = []) {
  * - is_complaint=false → type_trans_id مطلوب (معاملة عادية)
  * - بعد الإنشاء: مسح كاش قوائم المعاملات
  */
-async function createProcessDefinitionService (data) {
+async function createProcessDefinitionService (data, auditContext = {}) {
   console.log(`${LOG_PREFIX} createProcessDefinition name=${data.name}`)
 
   const { error } = createProcessDefinitionSchema.validate(data, {
@@ -156,6 +156,30 @@ async function createProcessDefinitionService (data) {
   )
   await invalidateAllProcessLists()
   await invalidateProcessDefinitionsWithType()
+
+  const {
+    auditSuccess
+  } = require('../../../../core/security/safeAudit')
+  const {
+    AUDIT_ACTIONS
+  } = require('../../../../core/security/auditActions')
+
+  await auditSuccess({
+    userId: auditContext.actorUserId || null,
+    action: AUDIT_ACTIONS.PROCESS_CREATED,
+    resourceType: 'process_definition',
+    resourceId: process.id,
+    ipAddress: auditContext.ip || null,
+    userAgent: auditContext.userAgent || null,
+    details: {
+      processDefinitionId: process.id,
+      code: process.code,
+      is_complaint: isComplaint,
+      type_trans_id: process.type_trans_id,
+      organization_id: process.organization_id,
+      camunda_process_key: process.camunda_process_key
+    }
+  })
 
   return process
 }
@@ -401,7 +425,7 @@ async function getProcessesByTypeForAdmin (typeTransID, paginationInput) {
   }
 }
 
-async function updateProcessActiveStatus (processId, isActive) {
+async function updateProcessActiveStatus (processId, isActive, auditContext = {}) {
   const numericProcessId = Number(processId)
   if (!Number.isInteger(numericProcessId) || numericProcessId < 1) {
     throw new Error('معرّف العملية غير صالح')
@@ -416,11 +440,34 @@ async function updateProcessActiveStatus (processId, isActive) {
     throw new Error('العملية غير موجودة')
   }
 
+  const previousActive = Boolean(process.is_active)
+
   await processRepository.update(numericProcessId, { is_active: isActive })
 
   await invalidateAllProcessLists()
   await invalidateProcessDefinitionsWithType()
   await invalidateProcessDefinitionDetails(numericProcessId)
+
+  const {
+    auditSuccess
+  } = require('../../../../core/security/safeAudit')
+  const {
+    AUDIT_ACTIONS
+  } = require('../../../../core/security/auditActions')
+
+  await auditSuccess({
+    userId: auditContext.actorUserId || null,
+    action: AUDIT_ACTIONS.PROCESS_STATUS_CHANGED,
+    resourceType: 'process_definition',
+    resourceId: numericProcessId,
+    ipAddress: auditContext.ip || null,
+    userAgent: auditContext.userAgent || null,
+    details: {
+      processDefinitionId: numericProcessId,
+      before: { is_active: previousActive },
+      after: { is_active: isActive }
+    }
+  })
 
   return {
     process_definition_id: numericProcessId,
@@ -579,7 +626,8 @@ async function getProcessDetailsWithValidation (processId) {
 
 async function reviewProcess (
   processId,
-  decision
+  decision,
+  auditContext = {}
 ) {
   const decisionMap = {
     APPROVE: 'APPROVED',
@@ -597,6 +645,13 @@ async function reviewProcess (
   if (!process) {
     throw new Error('العملية غير موجودة')
   }
+
+  const {
+    auditSuccess
+  } = require('../../../../core/security/safeAudit')
+  const {
+    AUDIT_ACTIONS
+  } = require('../../../../core/security/auditActions')
 
   // رفض → حذف قسري لـ process_definition (CASCADE للمراحل والإعدادات)
   if (decision === 'REJECT') {
@@ -621,6 +676,21 @@ async function reviewProcess (
     await invalidateProcessDefinitionsWithType()
     await invalidateProcessDefinitionDetails(processId)
 
+    await auditSuccess({
+      userId: auditContext.actorUserId || null,
+      action: AUDIT_ACTIONS.PROCESS_REVIEWED,
+      resourceType: 'process_definition',
+      resourceId: processId,
+      ipAddress: auditContext.ip || null,
+      userAgent: auditContext.userAgent || null,
+      details: {
+        decision: 'REJECT',
+        deleted: true,
+        processDefinitionId: Number(processId),
+        code: process.code || null
+      }
+    })
+
     return {
       message: 'تم رفض العملية وحذفها نهائياً',
       deleted: true,
@@ -644,6 +714,22 @@ async function reviewProcess (
   await invalidateAllProcessLists()
   await invalidateProcessDefinitionsWithType()
   await invalidateProcessDefinitionDetails(processId)
+
+  await auditSuccess({
+    userId: auditContext.actorUserId || null,
+    action: AUDIT_ACTIONS.PROCESS_REVIEWED,
+    resourceType: 'process_definition',
+    resourceId: processId,
+    ipAddress: auditContext.ip || null,
+    userAgent: auditContext.userAgent || null,
+    details: {
+      decision: 'APPROVE',
+      deleted: false,
+      processDefinitionId: Number(processId),
+      approval_status: approvalStatus,
+      is_active: updatePayload.is_active
+    }
+  })
 
   return {
     message: 'تمت الموافقة على العملية',

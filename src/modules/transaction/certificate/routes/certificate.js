@@ -7,6 +7,7 @@ const {
   getCertificateController,
   uploadFinalDocumentController,
   getFinalDocumentController,
+  listSourceDocumentsController,
   deleteFinalDocumentController,
   listMyFinalDocumentsController
 } = require('../controllers/transactionCertificateController')
@@ -131,29 +132,18 @@ router.get(
  *   get:
  *     summary: بيانات الشهادة للطباعة (transaction_history)
  *     description: |
- *       **الترتيب المقترح:** 1) هذا الـ API → 2) الفرونت يبني PDF → 3) POST final-document
+ *       **بيانات للطباعة/العرض — ليس ملف PDF نفسه.**
  *
- *       يجمع كل ما يحتاجه الفرونت:
- *       - `transaction_history` (process_name + applicant + stages)
- *       - `transaction_history`: مراحل USER_TASK فقط؛ ملف GENERATE_PDF داخل
- *         `templates[].value` (`id_template` + `value` فقط)
- *       - `signers` سلسلة التواقيع مرتبة: من وقّع كل مرحلة
- *         (الاسم الأول/الأخير، اسم الأب، اسم الأم، الرقم الوطني)
- *       - `final_document` إن وُجدت
+ *       يجمع:
+ *       - `transaction_history` + `signers`
+ *       - `final_document` **metadata فقط** إن كانت محفوظة مسبقاً
+ *         (`file_path` / `file_url`) — لا يولّد ولا يبثّ الملف.
  *
- *       ملاحظة: لا يتضمّن هذا الرد أي بيانات QR / سلسلة نزاهة.
+ *       لتوليد/جلب PDF النهائي استخدم:
+ *       `GET /api/transaction/{id}/source-documents` ثم
+ *       `GET /api/transaction/{id}/final-document?document_instance_ids=...&document_signature_ids=...`
  *
  *       **Auth:** Bearer + صلاحية `VIEW_HISTORY_TRANSACTION`
- *       **الحالة:** أي حالة — يعرض `transaction_history` المتاح.
- *       `completed_at` يكون `null` إن لم تكن completed؛ `final_document` إن وُجدت فقط.
- *
- *       **شكل data:**
- *       - transaction_id, status, process_name, process_priority
- *       - submitted_at, completed_at
- *       - signers: [{ signature_order, stage_code, stage_name, signed_at, user_id,
- *         first_name, last_name, father_name, mother_name, national_id }]
- *       - transaction_history: { process_name, priority, data }
- *       - final_document: سجل الوثيقة أو `{ available: false, message }`
  *     tags: [Certificate & Integrity Chain]
  *     security:
  *       - bearerAuth: []
@@ -185,6 +175,36 @@ router.get(
   authMiddleware,
   authorize('VIEW_HISTORY_TRANSACTION'),
   getCertificateController
+)
+
+/**
+ * @swagger
+ * /api/transaction/{transactionId}/source-documents:
+ *   get:
+ *     summary: عرض document_instance + document_signature لمعاملة
+ *     description: |
+ *       قائمة الملفات المرشّحة لبناء الوثيقة النهائية.
+ *       استخدم الـ `id` منها في `GET .../final-document`.
+ *
+ *       **Auth:** Bearer + `VIEW_CREATE_FINAL_DOCUMENT`
+ *     tags: [Certificate & Integrity Chain]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: transactionId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: قوائم document_instances و document_signatures
+ */
+router.get(
+  '/:transactionId/source-documents',
+  authMiddleware,
+  authorize('VIEW_CREATE_FINAL_DOCUMENT'),
+  listSourceDocumentsController
 )
 
 /**
@@ -335,20 +355,24 @@ router.post(
  * @swagger
  * /api/transaction/{transactionId}/final-document:
  *   get:
- *     summary: جلب الوثيقة النهائية (أو توليدها إن لم تكن محفوظة)
+ *     summary: جلب الوثيقة النهائية أو توليدها حسب IDs مختارة
  *     description: |
- *       يجلب الوثيقة النهائية اعتماداً على `transaction_id` فقط — **بدون تقييد بمالك المعاملة**.
+ *       **بدون query IDs:** يعيد الوثيقة المحفوظة فقط (إن وُجدت).
  *
- *       **السلوك:**
- *       - إن وُجدت وثيقة نهائية محفوظة → تُعاد كما هي.
- *       - إن لم توجد والمعاملة `completed` → يولّدها السيرفر (دمج المرفقات + ملفات
- *         GENERATE_PDF مع صفحة غلاف تحمل رمز QR) ثم يعيدها.
- *       - إن كانت محفوظة بدون QR وسلسلة التواقيع جاهزة → يُعاد توليدها لتتضمّن QR.
- *       - إن لم تكن المعاملة `completed` ولا توجد وثيقة محفوظة → `404`.
+ *       **مع query (موصى به للخلط):**
+ *       `file_order=signature:3,instance:2,signature:1,instance:5`
+ *       ⇒ بعد الغلاف يُدمَج بنفس التسلسل المخلوط (مو كل signatures ثم كل instances).
  *
- *       **Auth:** Bearer + صلاحية `VIEW_CREATE_FINAL_DOCUMENT`
+ *       اختصار: `file_order=s:3,i:2,s:1,i:5`
  *
- *       ملاحظة: **POST** على نفس المسار يبقى مقتصراً على مالك المعاملة.
+ *       **بديل قديم (مجموعتان منفصلتان):**
+ *       `document_signature_ids=...&document_instance_ids=...`
+ *       (كل نوع ورا بعض: signatures ثم instances)
+ *
+ *       يمكن إرسال `file_order=` فارغ → غلاف + QR فقط
+ *
+ *       المعاملة يجب أن تكون `completed` عند التوليد.
+ *       **Auth:** Bearer + `VIEW_CREATE_FINAL_DOCUMENT`
  *     tags: [Certificate & Integrity Chain]
  *     security:
  *       - bearerAuth: []
@@ -360,26 +384,31 @@ router.post(
  *           type: integer
  *           minimum: 1
  *         example: 12
+ *       - in: query
+ *         name: file_order
+ *         schema:
+ *           type: string
+ *         description: ترتيب مخلوط signature:ID,instance:ID,...
+ *         example: signature:3,instance:2,signature:1
+ *       - in: query
+ *         name: document_instance_ids
+ *         schema:
+ *           type: string
+ *         description: IDs مفصولة بفواصل (يُستخدم إن لم يُرسل file_order)
+ *         example: 2,5
+ *       - in: query
+ *         name: document_signature_ids
+ *         schema:
+ *           type: string
+ *         description: IDs مفصولة بفواصل (يُستخدم إن لم يُرسل file_order)
+ *         example: 3,1
  *     responses:
  *       200:
  *         description: تم جلب/توليد الوثيقة النهائية بنجاح
- *         content:
- *           application/json:
- *             schema:
- *               allOf:
- *                 - $ref: '#/components/schemas/ApiSuccessResponse'
- *                 - type: object
- *                   properties:
- *                     data:
- *                       $ref: '#/components/schemas/FinalDocumentRecord'
  *       403:
  *         description: لا تملك صلاحية VIEW_CREATE_FINAL_DOCUMENT
  *       404:
- *         description: المعاملة غير موجودة أو لا توجد وثيقة نهائية ولا يمكن توليدها
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ApiErrorResponse'
+ *         description: لا توجد وثيقة محفوظة ولم يُطلب توليد
  */
 router.get(
   '/:transactionId/final-document',

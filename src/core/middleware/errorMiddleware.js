@@ -9,13 +9,45 @@ const {
   formatClientErrorMessage,
   buildErrorPayload
 } = require('../utils/errorMessageHelper');
+const exceptionLogger = require('../logging/exceptionLogger');
+const { getClientIp } = require('../security/securityConfig');
+
+function shouldLogException (err, statusCode) {
+  if (!err) {
+    return false;
+  }
+
+  if (statusCode >= HTTP_STATUS.INTERNAL_SERVER_ERROR) {
+    return true;
+  }
+
+  if (err.name === 'ValidationError' || err.name === 'UnauthorizedError') {
+    return false;
+  }
+
+  if (err.statusCode === HTTP_STATUS.NOT_FOUND) {
+    return false;
+  }
+
+  return false;
+}
+
+function logUnexpected (err, req, statusCode) {
+  exceptionLogger.error({
+    message: err?.message || 'unexpected_error',
+    err,
+    user_id: req.user?.id || null,
+    method: req.method,
+    path: req.originalUrl || req.url,
+    statusCode,
+    ip: getClientIp(req)
+  });
+}
 
 const errorHandler = (err, req, res, next) => {
   if (res.headersSent) {
     return next(err);
   }
-
-  console.error('[error]', err.stack || err);
 
   if (err.name === 'ValidationError') {
     return ApiResponder.unprocessableResponse(
@@ -48,6 +80,10 @@ const errorHandler = (err, req, res, next) => {
     );
     const payload = buildErrorPayload(err);
 
+    if (shouldLogException(err, statusCode)) {
+      logUnexpected(err, req, statusCode);
+    }
+
     return ApiResponder.errorResponse(
       res,
       clientMessage,
@@ -56,6 +92,8 @@ const errorHandler = (err, req, res, next) => {
       payload.details ? { errors: payload.details } : null
     );
   }
+
+  logUnexpected(err, req, HTTP_STATUS.INTERNAL_SERVER_ERROR);
 
   return ApiResponder.internalErrorResponse(
     res,

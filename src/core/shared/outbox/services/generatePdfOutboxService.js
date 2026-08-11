@@ -62,7 +62,13 @@ async function failGeneratePdfEvent (event, error) {
 
   if (nextPayload._retry_count >= RETRY_MAX_ATTEMPTS) {
     handleGeneratePdfFailure(nextPayload, error).catch(err => {
-      console.error('[GeneratePdfFailure] handler error:', err.message)
+      const exceptionLogger = require('../../../logging/exceptionLogger')
+      exceptionLogger.error({
+        message: 'generate_pdf_failure_handler_error',
+        err,
+        transaction_id: nextPayload.transaction_id || null,
+        outbox_event_id: event.id
+      })
     })
   }
 

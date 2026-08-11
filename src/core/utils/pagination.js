@@ -160,6 +160,23 @@ function decodeCursor (rawValue) {
       }
     }
 
+    // Audit logs — created_at DESC, id DESC
+    if (kind === 'audit') {
+      if (
+        !createdAt ||
+        !Number.isFinite(id) ||
+        Number.isNaN(new Date(createdAt).getTime())
+      ) {
+        throw new Error('invalid audit cursor fields')
+      }
+
+      return {
+        k: 'audit',
+        t: new Date(createdAt).toISOString(),
+        id
+      }
+    }
+
     // Name + id ASC (process / organization / department search)
     if (kind === 'proc' || kind === 'org' || kind === 'dept') {
       const name = parsed.n

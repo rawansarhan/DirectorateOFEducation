@@ -54,7 +54,7 @@ async function invalidateDepartmentStructureCaches ({
 }
 
 // ================= CREATE =================
-async function createDepartmentService (data) {
+async function createDepartmentService (data, auditContext = {}) {
   const { error, value } = ValidateCreateDepartment(data)
 
   if (error) {
@@ -87,6 +87,28 @@ async function createDepartmentService (data) {
     organizationId: input.organization_id,
     departmentId: department.id,
     parentId: input.parent_id ?? null
+  })
+
+  const {
+    auditSuccess
+  } = require('../../../../core/security/safeAudit')
+  const {
+    AUDIT_ACTIONS
+  } = require('../../../../core/security/auditActions')
+
+  await auditSuccess({
+    userId: auditContext.actorUserId || null,
+    action: AUDIT_ACTIONS.DEPARTMENT_CREATED,
+    resourceType: 'department',
+    resourceId: department.id,
+    ipAddress: auditContext.ip || null,
+    userAgent: auditContext.userAgent || null,
+    details: {
+      departmentId: department.id,
+      name: department.name,
+      organization_id: department.organization_id,
+      parent_id: department.parent_id ?? null
+    }
   })
 
   return toDTO(department)
@@ -169,7 +191,7 @@ async function updateDepartmentService (data, id) {
 }
 
 // ================= TOGGLE STATUS =================
-async function toggleDepartmentStatusService (id) {
+async function toggleDepartmentStatusService (id, auditContext = {}) {
   const departmentId = parseInt(id, 10)
 
   if (!Number.isInteger(departmentId) || departmentId < 1) {
@@ -186,6 +208,8 @@ async function toggleDepartmentStatusService (id) {
     throw err
   }
 
+  const previousActive = Boolean(department.is_active)
+
   const updated = await departmentRepository.updateInstance(department, {
     is_active: !department.is_active
   })
@@ -194,6 +218,27 @@ async function toggleDepartmentStatusService (id) {
     organizationId: department.organization_id,
     departmentId,
     parentId: department.parent_id
+  })
+
+  const {
+    auditSuccess
+  } = require('../../../../core/security/safeAudit')
+  const {
+    AUDIT_ACTIONS
+  } = require('../../../../core/security/auditActions')
+
+  await auditSuccess({
+    userId: auditContext.actorUserId || null,
+    action: AUDIT_ACTIONS.DEPARTMENT_STATUS_CHANGED,
+    resourceType: 'department',
+    resourceId: departmentId,
+    ipAddress: auditContext.ip || null,
+    userAgent: auditContext.userAgent || null,
+    details: {
+      departmentId,
+      before: { is_active: previousActive },
+      after: { is_active: Boolean(updated.is_active) }
+    }
   })
 
   return toDTO(updated)

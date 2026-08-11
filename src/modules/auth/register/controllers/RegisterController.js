@@ -12,7 +12,12 @@ const ApiResponder = require('../../../../core/utils/apiResponder')
 
 const registerEmployeeUser = async (req, res) => {
   try {
-    const result = await registerEmployee(req.body)
+    const meta = getClientMeta(req)
+    const result = await registerEmployee(req.body, {
+      actorUserId: req.user?.id || null,
+      ip: meta.ip,
+      userAgent: meta.userAgent
+    })
     return ApiResponder.okResponse(res, result, 'تم تسجيل الموظف بنجاح')
   } catch (err) {
     return handleControllerError(res, err, 400)
@@ -21,7 +26,12 @@ const registerEmployeeUser = async (req, res) => {
 
 const registerCitizenUser = async (req, res) => {
   try {
-    const result = await registerCitizen(req.body)
+    //اضفنا الميتا داتا لتحقق من المستخدم الذي يقوم بالتسجيل 
+    const meta = getClientMeta(req)
+    const result = await registerCitizen(req.body, {
+      ip: meta.ip,
+      userAgent: meta.userAgent
+    })
     return ApiResponder.okResponse(res, result, 'تم تسجيل المواطن بنجاح')
   } catch (err) {
     return handleControllerError(res, err, 400)

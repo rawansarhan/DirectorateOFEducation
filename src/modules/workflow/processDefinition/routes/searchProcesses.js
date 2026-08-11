@@ -4,7 +4,8 @@ const express = require('express')
 const router = express.Router()
 
 const {
-  searchProcessDefinitionsController
+  searchProcessDefinitionsController,
+  searchProcessDefinitionsByOrganizationController
 } = require('../controllers/processSearchController')
 const { authMiddleware, authorize } = require('../../../../core/middleware/authMiddleware')
 const { createRateLimiter } = require('../../../../core/security/rateLimitMiddleware')
@@ -19,15 +20,11 @@ const searchLimiter = createRateLimiter({
  * @swagger
  * /api/process_definitions/search:
  *   get:
- *     summary: بحث تعاريف العمليات / المعاملات
+ *     summary: بحث تعاريف العمليات (أدمن)
  *     description: |
- *       بحث بسيط وآمن بالاسم أو الرمز أو مفتاح Camunda مع **Cursor Pagination**.
- *       الافتراضي: `approval_status=APPROVED` و `is_active=true`.
- *
- *       **الترقيم:** أرسل الطلب الأول بدون `cursor`، ثم مرّر `pagination.next_cursor`
- *       في `cursor` للصفحة التالية.
- *
- *       **Auth:** Bearer + `GET_ORGANIZATIONAL_STRUCTURE`
+ *       **Auth:** `PROCESS_PUBLISH_MANAGE` (`type=admin`).
+ *       فلاتر واسعة بما فيها `approval_status` و `include_inactive`.
+ *       للموظف استخدم `/api/process_definitions/search/org`.
  *     tags: [Process Definition]
  *     security:
  *       - bearerAuth: []
@@ -35,7 +32,6 @@ const searchLimiter = createRateLimiter({
  *       - in: query
  *         name: q
  *         schema: { type: string, maxLength: 120 }
- *         example: إجازة
  *       - in: query
  *         name: name
  *         schema: { type: string }
@@ -51,54 +47,86 @@ const searchLimiter = createRateLimiter({
  *       - in: query
  *         name: is_complaint
  *         schema: { type: boolean }
+ *         description: أيضاً يُقبل alias `is_complete`
  *       - in: query
  *         name: include_inactive
  *         schema: { type: boolean }
- *         description: عند true لا يُفرض is_active=true
  *       - in: query
  *         name: approval_status
  *         schema: { type: string, enum: [PENDING, APPROVED, REJECTED] }
  *       - in: query
  *         name: cursor
  *         schema: { type: string }
- *         description: cursor من الصفحة السابقة (`pagination.next_cursor`)
  *       - in: query
  *         name: limit
  *         schema: { type: integer, default: 20, maximum: 70 }
  *     responses:
  *       200:
- *         description: نتائج البحث (Cursor Pagination)
- *         content:
- *           application/json:
- *             example:
- *               success: true
- *               status_code: 200
- *               message: تم جلب نتائج البحث بنجاح
- *               data:
- *                 items:
- *                   - id: 6
- *                     name: طلب إجازة
- *                     code: LEAVE_01
- *                     is_active: true
- *                     approval_status: APPROVED
- *                     type_trans_name: إجازات
- *                 pagination:
- *                   limit: 20
- *                   cursor: null
- *                   next_cursor: eyJrIjoicHJvYyIsIm4iOiLYqtmI2KjbjCDIp9mE2K_ZhdivIiwiaWQiOjZ9
- *                   has_next: true
- *                   has_prev: false
- *       401:
- *         description: Unauthorized
+ *         description: نتائج البحث (Cursor)
  *       403:
  *         description: Forbidden
  */
 router.get(
   '/search',
   authMiddleware,
-  authorize('GET_ORGANIZATIONAL_STRUCTURE'),
+  authorize('PROCESS_PUBLISH_MANAGE'),
   searchLimiter,
   searchProcessDefinitionsController
+)
+
+/**
+ * @swagger
+ * /api/process_definitions/search/org:
+ *   get:
+ *     summary: بحث تعاريف العمليات ضمن مؤسسة (موظف)
+ *     description: |
+ *       **Auth:** `GET_ORGANIZATIONAL_STRUCTURE` (`type=employee`).
+ *       **`organization_id` إجباري** — النتائج محصورة بهذه المؤسسة فقط.
+ *       افتراضي: `approval_status=APPROVED` و `is_active=true`.
+ *     tags: [Process Definition]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: organization_id
+ *         required: true
+ *         schema: { type: integer }
+ *       - in: query
+ *         name: q
+ *         schema: { type: string, maxLength: 120 }
+ *       - in: query
+ *         name: name
+ *         schema: { type: string }
+ *       - in: query
+ *         name: code
+ *         schema: { type: string }
+ *       - in: query
+ *         name: type_trans_id
+ *         schema: { type: integer }
+ *       - in: query
+ *         name: is_complaint
+ *         schema: { type: boolean }
+ *         description: أيضاً alias `is_complete`
+ *       - in: query
+ *         name: cursor
+ *         schema: { type: string }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 20, maximum: 70 }
+ *     responses:
+ *       200:
+ *         description: نتائج البحث (Cursor)
+ *       400:
+ *         description: organization_id مفقود
+ *       403:
+ *         description: Forbidden
+ */
+router.get(
+  '/search/org',
+  authMiddleware,
+  authorize('GET_ORGANIZATIONAL_STRUCTURE'),
+  searchLimiter,
+  searchProcessDefinitionsByOrganizationController
 )
 
 module.exports = router

@@ -223,7 +223,7 @@ async function getUsersByOrgRoleDeptService (query = {}) {
 }
 
 // ================= UPDATE =================
-async function updateEmployeeService (data, id) {
+async function updateEmployeeService (data, id, auditContext = {}) {
   const employeeId = parseId(id)
 
   const { error, value } = validateUpdateEmployee(data)
@@ -233,6 +233,14 @@ async function updateEmployeeService (data, id) {
   }
 
   const input = toUpdateInput(value)
+  const changedFields = Object.keys(input).filter((key) => {
+    return input[key] !== undefined && key !== 'private_key'
+  }).map((key) => {
+    if (key === 'password') return 'password'
+    if (key === 'pin') return 'pin'
+    if (key === 'public_key') return 'public_key'
+    return key
+  })
 
   const sequelize = employeeRepository.getSequelize()
   const transaction = await sequelize.transaction()
@@ -378,6 +386,33 @@ async function updateEmployeeService (data, id) {
   if (input.department_id !== undefined) {
     await invalidateDepartmentOverview(input.department_id)
   }
+
+  const {
+    auditSuccess
+  } = require('../../../../core/security/safeAudit')
+  const {
+    AUDIT_ACTIONS
+  } = require('../../../../core/security/auditActions')
+
+  await auditSuccess({
+    userId: auditContext.actorUserId || null,
+    action: AUDIT_ACTIONS.EMPLOYEE_UPDATED,
+    resourceType: 'user',
+    resourceId: employeeId,
+    ipAddress: auditContext.ip || null,
+    userAgent: auditContext.userAgent || null,
+    details: {
+      targetUserId: employeeId,
+      changedFields,
+      passwordChanged: Boolean(input.password),
+      pinChanged: Boolean(input.pin),
+      publicKeyRotated: input.public_key !== undefined,
+      roleReassigned: input.organization_id !== undefined,
+      organization_id: input.organization_id,
+      department_id: input.department_id,
+      role_id: input.role_id
+    }
+  })
 
   // أعد قراءة الموظف بكامل علاقاته بعد التحديث
   const updated = await employeeRepository.findEmployeeById(employeeId)

@@ -44,7 +44,12 @@ async function tick () {
       )
     }
   } catch (err) {
-    console.error(`${LOG_PREFIX} error:`, err.message)
+    const exceptionLogger = require('../logging/exceptionLogger')
+    exceptionLogger.error({
+      message: 'service_task_sync_job_failed',
+      err,
+      component: 'serviceTaskSyncJob'
+    })
   } finally {
     isRunning = false
   }
@@ -57,9 +62,13 @@ function startServiceTaskSyncJob () {
   }
 
   if (!cron.validate(SERVICE_TASK_SYNC_CRON)) {
-    console.error(
-      `${LOG_PREFIX} invalid cron "${SERVICE_TASK_SYNC_CRON}" — job not started`
-    )
+    const exceptionLogger = require('../logging/exceptionLogger')
+    exceptionLogger.error({
+      message: 'service_task_sync_invalid_cron',
+      err: new Error(`invalid cron "${SERVICE_TASK_SYNC_CRON}"`),
+      component: 'serviceTaskSyncJob',
+      cron: SERVICE_TASK_SYNC_CRON
+    })
     return
   }
 

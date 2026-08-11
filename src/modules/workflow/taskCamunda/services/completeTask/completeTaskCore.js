@@ -382,6 +382,33 @@ async function completeTaskCore ({
       dbTransaction
     })
 
+    const {
+      auditSuccess
+    } = require('../../../../../core/security/safeAudit')
+    const {
+      AUDIT_ACTIONS
+    } = require('../../../../../core/security/auditActions')
+
+    await auditSuccess({
+      userId,
+      action: isReject
+        ? AUDIT_ACTIONS.TASK_REJECTED
+        : AUDIT_ACTIONS.TASK_COMPLETED,
+      resourceType: 'task',
+      resourceId: task.id,
+      ipAddress: clientMeta.ip || null,
+      userAgent: clientMeta.userAgent || null,
+      details: {
+        transactionId: transaction.id,
+        stageCode: stage.code,
+        stageId: stage.id,
+        workflowStatus,
+        isAutoComplete: Boolean(isAutoComplete),
+        decision: isReject ? 'REJECT' : 'APPROVE',
+        nextStageId: nextStageId || null
+      }
+    })
+
     return buildCompleteResponse({
       stage,
       stageSnapshot,
@@ -411,10 +438,14 @@ async function completeTaskCore ({
           taskId: task.id
         })
       } catch (persistErr) {
-        console.error(
-          '[CompleteTask] failed to persist recovery checkpoint:',
-          persistErr.message
-        )
+        const exceptionLogger = require('../../../../../core/logging/exceptionLogger')
+        exceptionLogger.error({
+          message: 'complete_task_recovery_checkpoint_failed',
+          err: persistErr,
+          user_id: userId,
+          taskId: task?.id,
+          transactionId: transaction?.id
+        })
       }
     }
 

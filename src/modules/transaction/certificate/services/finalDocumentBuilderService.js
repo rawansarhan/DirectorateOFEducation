@@ -53,10 +53,6 @@ const {
   embedUnicodeFont
 } = require('../../document/services/pdfGenerationService')
 const {
-  assessFinalDocumentReadiness,
-  assertReadyForMerge
-} = require('./finalDocumentReadinessService')
-const {
   loadAuthorizedTransaction,
   CERTIFICATE_AUDIENCE
 } = require('./transactionCertificateService')
@@ -133,12 +129,11 @@ function readUploadBytes (storedPath) {
 /**
  * رابط QR النهائي — كل مسح يُصدر رمز تفاصيل جديد (6 أرقام، 5 دقائق).
  * - إن وُجد GENERATE_PDF: الربط على آخر document_instance.
- * - وإلا: ربط على مستوى المعاملة (doc=0) اعتماداً على genesis + سلسلة التواقيع.
+ * - وإلا: ربط على مستوى المعاملة (doc=0) إن وُجد genesis + مفتاح السلطة.
  */
 function buildFinalQr ({
   transaction,
-  generatedInstances = [],
-  hasIntegrityChain = false
+  generatedInstances = []
 }) {
   if (!transaction.genesis_hash || !isAuthorityKeyConfigured()) {
     return null
@@ -147,10 +142,6 @@ function buildFinalQr ({
   const finalInstance = generatedInstances.length
     ? generatedInstances[generatedInstances.length - 1]
     : null
-
-  if (!finalInstance && !hasIntegrityChain) {
-    return null
-  }
 
   const documentInstanceId = finalInstance?.id ?? 0
 
@@ -413,7 +404,14 @@ async function buildCoverPdfBytes ({
 
 async function generateMergedFinalDocument (
   transactionId,
-  { userId = null, force = false, requireOwner = false } = {}
+  {
+    userId = null,
+    force = false,
+    requireOwner = false,
+    documentInstanceIds = null,
+    documentSignatureIds = null,
+    fileOrder = null
+  } = {}
 ) {
   const numericTransactionId = Number.parseInt(transactionId, 10)
 
@@ -431,10 +429,14 @@ async function generateMergedFinalDocument (
     throw createTransactionError('TRANSACTION_NOT_FOUND')
   }
 
+  const selectiveMode =
+    Array.isArray(fileOrder) ||
+    Array.isArray(documentInstanceIds) ||
+    Array.isArray(documentSignatureIds)
+
   // idempotent: إذا وُجدت نسخة نهائية مسبقاً نرجّعها دون إعادة توليد/استبدال
-  // (قراءة مكاشة — تُبطَّل تلقائياً عند توليد/تحديث الوثيقة النهائية)
-  // force=true: يتخطّى ذلك ويعيد التوليد ويستبدل النسخة السابقة
-  const existingFinalDocument = force
+  // force=true أو وضع الاختيار (IDs): يعيد التوليد ويستبدل
+  const existingFinalDocument = (force || selectiveMode)
     ? null
     : await documentFinalTransactionRepository.findByTransactionIdCached(
       numericTransactionId
@@ -462,15 +464,6 @@ async function generateMergedFinalDocument (
     )
   }
 
-  const readiness = await assessFinalDocumentReadiness(numericTransactionId, {
-    userId,
-    requireCompleted: true,
-    flushGeneratePdf: true,
-    requireOwner
-  })
-
-  assertReadyForMerge(readiness)
-
   const [instances, uploadedRows] = await Promise.all([
     documentInstanceRepository.findAllByTransactionId(numericTransactionId),
     documentSignatureRepository.findAllWithSignaturesByTransactionId(
@@ -478,18 +471,107 @@ async function generateMergedFinalDocument (
     )
   ])
 
-  const generatedInstances = instances.filter(item => item.generated_pdf_path)
-  const hasIntegrityChain = Boolean(
-    transaction.genesis_hash &&
-    Number(readiness?.integrity_chain?.total_links || 0) > 0
+  const selectedInstanceIds = Array.isArray(documentInstanceIds)
+    ? documentInstanceIds.map(Number).filter(id => Number.isInteger(id) && id > 0)
+    : null
+  const selectedSignatureIds = Array.isArray(documentSignatureIds)
+    ? documentSignatureIds.map(Number).filter(id => Number.isInteger(id) && id > 0)
+    : null
+
+  const instanceById = new Map(
+    (instances || []).map(row => [Number(row.id), row])
+  )
+  const signatureById = new Map(
+    (uploadedRows || []).map(row => [Number(row.id), row])
   )
 
-  if (!generatedInstances.length && !uploadedRows.length && !hasIntegrityChain) {
-    throw createTransactionError(
-      'VALIDATION_ERROR',
-      'لا توجد وثائق (GENERATE_PDF أو مرفقات) ولا سلسلة تواقيع لبناء الوثيقة النهائية'
-    )
+  /**
+   * ترتيب الدمج كما أرسله الموظف (يسمح بالخلط بين النوعين).
+   * أولوية: fileOrder المخلوط → وإلا مجموعتين منفصلتين.
+   */
+  const orderedFiles = []
+
+  if (selectiveMode && Array.isArray(fileOrder)) {
+    for (const entry of fileOrder) {
+      const kind = entry?.kind === 'instance' ? 'instance' : 'signature'
+      const id = Number(entry?.id)
+
+      if (!Number.isInteger(id) || id < 1) {
+        continue
+      }
+
+      if (kind === 'signature') {
+        const row = signatureById.get(id)
+        if (!row) {
+          throw createTransactionError(
+            'VALIDATION_ERROR',
+            `document_signature id=${id} غير تابع لهذه المعاملة`
+          )
+        }
+        if (isSyntheticSignatureDocumentPath(row.file_path)) {
+          continue
+        }
+        orderedFiles.push({ kind: 'signature', row })
+      } else {
+        const row = instanceById.get(id)
+        if (!row) {
+          throw createTransactionError(
+            'VALIDATION_ERROR',
+            `document_instance id=${id} غير تابع لهذه المعاملة`
+          )
+        }
+        if (!row.generated_pdf_path) {
+          continue
+        }
+        orderedFiles.push({ kind: 'instance', row })
+      }
+    }
+  } else if (selectiveMode) {
+    const missingInstances = (selectedInstanceIds || [])
+      .filter(id => !instanceById.has(id))
+    const missingSignatures = (selectedSignatureIds || [])
+      .filter(id => !signatureById.has(id))
+
+    if (missingInstances.length || missingSignatures.length) {
+      throw createTransactionError(
+        'VALIDATION_ERROR',
+        `معرّفات غير تابعة لهذه المعاملة — instances: [${missingInstances.join(',')}] signatures: [${missingSignatures.join(',')}]`
+      )
+    }
+
+    for (const id of selectedSignatureIds || []) {
+      const row = signatureById.get(id)
+      if (!row || isSyntheticSignatureDocumentPath(row.file_path)) {
+        continue
+      }
+      orderedFiles.push({ kind: 'signature', row })
+    }
+
+    for (const id of selectedInstanceIds || []) {
+      const row = instanceById.get(id)
+      if (!row || !row.generated_pdf_path) {
+        continue
+      }
+      orderedFiles.push({ kind: 'instance', row })
+    }
+  } else {
+    for (const row of uploadedRows || []) {
+      if (isSyntheticSignatureDocumentPath(row.file_path)) {
+        continue
+      }
+      orderedFiles.push({ kind: 'signature', row })
+    }
+    for (const row of instances || []) {
+      if (!row.generated_pdf_path) {
+        continue
+      }
+      orderedFiles.push({ kind: 'instance', row })
+    }
   }
+
+  const generatedInstances = orderedFiles
+    .filter(item => item.kind === 'instance')
+    .map(item => item.row)
 
   const process = transaction.code
     ? await processRepository.findByCode(transaction.code)
@@ -497,8 +579,7 @@ async function generateMergedFinalDocument (
 
   const finalQr = buildFinalQr({
     transaction,
-    generatedInstances,
-    hasIntegrityChain
+    generatedInstances
   })
 
   const mergedPdf = await PDFDocument.create()
@@ -521,35 +602,35 @@ async function generateMergedFinalDocument (
 
   let mergedGenerated = 0
   let mergedUploaded = 0
+  const mergedSignatureIds = []
+  const mergedInstanceIds = []
 
-  // الترتيب: ملفات file_picker المرفوعة أولاً، ثم ملفات GENERATE_PDF
-  for (const row of uploadedRows) {
-    if (isSyntheticSignatureDocumentPath(row.file_path)) {
-      continue
-    }
-
+  // دمج حسب ترتيب orderedFiles فقط (نفس ترتيب IDs الموظف)
+  for (const item of orderedFiles) {
     const before = mergedPdf.getPageCount()
-    await appendFile({
-      mergedPdf,
-      storedPath: row.file_path,
-      label: `uploaded:document#${row.id}`,
-      skipped
-    })
-    if (mergedPdf.getPageCount() > before) {
-      mergedUploaded += 1
-    }
-  }
 
-  for (const instance of generatedInstances) {
-    const before = mergedPdf.getPageCount()
-    await appendFile({
-      mergedPdf,
-      storedPath: instance.generated_pdf_path,
-      label: `generated:instance#${instance.id}`,
-      skipped
-    })
-    if (mergedPdf.getPageCount() > before) {
-      mergedGenerated += 1
+    if (item.kind === 'signature') {
+      await appendFile({
+        mergedPdf,
+        storedPath: item.row.file_path,
+        label: `uploaded:document#${item.row.id}`,
+        skipped
+      })
+      if (mergedPdf.getPageCount() > before) {
+        mergedUploaded += 1
+        mergedSignatureIds.push(Number(item.row.id))
+      }
+    } else {
+      await appendFile({
+        mergedPdf,
+        storedPath: item.row.generated_pdf_path,
+        label: `generated:instance#${item.row.id}`,
+        skipped
+      })
+      if (mergedPdf.getPageCount() > before) {
+        mergedGenerated += 1
+        mergedInstanceIds.push(Number(item.row.id))
+      }
     }
   }
 
@@ -580,6 +661,31 @@ async function generateMergedFinalDocument (
     generatedAt: new Date()
   })
 
+  const {
+    auditSuccess
+  } = require('../../../../core/security/safeAudit')
+  const {
+    AUDIT_ACTIONS
+  } = require('../../../../core/security/auditActions')
+
+  await auditSuccess({
+    userId: userId || null,
+    action: AUDIT_ACTIONS.FINAL_DOCUMENT_GENERATED,
+    resourceType: 'transaction',
+    resourceId: numericTransactionId,
+    details: {
+      transactionId: numericTransactionId,
+      finalDocumentId: saved.id,
+      file_path: saved.file_path,
+      content_hash: contentHash,
+      force: Boolean(force || selectiveMode),
+      document_instance_ids: selectedInstanceIds,
+      document_signature_ids: selectedSignatureIds,
+      mergedGenerated,
+      mergedUploaded
+    }
+  })
+
   return {
     transaction_id: numericTransactionId,
     already_exists: false,
@@ -595,18 +701,19 @@ async function generateMergedFinalDocument (
     },
     final_qr: finalQr || {
       available: false,
-      message: 'لم يتم تضمين رمز QR (لا توجد وثيقة موقّعة أو مفتاح السلطة غير مهيّأ)'
+      message: 'لم يتم تضمين رمز QR (مفتاح السلطة غير مهيّأ أو لا يوجد genesis_hash)'
     },
     merge_summary: {
       generated_documents_merged: mergedGenerated,
       uploaded_files_merged: mergedUploaded,
       total_pages: mergedPdf.getPageCount(),
       skipped,
-      readiness: {
-        ready_for_merge: readiness.ready_for_merge,
-        generate_pdf: readiness.generate_pdf,
-        final_qr: readiness.final_qr
-      }
+      document_signature_ids: mergedSignatureIds,
+      document_instance_ids: mergedInstanceIds,
+      merge_order: orderedFiles.map(item => ({
+        type: item.kind,
+        id: Number(item.row.id)
+      }))
     }
   }
 }

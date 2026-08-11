@@ -32,6 +32,11 @@ const PERMISSIONS = [
     code: 'PERMISSION_MANAGE',
     type: 'admin'
   },
+  {
+    name: 'عرض سجلات التدقيق الأمنية والإدارية',
+    code: 'VIEW_AUDIT_LOGS',
+    type: 'admin'
+  },
 
   // employee
   {
@@ -45,7 +50,7 @@ const PERMISSIONS = [
     type: 'employee'
   },
   {
-    name: 'عرض المستندات النهائية المنشئة للمعاملة',
+    name: 'عرض و انشاءالمستندات النهائية المنشئة للمعاملة',
     code: 'VIEW_CREATE_FINAL_DOCUMENT',
     type: 'employee'
   },

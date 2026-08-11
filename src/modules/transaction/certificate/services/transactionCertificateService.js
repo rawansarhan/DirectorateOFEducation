@@ -194,10 +194,38 @@ async function saveFinalDocument (payload) {
     generatedAt: new Date()
   })
 
+  const {
+    auditSuccess
+  } = require('../../../../core/security/safeAudit')
+  const {
+    AUDIT_ACTIONS
+  } = require('../../../../core/security/auditActions')
+
+  await auditSuccess({
+    userId: input.userId || null,
+    action: AUDIT_ACTIONS.FINAL_DOCUMENT_SAVED,
+    resourceType: 'transaction',
+    resourceId: transaction.id,
+    details: {
+      transactionId: transaction.id,
+      finalDocumentId: saved.id,
+      file_path: saved.file_path,
+      file_size_bytes: saved.file_size_bytes
+    }
+  })
+
   return toFinalDocumentDTO(saved, { includeQrSnapshot: true })
 }
 
-async function getFinalDocument (transactionId, { userId = null } = {}) {
+async function getFinalDocument (
+  transactionId,
+  {
+    userId = null,
+    documentInstanceIds = undefined,
+    documentSignatureIds = undefined,
+    fileOrder = undefined
+  } = {}
+) {
   const numericTransactionId = Number.parseInt(transactionId, 10)
 
   if (!Number.isInteger(numericTransactionId) || numericTransactionId < 1) {
@@ -210,51 +238,185 @@ async function getFinalDocument (transactionId, { userId = null } = {}) {
     throw createTransactionError('TRANSACTION_NOT_FOUND')
   }
 
-  let row = await documentFinalTransactionRepository.findByTransactionIdCached(
+  const selectiveMode =
+    fileOrder !== undefined ||
+    documentInstanceIds !== undefined ||
+    documentSignatureIds !== undefined
+
+  // بدون ترتيب/IDs: قراءة الوثيقة المحفوظة فقط
+  if (!selectiveMode) {
+    const row = await documentFinalTransactionRepository.findByTransactionIdCached(
+      numericTransactionId
+    )
+
+    if (!row) {
+      throw createTransactionError(
+        'NOT_FOUND',
+        'لا توجد وثيقة نهائية محفوظة — أرسل file_order (موصى به) أو document_*_ids لتوليدها'
+      )
+    }
+
+    return toFinalDocumentDTO(row, { includeQrSnapshot: true })
+  }
+
+  if (!COMPLETED_STATUSES.has(transaction.status)) {
+    throw createTransactionError(
+      'VALIDATION_ERROR',
+      'توليد الوثيقة النهائية متاح فقط للمعاملات المكتملة (completed)'
+    )
+  }
+
+  const {
+    generateMergedFinalDocument
+  } = require('./finalDocumentBuilderService')
+
+  await generateMergedFinalDocument(numericTransactionId, {
+    userId,
+    force: true,
+    requireOwner: false,
+    fileOrder: Array.isArray(fileOrder) ? fileOrder : undefined,
+    documentInstanceIds: Array.isArray(documentInstanceIds)
+      ? documentInstanceIds
+      : [],
+    documentSignatureIds: Array.isArray(documentSignatureIds)
+      ? documentSignatureIds
+      : []
+  })
+
+  const row = await documentFinalTransactionRepository.findByTransactionIdCached(
     numericTransactionId
   )
-
-  const snapshot = row?.qr_payload_snapshot || {}
-  const missingQr =
-    Boolean(row) &&
-    !snapshot.verification_url &&
-    !snapshot.signature
-
-  const shouldGenerate =
-    COMPLETED_STATUSES.has(transaction.status) &&
-    (!row || missingQr)
-
-  if (shouldGenerate) {
-    const {
-      generateMergedFinalDocument
-    } = require('./finalDocumentBuilderService')
-
-    try {
-      await generateMergedFinalDocument(numericTransactionId, {
-        userId,
-        force: Boolean(missingQr),
-        requireOwner: false
-      })
-
-      row = await documentFinalTransactionRepository.findByTransactionIdCached(
-        numericTransactionId
-      )
-    } catch (error) {
-      // إن فشلت إعادة التوليد وما زالت نسخة قديمة موجودة نُعيدها
-      if (!row) {
-        throw error
-      }
-    }
-  }
 
   if (!row) {
     throw createTransactionError(
       'NOT_FOUND',
-      'لا توجد وثيقة نهائية محفوظة لهذه المعاملة'
+      'تعذّر حفظ الوثيقة النهائية بعد التوليد'
     )
   }
 
   return toFinalDocumentDTO(row, { includeQrSnapshot: true })
+}
+
+function parseIdList (raw) {
+  if (raw === undefined) {
+    return undefined
+  }
+
+  if (raw === null || raw === '') {
+    return []
+  }
+
+  const parts = Array.isArray(raw)
+    ? raw
+    : String(raw).split(',')
+
+  return parts
+    .map(part => Number(String(part).trim()))
+    .filter(id => Number.isInteger(id) && id > 0)
+}
+
+/**
+ * ترتيب مخلوط: signature:3,instance:2,signature:1
+ * اختصار: s:3,i:2
+ */
+function parseFileOrder (raw) {
+  if (raw === undefined) {
+    return undefined
+  }
+
+  if (raw === null || String(raw).trim() === '') {
+    return []
+  }
+
+  const parts = Array.isArray(raw)
+    ? raw
+    : String(raw).split(',')
+
+  const items = []
+
+  for (const part of parts) {
+    const token = String(part).trim()
+    if (!token) {
+      continue
+    }
+
+    const match = /^(signature|instance|sig|s|i)\s*[:=_-]\s*(\d+)$/i.exec(token)
+
+    if (!match) {
+      const err = new Error(
+        `عنصر ترتيب غير صالح: "${token}" — استخدم signature:ID أو instance:ID`
+      )
+      err.statusCode = 400
+      err.code = 'VALIDATION_ERROR'
+      throw err
+    }
+
+    const kindRaw = match[1].toLowerCase()
+    const id = Number(match[2])
+    const kind =
+      kindRaw === 'instance' || kindRaw === 'i'
+        ? 'instance'
+        : 'signature'
+
+    items.push({ kind, id })
+  }
+
+  return items
+}
+
+async function listTransactionSourceDocuments (transactionId) {
+  const numericTransactionId = Number.parseInt(transactionId, 10)
+
+  if (!Number.isInteger(numericTransactionId) || numericTransactionId < 1) {
+    throw createTransactionError('VALIDATION_ERROR', 'معرّف المعاملة غير صالح')
+  }
+
+  const transaction = await transactionRepository.findById(numericTransactionId)
+
+  if (!transaction) {
+    throw createTransactionError('TRANSACTION_NOT_FOUND')
+  }
+
+  const {
+    documentSignatureRepository
+  } = require('../../../workflow/public')
+
+  const [instances, signatures] = await Promise.all([
+    documentInstanceRepository.findAllByTransactionId(numericTransactionId),
+    documentSignatureRepository.findAllWithSignaturesByTransactionId(
+      numericTransactionId
+    )
+  ])
+
+  return {
+    transaction_id: numericTransactionId,
+    status: transaction.status,
+    document_instances: (instances || []).map(row => {
+      const plain = typeof row.get === 'function' ? row.get({ plain: true }) : row
+      return {
+        id: plain.id,
+        document_template_id: plain.document_template_id ?? null,
+        generated_pdf_path: plain.generated_pdf_path ?? null,
+        file_url: plain.generated_pdf_path
+          ? toPublicFileUrl(plain.generated_pdf_path)
+          : null,
+        status: plain.status ?? null,
+        content_hash: plain.content_hash ?? null,
+        created_at: plain.created_at ?? null
+      }
+    }),
+    document_signatures: (signatures || []).map(row => {
+      const plain = typeof row.get === 'function' ? row.get({ plain: true }) : row
+      return {
+        id: plain.id,
+        type_doc_id: plain.type_doc_id ?? null,
+        type_doc_name: plain.type_doc?.name ?? null,
+        file_path: plain.file_path ?? null,
+        file_url: plain.file_path ? toPublicFileUrl(plain.file_path) : null,
+        created_at: plain.created_at ?? null
+      }
+    })
+  }
 }
 
 async function deleteFinalDocument (transactionId) {
@@ -335,5 +497,8 @@ module.exports = {
   saveFinalDocument,
   getFinalDocument,
   deleteFinalDocument,
-  listMyFinalDocuments
+  listMyFinalDocuments,
+  listTransactionSourceDocuments,
+  parseIdList,
+  parseFileOrder
 }

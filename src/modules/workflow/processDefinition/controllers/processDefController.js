@@ -7,6 +7,7 @@ const {
   createHttpError,
   HTTP_STATUS
 } = require('../../../../core/middleware/httpStatusCodes')
+const { getClientMeta } = require('../../../../core/security/securityConfig')
 
 const {
   createProcessDefinitionService,
@@ -27,6 +28,15 @@ const {
 const {
   getAllProcessDefinitionStatsService
 } = require('../services/processDefinitionStatsService')
+
+function buildAuditContext (req) {
+  const meta = getClientMeta(req)
+  return {
+    actorUserId: req.user?.id || null,
+    ip: meta.ip,
+    userAgent: meta.userAgent
+  }
+}
 
 ///// ============================== create new Process Definition ====================================
 
@@ -74,7 +84,7 @@ const createProcessDefinition = asyncHandler(async (req, res) => {
     )
   }
 
-  const process = await createProcessDefinitionService(data)
+  const process = await createProcessDefinitionService(data, buildAuditContext(req))
   const processID = process.id
   const setup = await setupProcessAfterCreation(processID)
 
@@ -158,7 +168,8 @@ const updateProcessActiveStatusController = asyncHandler(async (req, res) => {
   try {
     const result = await updateProcessActiveStatus(
       req.params.id,
-      req.body?.is_active
+      req.body?.is_active,
+      buildAuditContext(req)
     )
 
     return ApiResponder.okResponse(res, result, 'تم تعديل حالة العملية بنجاح')
@@ -213,7 +224,7 @@ const reviewProcessController = asyncHandler(async (req, res) => {
   const { decision } = req.body
 
   const result =
-    await reviewProcess(processId, decision)
+    await reviewProcess(processId, decision, buildAuditContext(req))
 
   return ApiResponder.okResponse(res, result, 'تم تنفيذ المراجعة بنجاح')
     } catch (err) {

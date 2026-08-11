@@ -251,7 +251,8 @@ async function pickupTaskController (req, res) {
   try {
     const result = await getTaskDetailsService.pickupTask({
       taskId: req.params.taskId,
-      userId: req.user.id
+      userId: req.user.id,
+      clientMeta: getClientMeta(req)
     })
 
     return sendWorkflowSuccess(res, result.data, result.message)
@@ -265,7 +266,8 @@ async function releaseTaskController (req, res) {
   try {
     const result = await getTaskDetailsService.releaseTask({
       taskId: req.params.taskId,
-      userId: req.user.id
+      userId: req.user.id,
+      clientMeta: getClientMeta(req)
     })
 
     return sendWorkflowSuccess(res, result.data, result.message)

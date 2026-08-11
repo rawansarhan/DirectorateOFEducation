@@ -334,7 +334,8 @@ async function resendOtp ({ session_id }) {
 
 async function registerDeviceToken (
   userId,
-  payload
+  payload,
+  clientMeta = {}
 ) {
   const { error } =
     validateDeviceToken(payload)
@@ -356,6 +357,9 @@ async function registerDeviceToken (
       fcm_token
     )
 
+  let record
+  let reused = false
+
   if (existingToken) {
     await userDeviceTokenRepository.update(
       existingToken,
@@ -369,16 +373,48 @@ async function registerDeviceToken (
       }
     )
 
-    return existingToken
+    record = existingToken
+    reused = true
+  } else {
+    record = await userDeviceTokenRepository.create({
+      user_id: userId,
+      fcm_token,
+      platform: platform || null,
+      device_id: device_id || null,
+      is_active: true
+    })
   }
 
-  return userDeviceTokenRepository.create({
-    user_id: userId,
-    fcm_token,
-    platform: platform || null,
-    device_id: device_id || null,
-    is_active: true
+  const {
+    auditSuccess
+  } = require('../../../../core/security/safeAudit')
+  const {
+    AUDIT_ACTIONS
+  } = require('../../../../core/security/auditActions')
+  const { createHash } = require('crypto')
+
+  const tokenFingerprint = createHash('sha256')
+    .update(String(fcm_token))
+    .digest('hex')
+    .slice(0, 16)
+
+  await auditSuccess({
+    userId,
+    action: AUDIT_ACTIONS.DEVICE_TOKEN_REGISTERED,
+    resourceType: 'user_device_token',
+    resourceId: record.id,
+    ipAddress: clientMeta.ip || null,
+    userAgent: clientMeta.userAgent || null,
+    details: {
+      deviceTokenId: record.id,
+      platform: record.platform || platform || null,
+      device_id: record.device_id || device_id || null,
+      reused,
+      tokenFingerprint
+    }
   })
+
+  return record
 }
 
 module.exports = {

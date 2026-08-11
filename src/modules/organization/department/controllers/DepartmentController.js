@@ -1,5 +1,6 @@
 const asyncHandler = require('../../../../core/middleware/asyncHandler')
 const ApiResponder = require('../../../../core/utils/apiResponder')
+const { buildAuditContext } = require('../../../../core/security/auditContext')
 
 const {
   createDepartmentService,
@@ -19,7 +20,7 @@ const {
 // ================= CREATE =================
 const createDepartment = asyncHandler(async (req, res) => {
   try {
-    const result = await createDepartmentService(req.body)
+    const result = await createDepartmentService(req.body, buildAuditContext(req))
     return ApiResponder.createdResponse(res, result, 'تم إنشاء القسم بنجاح')
   } catch (err) {
     return ApiResponder.error(res, { message: err.message, statusCode: err.statusCode || 400 })
@@ -69,7 +70,10 @@ const getDepartmentById = asyncHandler(async (req, res) => {
 // ================= TOGGLE STATUS =================
 const toggleDepartmentStatus = asyncHandler(async (req, res) => {
   try {
-    const result = await toggleDepartmentStatusService(req.params.id)
+    const result = await toggleDepartmentStatusService(
+      req.params.id,
+      buildAuditContext(req)
+    )
     return ApiResponder.okResponse(
       res,
       result,

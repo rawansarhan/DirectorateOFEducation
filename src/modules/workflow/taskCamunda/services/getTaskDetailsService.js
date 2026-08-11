@@ -271,7 +271,7 @@ async function getTaskDetails ({ taskId, userId }) {
   return result
 }
 
-async function pickupTask ({ taskId, userId }) {
+async function pickupTask ({ taskId, userId, clientMeta = {} }) {
   const task = await fetchCamundaTask(taskId)
 
   if (!task) {
@@ -305,6 +305,28 @@ async function pickupTask ({ taskId, userId }) {
   const refreshedInstance = await processInstanceRepository.findById(processInstance.id)
   const task_lock = buildTaskLockStatus(refreshedInstance, task.id, userId)
 
+  const {
+    auditSuccess
+  } = require('../../../../core/security/safeAudit')
+  const {
+    AUDIT_ACTIONS
+  } = require('../../../../core/security/auditActions')
+
+  await auditSuccess({
+    userId,
+    action: AUDIT_ACTIONS.TASK_PICKED_UP,
+    resourceType: 'task',
+    resourceId: task.id,
+    ipAddress: clientMeta.ip || null,
+    userAgent: clientMeta.userAgent || null,
+    details: {
+      taskId: task.id,
+      processInstanceId: processInstance.id,
+      transactionId: processInstance.transaction_id || null,
+      taskDefinitionKey: task.taskDefinitionKey || null
+    }
+  })
+
   return {
     message: 'تم استلام المعاملة بنجاح',
     data: {
@@ -314,7 +336,7 @@ async function pickupTask ({ taskId, userId }) {
   }
 }
 
-async function releaseTask ({ taskId, userId }) {
+async function releaseTask ({ taskId, userId, clientMeta = {} }) {
   const { task, processInstance } = await loadTaskDetailsContext({ taskId, userId })
 
   await releaseTaskLockStrict({
@@ -328,6 +350,27 @@ async function releaseTask ({ taskId, userId }) {
 
   const refreshedInstance = await processInstanceRepository.findById(processInstance.id)
   const task_lock = buildTaskLockStatus(refreshedInstance, task.id, userId)
+
+  const {
+    auditSuccess
+  } = require('../../../../core/security/safeAudit')
+  const {
+    AUDIT_ACTIONS
+  } = require('../../../../core/security/auditActions')
+
+  await auditSuccess({
+    userId,
+    action: AUDIT_ACTIONS.TASK_RELEASED,
+    resourceType: 'task',
+    resourceId: task.id,
+    ipAddress: clientMeta.ip || null,
+    userAgent: clientMeta.userAgent || null,
+    details: {
+      taskId: task.id,
+      processInstanceId: processInstance.id,
+      transactionId: processInstance.transaction_id || null
+    }
+  })
 
   return {
     message: 'تم إلغاء استلام المعاملة بنجاح',

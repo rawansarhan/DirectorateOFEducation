@@ -44,7 +44,7 @@ const {
 
 // ================== REGISTER EMPLOYEE ==================
 
-async function registerEmployee (userData) {
+async function registerEmployee (userData, auditContext = {}) {
   const { error, value } = validateRegisterEmp(userData)
 
   if (error) {
@@ -155,6 +155,31 @@ async function registerEmployee (userData) {
     is_active: true,
   })
 
+  const {
+    auditSuccess
+  } = require('../../../../core/security/safeAudit')
+  const {
+    AUDIT_ACTIONS
+  } = require('../../../../core/security/auditActions')
+
+  await auditSuccess({
+    userId: auditContext.actorUserId || user.id,
+    action: AUDIT_ACTIONS.EMPLOYEE_REGISTERED,
+    resourceType: 'user',
+    resourceId: user.id,
+    ipAddress: auditContext.ip || null,
+    userAgent: auditContext.userAgent || null,
+    details: {
+      createdUserId: user.id,
+      organization_id: data.organization_id,
+      department_id: data.department_id,
+      role_id: data.role_id,
+      orgDeptRoleId: orgDeptRole.id,
+      key_fingerprint: keyFingerprint,
+      hasPrivateKeyUpload: Boolean(data.private_key)
+    }
+  })
+
   return {
     userName: data.userName,
     first_name: user.first_name,
@@ -245,7 +270,7 @@ async function registerEmployee (userData) {
 //     throw error
 //   }
 // }
-async function registerCitizen (userData) {
+async function registerCitizen (userData, auditContext = {}) {
   const sequelize = userRepository.getSequelize()
 
   const transaction = await sequelize.transaction()
@@ -329,6 +354,28 @@ async function registerCitizen (userData) {
     )
 
     await transaction.commit()
+
+    const {
+      auditSuccess
+    } = require('../../../../core/security/safeAudit')
+    const {
+      AUDIT_ACTIONS
+    } = require('../../../../core/security/auditActions')
+
+    await auditSuccess({
+      userId: user.id,
+      action: AUDIT_ACTIONS.CITIZEN_REGISTER_STARTED,
+      resourceType: 'user',
+      resourceId: user.id,
+      ipAddress: auditContext.ip || null,
+      userAgent: auditContext.userAgent || null,
+      details: {
+        userId: user.id,
+        userName: user.userName || userData.userName || null,
+        orgDeptRoleId: orgDeptRole.id,
+        otpPending: true
+      }
+    })
 
     if (!user.phone_number) {
       throw new Error(

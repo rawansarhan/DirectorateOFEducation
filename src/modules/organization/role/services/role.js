@@ -70,7 +70,7 @@ function buildCamundaGroupKey (roleCode, organizationId, departmentId) {
 }
 
 // ================= CREATE =================
-async function createRoleService (data) {
+async function createRoleService (data, auditContext = {}) {
   const { error, value } = ValidateCreateRole(data)
 
   if (error) {
@@ -159,6 +159,31 @@ async function createRoleService (data) {
   await invalidateDepartmentRoleCaches(input.department_id)
 
   const created = await orgDeptRoleRepository.findByIdWithRelations(result.orgDeptRole.id)
+
+  const {
+    auditSuccess
+  } = require('../../../../core/security/safeAudit')
+  const {
+    AUDIT_ACTIONS
+  } = require('../../../../core/security/auditActions')
+
+  await auditSuccess({
+    userId: auditContext.actorUserId || null,
+    action: AUDIT_ACTIONS.ODR_CREATED,
+    resourceType: 'organization_department_role',
+    resourceId: result.orgDeptRole.id,
+    ipAddress: auditContext.ip || null,
+    userAgent: auditContext.userAgent || null,
+    details: {
+      orgDeptRoleId: result.orgDeptRole.id,
+      role_id: result.role.id,
+      role_code: result.role.code,
+      organization_id: input.organization_id,
+      department_id: input.department_id,
+      parent_id: input.parent_id ?? null
+    }
+  })
+
   return toDTO(created)
 }
 
@@ -274,7 +299,7 @@ async function updateRoleService (data, id) {
 }
 
 // ================= TOGGLE STATUS =================
-async function toggleRoleStatusService (id) {
+async function toggleRoleStatusService (id, auditContext = {}) {
   const orgDeptRoleId = parseInt(id, 10)
 
   if (!Number.isInteger(orgDeptRoleId) || orgDeptRoleId < 1) {
@@ -291,6 +316,8 @@ async function toggleRoleStatusService (id) {
     throw err
   }
 
+  const previousActive = Boolean(orgDeptRole.is_active)
+
   await orgDeptRoleRepository.updateInstance(orgDeptRole, {
     is_active: !orgDeptRole.is_active
   })
@@ -300,6 +327,28 @@ async function toggleRoleStatusService (id) {
   await invalidatePermissionCachesForOrgDeptRole(orgDeptRoleId)
 
   const updated = await orgDeptRoleRepository.findByIdWithRelations(orgDeptRoleId)
+
+  const {
+    auditSuccess
+  } = require('../../../../core/security/safeAudit')
+  const {
+    AUDIT_ACTIONS
+  } = require('../../../../core/security/auditActions')
+
+  await auditSuccess({
+    userId: auditContext.actorUserId || null,
+    action: AUDIT_ACTIONS.ODR_STATUS_CHANGED,
+    resourceType: 'organization_department_role',
+    resourceId: orgDeptRoleId,
+    ipAddress: auditContext.ip || null,
+    userAgent: auditContext.userAgent || null,
+    details: {
+      orgDeptRoleId,
+      before: { is_active: previousActive },
+      after: { is_active: Boolean(updated.is_active) }
+    }
+  })
+
   return toDTO(updated)
 }
 

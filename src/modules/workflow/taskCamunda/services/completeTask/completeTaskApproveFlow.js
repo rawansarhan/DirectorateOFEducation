@@ -22,7 +22,6 @@ const {
   scheduleNotifyTechnicalOfficersIfNoAssigneeStaff
 } = require('../../../../notification/services/missingAssigneeStaffNotificationService')
 const {
-  scheduleFinalDocumentAutoGeneration,
   withDbTransaction,
   logStep
 } = require('./completeTaskHelpers')
@@ -229,7 +228,7 @@ async function runApproveFlow ({
       processInstanceId: processInstance.id
     })
 
-    scheduleFinalDocumentAutoGeneration(transaction.id)
+    // الوثيقة النهائية تُولَّد يدوياً عبر GET final-document مع اختيار الملفات
   }
 
   return {

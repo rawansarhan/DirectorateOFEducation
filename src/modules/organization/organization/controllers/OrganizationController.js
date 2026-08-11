@@ -1,5 +1,6 @@
 const asyncHandler = require('../../../../core/middleware/asyncHandler')
 const ApiResponder = require('../../../../core/utils/apiResponder')
+const { buildAuditContext } = require('../../../../core/security/auditContext')
 
 
 const {
@@ -13,7 +14,7 @@ const {
 // ================= CREATE =================
 const createOrganization = asyncHandler(async (req, res) => {
   try {
-    const result = await createOrganizationService(req.body)
+    const result = await createOrganizationService(req.body, buildAuditContext(req))
     return ApiResponder.createdResponse(res, result, 'تم إنشاء المؤسسة بنجاح')
   } catch (err) {
     return ApiResponder.error(res, { message: err.message, statusCode: err.statusCode || 400 })

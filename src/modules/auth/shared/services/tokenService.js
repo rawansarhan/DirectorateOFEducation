@@ -119,6 +119,28 @@ async function rotateRefreshToken (rawToken, clientMeta = {}) {
         transaction
       })
       await transaction.commit()
+
+      const {
+        auditWrite
+      } = require('../../../../core/security/safeAudit')
+      const {
+        AUDIT_ACTIONS
+      } = require('../../../../core/security/auditActions')
+
+      await auditWrite({
+        userId: stored.user_id,
+        action: AUDIT_ACTIONS.REFRESH_TOKEN_REUSE,
+        resourceType: 'user',
+        resourceId: stored.user_id,
+        status: 'failure',
+        ipAddress: clientMeta.ip || null,
+        userAgent: clientMeta.userAgent || null,
+        details: {
+          reason: 'REFRESH_TOKEN_REUSE_DETECTED',
+          refreshTokenId: stored.id
+        }
+      })
+
       throw buildAuthError(
         'تم كشف إعادة استخدام التوكن. تم إنهاء جميع الجلسات لأسباب أمنية'
       )
@@ -258,7 +280,7 @@ async function findLatestInChain (token, { transaction }) {
 // ============================================================
 // إبطال refresh token واحد (logout)
 // ============================================================
-async function revokeRefreshToken (rawToken) {
+async function revokeRefreshToken (rawToken, clientMeta = {}) {
   if (!rawToken) {
     return { revoked: false }
   }
@@ -271,7 +293,26 @@ async function revokeRefreshToken (rawToken) {
 
   await refreshTokenRepository.revoke(stored)
 
-  return { revoked: true }
+  const {
+    auditSuccess
+  } = require('../../../../core/security/safeAudit')
+  const {
+    AUDIT_ACTIONS
+  } = require('../../../../core/security/auditActions')
+
+  await auditSuccess({
+    userId: stored.user_id,
+    action: AUDIT_ACTIONS.LOGOUT,
+    resourceType: 'user',
+    resourceId: stored.user_id,
+    ipAddress: clientMeta.ip || null,
+    userAgent: clientMeta.userAgent || null,
+    details: {
+      refreshTokenId: stored.id
+    }
+  })
+
+  return { revoked: true, userId: stored.user_id }
 }
 
 // إبطال كل جلسات المستخدم (logout من كل الأجهزة)

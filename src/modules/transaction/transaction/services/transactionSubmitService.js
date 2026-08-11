@@ -454,6 +454,27 @@ async function submitTransaction (
       )
     })()
 
+    const {
+      auditSuccess
+    } = require('../../../../core/security/safeAudit')
+    const {
+      AUDIT_ACTIONS
+    } = require('../../../../core/security/auditActions')
+
+    await auditSuccess({
+      userId: userId || null,
+      action: AUDIT_ACTIONS.TRANSACTION_SUBMITTED,
+      resourceType: 'transaction',
+      resourceId: numericId,
+      ipAddress: clientMeta.ip || null,
+      userAgent: clientMeta.userAgent || null,
+      details: {
+        transactionId: numericId,
+        processId: transaction.id_process || null,
+        idempotencyKey: guardKey || null
+      }
+    })
+
     if (guardContext) {
       return operationGuardService.commit(guardContext, { data: result }).data
     }

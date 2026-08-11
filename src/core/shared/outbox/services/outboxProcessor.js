@@ -58,10 +58,13 @@ async function processOutbox () {
 
     } catch (err) {
 
-      console.error(
-        `❌ FAILED: ${event.event_type}`,
-        err.message
-      )
+      const exceptionLogger = require('../../../logging/exceptionLogger')
+      exceptionLogger.error({
+        message: 'outbox_processor_event_failed',
+        err,
+        event_type: event.event_type,
+        outbox_event_id: event.id
+      })
 
       // ===============================
       // MARK FAILED

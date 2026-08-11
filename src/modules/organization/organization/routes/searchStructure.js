@@ -15,54 +15,43 @@ const searchLimiter = createRateLimiter({
   message: 'تم تجاوز حد طلبات البحث — حاول بعد دقيقة'
 })
 
+const searchHandlers = [searchLimiter, searchStructureController]
+
 /**
  * @swagger
  * /api/organization/search:
  *   get:
- *     summary: بحث موحّد في الهيكل التنظيمي (مؤسسات / أقسام / أدوار)
+ *     summary: بحث ضمن مؤسسة (موظف) — أقسام / أدوار / موظفين
  *     description: |
- *       API واحد للبحث في الهيكل:
- *       - `scope=all` (افتراضي): يعيد ثلاث قوائم قصيرة (typeahead)
- *       - `scope=organization|department|role`: قائمة مرقّمة
- *
- *       **Auth:** Bearer + `GET_ORGANIZATIONAL_STRUCTURE`
- *       النصوص مقيّدة الطول ومُهرَّبة من أحرف LIKE.
+ *       `organization_id` إجباري. **Auth:** `GET_ORGANIZATIONAL_STRUCTURE` (`type=employee`).
+ *       للأدمن استخدم `/api/organization/admin/search`.
  *     tags: [Organization]
  *     security:
  *       - bearerAuth: []
  *     parameters:
  *       - in: query
+ *         name: organization_id
+ *         required: true
+ *         schema: { type: integer }
+ *       - in: query
  *         name: q
  *         required: true
- *         schema: { type: string, maxLength: 120 }
- *         example: موارد
+ *         schema: { type: string, minLength: 1, maxLength: 120 }
  *       - in: query
  *         name: scope
- *         schema:
- *           type: string
- *           enum: [all, organization, department, role]
- *           default: all
- *       - in: query
- *         name: organization_id
- *         schema: { type: integer }
- *         description: يضيّق الأقسام/الأدوار ضمن مؤسسة
+ *         schema: { type: string, enum: [all, department, role, employee], default: all }
  *       - in: query
  *         name: is_active
  *         schema: { type: boolean }
  *       - in: query
  *         name: cursor
  *         schema: { type: string }
- *         description: للـ scope المحدّد فقط (`organization|department|role`)
  *       - in: query
  *         name: limit
  *         schema: { type: integer, default: 20, maximum: 70 }
  *     responses:
  *       200:
- *         description: نتائج البحث (Cursor Pagination للنطاق المحدّد)
- *       400:
- *         description: q مفقود أو cursor غير صالح
- *       401:
- *         description: Unauthorized
+ *         description: نتائج البحث
  *       403:
  *         description: Forbidden
  */
@@ -70,8 +59,48 @@ router.get(
   '/search',
   authMiddleware,
   authorize('GET_ORGANIZATIONAL_STRUCTURE'),
-  searchLimiter,
-  searchStructureController
+  ...searchHandlers
+)
+
+/**
+ * @swagger
+ * /api/organization/admin/search:
+ *   get:
+ *     summary: بحث ضمن مؤسسة (أدمن) — أقسام / أدوار / موظفين
+ *     description: |
+ *       نفس منطق `/search` مع **Auth:** `ORGANIZATIONAL_STRUCTURE_CREATE` (`type=admin`).
+ *     tags: [Organization]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: organization_id
+ *         required: true
+ *         schema: { type: integer }
+ *       - in: query
+ *         name: q
+ *         required: true
+ *         schema: { type: string, minLength: 1, maxLength: 120 }
+ *       - in: query
+ *         name: scope
+ *         schema: { type: string, enum: [all, department, role, employee], default: all }
+ *       - in: query
+ *         name: cursor
+ *         schema: { type: string }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 20, maximum: 70 }
+ *     responses:
+ *       200:
+ *         description: نتائج البحث
+ *       403:
+ *         description: Forbidden
+ */
+router.get(
+  '/admin/search',
+  authMiddleware,
+  authorize('ORGANIZATIONAL_STRUCTURE_CREATE'),
+  ...searchHandlers
 )
 
 module.exports = router

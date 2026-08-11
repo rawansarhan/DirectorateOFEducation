@@ -58,7 +58,11 @@ const verifyLoginOtpUser = async (req, res) => {
 
 const registerDeviceTokenUser = async (req, res) => {
   try {
-    const result = await registerDeviceToken(req.user.id, req.body)
+    const result = await registerDeviceToken(
+      req.user.id,
+      req.body,
+      getClientMeta(req)
+    )
     return ApiResponder.okResponse(
       res,
       {
@@ -124,7 +128,10 @@ const logoutUser = async (req, res) => {
       throw new Error(error.details.map(item => item.message).join(', '))
     }
 
-    const result = await tokenService.revokeRefreshToken(req.body.refreshToken)
+    const result = await tokenService.revokeRefreshToken(
+      req.body.refreshToken,
+      getClientMeta(req)
+    )
 
     return ApiResponder.okResponse(
       res,

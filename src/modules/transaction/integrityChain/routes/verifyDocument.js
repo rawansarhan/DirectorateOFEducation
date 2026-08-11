@@ -150,13 +150,19 @@ router.get('/document/details',
  *       نفس بيانات `GET /api/verify/document/details` لكن عبر `transaction_id`
  *       بدل رمز التفاصيل المؤقت.
  *
- *       يعيد: الموقّعين، طالب المعاملة، transaction_history، final_document،
- *       تاريخ الطلب وتاريخ الإكمال/الرفض.
+ *       **Auth:** Bearer + صلاحية `DOCUMENT_VERIFY_BY_CODE`
  *
- *       **transaction_history.stages:** مراحل USER_TASK فقط.
- *       ملفات GENERATE_PDF تظهر داخل `templates[].value` للمرحلة المالكة للقالب:
- *       `{ id_template, value: { ...fields, id_document_instance, generated_pdf_path, generated_pdf_url } }`
- *       بدون مرحلة SERVICE_TASK مستقلة.
+ *       ### يعيد
+ *       - `applicant` هوية طالب المعاملة
+ *       - `signers` سلسلة الموقّعين بالترتيب
+ *       - `transaction` حالة المعاملة + تواريخ الطلب/الإكمال/الرفض
+ *       - `transaction_history` مراحل USER_TASK فقط؛ ملفات GENERATE_PDF داخل
+ *         `templates[].value` (`id_template` + `value` مع `id_document_instance` /
+ *         `generated_pdf_path` / `generated_pdf_url` إن وُجدت)
+ *       - `final_document` إن وُجدت، وإلا `{ available: false, message }`
+ *
+ *       ### أمثلة طلب
+ *       - `/api/verify/document/details/by-transaction?transaction_id=42`
  *     tags: [IntegrityChain]
  *     security:
  *       - bearerAuth: []
@@ -164,7 +170,9 @@ router.get('/document/details',
  *       - in: query
  *         name: transaction_id
  *         required: true
- *         schema: { type: integer, minimum: 1 }
+ *         schema:
+ *           type: integer
+ *           minimum: 1
  *         description: معرّف المعاملة
  *         example: 42
  *     responses:
@@ -172,47 +180,205 @@ router.get('/document/details',
  *         description: تفاصيل التحقق
  *         content:
  *           application/json:
- *             example:
- *               success: true
- *               status_code: 200
- *               message: تم جلب تفاصيل التحقق من الوثيقة بنجاح
- *               data:
- *                 applicant:
- *                   first_name: أحمد
- *                   last_name: علي
- *                   father_name: محمد
- *                   mother_name: فاطمة
- *                   national_id: "01234567890"
- *                 signers:
- *                   - signature_order: 1
- *                     first_name: سلى
- *                     last_name: أحمد
- *                     father_name: خالد
- *                     mother_name: مريم
- *                     national_id: "09876543210"
- *                 transaction:
- *                   id: 42
- *                   status: completed
- *                   request_date: 01/07/2026
- *                   completed_at: 18/07/2026
- *                   rejected_at: null
- *                 transaction_history:
- *                   id_process: TX-2026-00042
- *                   data: {}
- *                 final_document:
- *                   available: true
- *                   file_url: https://host/uploads/final/tx-42.pdf
- *       401:
- *         description: Bearer token مطلوب أو غير صالح
+ *             examples:
+ *               completed_with_final_document:
+ *                 summary: معاملة مكتملة + وثيقة نهائية + تاريخ مراحل
+ *                 value:
+ *                   success: true
+ *                   status_code: 200
+ *                   message: تم جلب تفاصيل التحقق من الوثيقة بنجاح
+ *                   data:
+ *                     transaction:
+ *                       id: 42
+ *                       id_process: 4
+ *                       status: completed
+ *                       process_name: طلب إجازة
+ *                       request_date: 01/07/2026
+ *                       completed_at: 18/07/2026
+ *                       rejected_at: null
+ *                     applicant:
+ *                       first_name: أحمد
+ *                       last_name: علي
+ *                       father_name: محمد
+ *                       mother_name: فاطمة
+ *                       national_id: "01234567890"
+ *                     signers:
+ *                       - signature_order: 1
+ *                         stage_code: REVIEW_STAGE
+ *                         signed_at: "2026-07-10T09:15:00.000Z"
+ *                         user_id: 12
+ *                         first_name: سارة
+ *                         last_name: أحمد
+ *                         father_name: خالد
+ *                         mother_name: مريم
+ *                         national_id: "09876543210"
+ *                       - signature_order: 2
+ *                         stage_code: APPROVE_STAGE
+ *                         signed_at: "2026-07-18T11:40:00.000Z"
+ *                         user_id: 8
+ *                         first_name: عمر
+ *                         last_name: خليل
+ *                         father_name: حسن
+ *                         mother_name: ليلى
+ *                         national_id: "01112223334"
+ *                     transaction_history:
+ *                       process_name: طلب إجازة
+ *                       priority: 2
+ *                       data:
+ *                         applicant:
+ *                           first_name: أحمد
+ *                           last_name: علي
+ *                           father_name: محمد
+ *                           mother_name: فاطمة
+ *                           national_id: "01234567890"
+ *                         stages:
+ *                           - stage_code: AUTH
+ *                             stage_name: تقديم الطلب
+ *                             widgets: []
+ *                             templates:
+ *                               - id_template: 7
+ *                                 value:
+ *                                   full_name: أحمد علي
+ *                                   leave_days: "5"
+ *                                   id_document_instance: 15
+ *                                   generated_pdf_path: /uploads/generated-15.pdf
+ *                                   generated_pdf_url: /uploads/generated-15.pdf
+ *                           - stage_code: REVIEW_STAGE
+ *                             stage_name: مراجعة الموظف
+ *                             widgets: []
+ *                             templates: []
+ *                     final_document:
+ *                       available: true
+ *                       id: 9
+ *                       file_path: /uploads/final-merged-42.pdf
+ *                       file_url: /uploads/final-merged-42.pdf
+ *                       original_name: final-merged-42.pdf
+ *                       mime_type: application/pdf
+ *                       file_size_bytes: 245760
+ *                       generated_at: "2026-07-18T12:00:00.000Z"
+ *               rejected_no_final_document:
+ *                 summary: معاملة مرفوضة بدون وثيقة نهائية
+ *                 value:
+ *                   success: true
+ *                   status_code: 200
+ *                   message: تم جلب تفاصيل التحقق من الوثيقة بنجاح
+ *                   data:
+ *                     transaction:
+ *                       id: 55
+ *                       id_process: 4
+ *                       status: rejected
+ *                       process_name: طلب إجازة
+ *                       request_date: 05/07/2026
+ *                       completed_at: null
+ *                       rejected_at: 08/07/2026
+ *                     applicant:
+ *                       first_name: علي
+ *                       last_name: حسن
+ *                       father_name: محمود
+ *                       mother_name: ندى
+ *                       national_id: "05556667778"
+ *                     signers:
+ *                       - signature_order: 1
+ *                         stage_code: REVIEW_STAGE
+ *                         signed_at: "2026-07-08T10:00:00.000Z"
+ *                         user_id: 12
+ *                         first_name: سارة
+ *                         last_name: أحمد
+ *                         father_name: خالد
+ *                         mother_name: مريم
+ *                         national_id: "09876543210"
+ *                     transaction_history:
+ *                       process_name: طلب إجازة
+ *                       priority: 2
+ *                       data:
+ *                         applicant:
+ *                           first_name: علي
+ *                           last_name: حسن
+ *                         stages:
+ *                           - stage_code: AUTH
+ *                             stage_name: تقديم الطلب
+ *                             templates: []
+ *                     final_document:
+ *                       available: false
+ *                       message: لم يتم توليد الوثيقة النهائية لهذه المعاملة بعد
+ *               running_minimal:
+ *                 summary: معاملة قيد المعالجة (بدون موقّعين / بدون final)
+ *                 value:
+ *                   success: true
+ *                   status_code: 200
+ *                   message: تم جلب تفاصيل التحقق من الوثيقة بنجاح
+ *                   data:
+ *                     transaction:
+ *                       id: 60
+ *                       id_process: 2
+ *                       status: submitted
+ *                       process_name: قيد مدني
+ *                       request_date: 11/08/2026
+ *                       completed_at: null
+ *                       rejected_at: null
+ *                     applicant:
+ *                       first_name: ليلى
+ *                       last_name: سمير
+ *                       father_name: يوسف
+ *                       mother_name: هالة
+ *                       national_id: "09998887776"
+ *                     signers: []
+ *                     transaction_history:
+ *                       process_name: قيد مدني
+ *                       priority: 1
+ *                       data:
+ *                         applicant:
+ *                           first_name: ليلى
+ *                           last_name: سمير
+ *                         stages: []
+ *                     final_document:
+ *                       available: false
+ *                       message: لم يتم توليد الوثيقة النهائية لهذه المعاملة بعد
  *       400:
  *         description: معرّف المعاملة غير صالح
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: false
+ *               status_code: 400
+ *               message: معرّف المعاملة غير صالح
+ *               error: BAD_REQUEST
+ *               data: null
+ *       401:
+ *         description: Bearer token مطلوب أو غير صالح
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: false
+ *               status_code: 401
+ *               message: Unauthorized
+ *               error: UNAUTHORIZED
+ *               data: null
+ *       403:
+ *         description: لا يملك صلاحية DOCUMENT_VERIFY_BY_CODE
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: false
+ *               status_code: 403
+ *               message: Forbidden - missing permission
+ *               error: FORBIDDEN
+ *               data: null
  *       404:
  *         description: المعاملة غير موجودة
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: false
+ *               status_code: 404
+ *               message: المعاملة غير موجودة
+ *               error: NOT_FOUND
+ *               data: null
  */
 router.get(
   '/document/details/by-transaction',
   authMiddleware,
-  authorize(''),
+  authorize('DOCUMENT_VERIFY_BY_CODE'),
   getDocumentVerifyDetailsByTransactionController
 )
 

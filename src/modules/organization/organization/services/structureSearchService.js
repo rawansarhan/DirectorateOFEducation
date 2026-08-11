@@ -12,17 +12,6 @@ const {
 } = require('../../../../core/utils/pagination')
 const { createHttpError, HTTP_STATUS } = require('../../../../core/middleware/httpStatusCodes')
 
-function mapOrg (row) {
-  const p = row.get ? row.get({ plain: true }) : row
-  return {
-    kind: 'organization',
-    id: p.id,
-    name: p.name,
-    parent_id: p.parent_id ?? null,
-    location_id: p.location_id ?? null
-  }
-}
-
 function mapDept (row) {
   const p = row.get ? row.get({ plain: true }) : row
   return {
@@ -30,7 +19,6 @@ function mapDept (row) {
     id: p.id,
     name: p.name,
     organization_id: p.organization_id,
-    organization_name: p.organization?.name ?? null,
     parent_id: p.parent_id ?? null,
     is_active: Boolean(p.is_active)
   }
@@ -45,11 +33,41 @@ function mapRole (row) {
     name: p.role?.name ?? null,
     code: p.role?.code ?? null,
     organization_id: p.organization_id,
-    organization_name: p.organization?.name ?? null,
     department_id: p.department_id,
     department_name: p.department?.name ?? null,
     camunda_group_key: p.camunda_group_key ?? null,
     is_active: Boolean(p.is_active)
+  }
+}
+
+function mapEmployee (row) {
+  const p = row.get ? row.get({ plain: true }) : row
+  const assignments = (p.role_assignments || []).map(a => {
+    const odr = a.org_department_role || {}
+    return {
+      assignment_id: a.id,
+      odr_id: odr.id ?? a.organization_department_roles_id,
+      role: odr.role
+        ? { id: odr.role.id, name: odr.role.name, code: odr.role.code }
+        : null,
+      department: odr.department
+        ? { id: odr.department.id, name: odr.department.name }
+        : null
+    }
+  })
+
+  return {
+    kind: 'employee',
+    id: p.id,
+    userName: p.userName ?? null,
+    email: p.email ?? null,
+    first_name: p.first_name ?? null,
+    last_name: p.last_name ?? null,
+    father_name: p.father_name ?? null,
+    mother_name: p.mother_name ?? null,
+    national_id: p.national_id ?? null,
+    is_active: Boolean(p.is_active),
+    assignments
   }
 }
 
@@ -59,10 +77,10 @@ function buildNameCursor (kind, row) {
   return encodeCursor({ k: kind, n: p.name, id: Number(p.id) })
 }
 
-function buildOdrCursor (row) {
+function buildIdCursor (kind, row) {
   const p = row.get ? row.get({ plain: true }) : row
   if (!Number.isFinite(Number(p.id))) return null
-  return encodeCursor({ k: 'odr', id: Number(p.id) })
+  return encodeCursor({ k: kind, id: Number(p.id) })
 }
 
 async function searchStructure (query = {}) {
@@ -78,57 +96,54 @@ async function searchStructure (query = {}) {
 
   const common = {
     limit,
-    organizationId: filters.organization_id || null,
-    isActive: filters.is_active == null ? null : filters.is_active
+    organizationId: filters.organization_id,
+    isActive: filters.is_active
   }
 
-  // scope=all: ثلاث قوائم قصيرة (typeahead) بدون cursor موحّد
+  // typeahead: ثلاث قوائم قصيرة ضمن نفس المؤسسة
   if (filters.scope === 'all') {
     if (cursor) {
       throw createHttpError(
-        'cursor غير مدعوم مع scope=all — استخدم scope محدّد للترقيم',
+        'cursor غير مدعوم مع scope=all — استخدم scope=department|role|employee',
         HTTP_STATUS.BAD_REQUEST,
         'VALIDATION_ERROR'
       )
     }
 
     const capped = Math.min(limit, 20)
-    const [orgs, depts, roles] = await Promise.all([
-      structureSearchRepository.searchOrganizations(filters.q, { limit: capped }),
-      structureSearchRepository.searchDepartments(filters.q, {
-        ...common,
-        limit: capped
-      }),
-      structureSearchRepository.searchRoles(filters.q, {
-        ...common,
-        limit: capped
-      })
+    const opts = { ...common, limit: capped }
+
+    const [depts, roles, employees] = await Promise.all([
+      structureSearchRepository.searchDepartments(filters.q, opts),
+      structureSearchRepository.searchRoles(filters.q, opts),
+      structureSearchRepository.searchEmployees(filters.q, opts)
     ])
 
     return {
       message: 'تم جلب نتائج بحث الهيكل بنجاح',
       data: {
+        organization_id: filters.organization_id,
         scope: 'all',
         q: filters.q,
-        organizations: orgs.rows.map(mapOrg),
         departments: depts.rows.map(mapDept),
         roles: roles.rows.map(mapRole),
+        employees: employees.rows.map(mapEmployee),
         pagination: {
           limit: capped,
-          organizations_has_next: orgs.hasNext,
           departments_has_next: depts.hasNext,
-          roles_has_next: roles.hasNext
+          roles_has_next: roles.hasNext,
+          employees_has_next: employees.hasNext
         }
       }
     }
   }
 
   const expectedKind =
-    filters.scope === 'organization'
-      ? 'org'
-      : filters.scope === 'department'
-        ? 'dept'
-        : 'odr'
+    filters.scope === 'department'
+      ? 'dept'
+      : filters.scope === 'role'
+        ? 'odr'
+        : 'emp'
 
   if (decodedCursor && decodedCursor.k !== expectedKind) {
     throw createHttpError(
@@ -142,33 +157,34 @@ async function searchStructure (query = {}) {
   let mapper
   let buildNext
 
-  if (filters.scope === 'organization') {
-    result = await structureSearchRepository.searchOrganizations(filters.q, {
-      limit,
-      cursor: decodedCursor
-    })
-    mapper = mapOrg
-    buildNext = row => buildNameCursor('org', row)
-  } else if (filters.scope === 'department') {
+  if (filters.scope === 'department') {
     result = await structureSearchRepository.searchDepartments(filters.q, {
       ...common,
       cursor: decodedCursor
     })
     mapper = mapDept
     buildNext = row => buildNameCursor('dept', row)
-  } else {
+  } else if (filters.scope === 'role') {
     result = await structureSearchRepository.searchRoles(filters.q, {
       ...common,
       cursor: decodedCursor
     })
     mapper = mapRole
-    buildNext = buildOdrCursor
+    buildNext = row => buildIdCursor('odr', row)
+  } else {
+    result = await structureSearchRepository.searchEmployees(filters.q, {
+      ...common,
+      cursor: decodedCursor
+    })
+    mapper = mapEmployee
+    buildNext = row => buildIdCursor('emp', row)
   }
 
   if (!result.rows.length) {
     return {
       message: 'تم جلب نتائج بحث الهيكل بنجاح',
       data: {
+        organization_id: filters.organization_id,
         scope: filters.scope,
         q: filters.q,
         ...emptyCursorPaginatedResult({ limit, cursor })
@@ -183,6 +199,7 @@ async function searchStructure (query = {}) {
   return {
     message: 'تم جلب نتائج بحث الهيكل بنجاح',
     data: {
+      organization_id: filters.organization_id,
       scope: filters.scope,
       q: filters.q,
       items: result.rows.map(mapper),

@@ -123,7 +123,12 @@ function createRedisClient (url) {
   })
 
   redisClient.on('error', (err) => {
-    console.error(`${LOG_PREFIX} Redis error:`, err.message)
+    const exceptionLogger = require('../logging/exceptionLogger')
+    exceptionLogger.error({
+      message: 'redis_client_error',
+      err,
+      component: 'apiCacheService'
+    })
   })
 
   return redisClient

@@ -18,7 +18,7 @@ const {
   invalidateRolePermissionsByOrgDeptRole,
   invalidateUserPermissionCaches
 } = require('../../../../core/cache/apiCacheService')
-
+//هذه اللدالة لتحديد الدور و المنصب و المراد تحديده
 async function resolveOrgDeptRole ({ organizationId, departmentId, roleId }) {
   const orgDeptRole = await rolePermissionRepository.findOrgDeptRoleByOrgDeptRole({
     organizationId,
@@ -36,7 +36,7 @@ async function resolveOrgDeptRole ({ organizationId, departmentId, roleId }) {
 
   return orgDeptRole
 }
-
+//هذه الدالة لتحديد الصلاحيات الموجودة في النظام 
 async function assertPermissionIdsExist (permissionIds) {
   const found = await permissionRepository.findByIds(permissionIds)
 
@@ -57,7 +57,7 @@ const PERMISSION_AUDIENCES = {
   employee: ['employee', 'employee,citizen,admin'],
   admin: ['admin', 'employee,citizen,admin']
 }
-
+//هذه الدلة لجلب الصلاحيات الموجودة في النظام 
 async function listPermissions () {
   const rows = await getOrLoad(
     KEYS.permissionsAll(),
@@ -70,7 +70,7 @@ async function listPermissions () {
     data: toPermissionDTOList(rows)
   }
 }
-
+//هذه الدالة لجلب الصلاحيات الموجودة بالنظام المعين 
 async function listPermissionsByAudience (audience) {
   const types = PERMISSION_AUDIENCES[audience]
 
@@ -95,7 +95,7 @@ async function listPermissionsByAudience (audience) {
     data: toPermissionDTOList(rows)
   }
 }
-
+//هذه الدالة لجلب الصلاحيات الموجودة في دور معين 
 async function getRolePermissions (query) {
   const { organizationId, departmentId, roleId } = parseOrgDeptRoleQuery(query)
   const orgDeptRole = await resolveOrgDeptRole({
@@ -121,8 +121,8 @@ async function getRolePermissions (query) {
     })
   }
 }
-
-async function createRolePermissions (body) {
+//انشاء صلاحية لرول معين 
+async function createRolePermissions (body, auditContext = {}) {
   const { organizationId, departmentId, roleId, permissionIds } =
     parseOrgDeptRoleBody(body)
 
@@ -135,7 +135,7 @@ async function createRolePermissions (body) {
     departmentId,
     roleId
   })
-
+//تحديد الصلاحية الموجودة في النظام
   await assertPermissionIdsExist(permissionIds)
   await rolePermissionRepository.addPermissionsForOrgDeptRole(
     orgDeptRole.id,
@@ -148,6 +148,29 @@ async function createRolePermissions (body) {
   ])
 
   const rows = await rolePermissionRepository.findByOrgDeptRoleId(orgDeptRole.id)
+//تسجيل حالة النجاح في النظام 
+  const {
+    auditSuccess
+  } = require('../../../../core/security/safeAudit')
+  const {
+    AUDIT_ACTIONS
+  } = require('../../../../core/security/auditActions')
+
+  await auditSuccess({
+    userId: auditContext.actorUserId || null,
+    action: AUDIT_ACTIONS.ROLE_PERMISSIONS_CREATED,
+    resourceType: 'organization_department_role',
+    resourceId: orgDeptRole.id,
+    ipAddress: auditContext.ip || null,
+    userAgent: auditContext.userAgent || null,
+    details: {
+      organization_id: organizationId,
+      department_id: departmentId,
+      role_id: roleId,
+      permissionIds,
+      permissionCount: permissionIds.length
+    }
+  })
 
   return {
     message: 'تم ربط الصلاحيات بالدور بنجاح',
@@ -157,8 +180,8 @@ async function createRolePermissions (body) {
     })
   }
 }
-
-async function updateRolePermissions (body) {
+//تحديث صلاحيات الدور
+async function updateRolePermissions (body, auditContext = {}) {
   const { organizationId, departmentId, roleId, permissionIds } =
     parseOrgDeptRoleBody(body)
 
@@ -183,6 +206,29 @@ async function updateRolePermissions (body) {
   ])
 
   const rows = await rolePermissionRepository.findByOrgDeptRoleId(orgDeptRole.id)
+
+  const {
+    auditSuccess
+  } = require('../../../../core/security/safeAudit')
+  const {
+    AUDIT_ACTIONS
+  } = require('../../../../core/security/auditActions')
+
+  await auditSuccess({
+    userId: auditContext.actorUserId || null,
+    action: AUDIT_ACTIONS.ROLE_PERMISSIONS_UPDATED,
+    resourceType: 'organization_department_role',
+    resourceId: orgDeptRole.id,
+    ipAddress: auditContext.ip || null,
+    userAgent: auditContext.userAgent || null,
+    details: {
+      organization_id: organizationId,
+      department_id: departmentId,
+      role_id: roleId,
+      permissionIds,
+      permissionCount: permissionIds.length
+    }
+  })
 
   return {
     message: 'تم تحديث صلاحيات الدور بنجاح',

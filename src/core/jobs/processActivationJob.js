@@ -1,5 +1,6 @@
 const cron = require('node-cron')
 const { updateProcessActivationStatus } = require('../../modules/workflow/processDefinition/services/processScheduleService')
+const exceptionLogger = require('../logging/exceptionLogger')
 
 // كل دقيقة (تقدر تغيرها)
 cron.schedule('* * * * *', async () => {
@@ -9,6 +10,10 @@ cron.schedule('* * * * *', async () => {
     await updateProcessActivationStatus()
     console.log('✅ Process activation updated')
   } catch (err) {
-    console.error('❌ Error updating process activation:', err.message)
+    exceptionLogger.error({
+      message: 'process_activation_job_failed',
+      err,
+      component: 'processActivationJob'
+    })
   }
 })

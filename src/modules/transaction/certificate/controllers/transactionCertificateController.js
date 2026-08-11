@@ -5,7 +5,10 @@ const {
   saveFinalDocument,
   getFinalDocument,
   deleteFinalDocument,
-  listMyFinalDocuments
+  listMyFinalDocuments,
+  listTransactionSourceDocuments,
+  parseIdList,
+  parseFileOrder
 } = require('../services/transactionCertificateService')
 const {
   parseQrPayloadFromBody
@@ -62,14 +65,47 @@ async function uploadFinalDocumentController (req, res) {
 
 async function getFinalDocumentController (req, res) {
   try {
+    const hasFileOrder = Object.prototype.hasOwnProperty.call(
+      req.query,
+      'file_order'
+    )
+    const hasInstanceKey = Object.prototype.hasOwnProperty.call(
+      req.query,
+      'document_instance_ids'
+    )
+    const hasSignatureKey = Object.prototype.hasOwnProperty.call(
+      req.query,
+      'document_signature_ids'
+    )
+
     const data = await getFinalDocument(req.params.transactionId, {
-      userId: req.user?.id ?? null
+      userId: req.user?.id ?? null,
+      fileOrder: hasFileOrder
+        ? parseFileOrder(req.query.file_order)
+        : undefined,
+      documentInstanceIds: hasInstanceKey
+        ? parseIdList(req.query.document_instance_ids)
+        : undefined,
+      documentSignatureIds: hasSignatureKey
+        ? parseIdList(req.query.document_signature_ids)
+        : undefined
     })
 
     return successResponse(res, {
-      message: data?.available === false
-        ? 'لا توجد وثيقة نهائية'
-        : 'تم جلب الوثيقة النهائية بنجاح',
+      message: 'تم جلب الوثيقة النهائية بنجاح',
+      data
+    })
+  } catch (err) {
+    return handleCertificateError(res, err)
+  }
+}
+
+async function listSourceDocumentsController (req, res) {
+  try {
+    const data = await listTransactionSourceDocuments(req.params.transactionId)
+
+    return successResponse(res, {
+      message: 'تم جلب مستندات المعاملة بنجاح',
       data
     })
   } catch (err) {
@@ -108,6 +144,7 @@ module.exports = {
   getCertificateController,
   uploadFinalDocumentController,
   getFinalDocumentController,
+  listSourceDocumentsController,
   deleteFinalDocumentController,
   listMyFinalDocumentsController
 }

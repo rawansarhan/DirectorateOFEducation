@@ -2,7 +2,8 @@
 
 const processSearchRepository = require('../repositories/processSearchRepository')
 const {
-  validateProcessSearchQuery
+  validateProcessSearchQuery,
+  validateEmployeeOrgProcessSearchQuery
 } = require('../validations/processSearchValidation')
 const {
   parseCursorPaginationQuery,
@@ -46,13 +47,7 @@ function buildProcessCursor (row) {
   })
 }
 
-async function searchProcessDefinitions (query = {}) {
-  const { error, value: filters } = validateProcessSearchQuery(query)
-
-  if (error) {
-    throw createHttpError(error, HTTP_STATUS.BAD_REQUEST, 'VALIDATION_ERROR')
-  }
-
+async function runProcessSearch (filters, query) {
   const { limit, cursor, decodedCursor } = parseCursorPaginationQuery(query, {
     defaultLimit: 20
   })
@@ -93,6 +88,29 @@ async function searchProcessDefinitions (query = {}) {
   }
 }
 
+/** أدمن — PROCESS_PUBLISH_MANAGE */
+async function searchProcessDefinitions (query = {}) {
+  const { error, value: filters } = validateProcessSearchQuery(query)
+
+  if (error) {
+    throw createHttpError(error, HTTP_STATUS.BAD_REQUEST, 'VALIDATION_ERROR')
+  }
+
+  return runProcessSearch(filters, query)
+}
+
+/** موظف — GET_ORGANIZATIONAL_STRUCTURE + organization_id إجباري */
+async function searchProcessDefinitionsByOrganization (query = {}) {
+  const { error, value: filters } = validateEmployeeOrgProcessSearchQuery(query)
+
+  if (error) {
+    throw createHttpError(error, HTTP_STATUS.BAD_REQUEST, 'VALIDATION_ERROR')
+  }
+
+  return runProcessSearch(filters, query)
+}
+
 module.exports = {
-  searchProcessDefinitions
+  searchProcessDefinitions,
+  searchProcessDefinitionsByOrganization
 }

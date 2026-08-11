@@ -1,5 +1,6 @@
 const asyncHandler = require('../../../../core/middleware/asyncHandler')
 const ApiResponder = require('../../../../core/utils/apiResponder')
+const { buildAuditContext } = require('../../../../core/security/auditContext')
 const {
   createRoleService,
   updateRoleService,
@@ -13,7 +14,7 @@ const {
 // ================= CREATE =================
 const createRole = asyncHandler(async (req, res) => {
   try {
-    const result = await createRoleService(req.body)
+    const result = await createRoleService(req.body, buildAuditContext(req))
     return ApiResponder.createdResponse(res, result, 'تم إنشاء الدور بنجاح')
   } catch (err) {
     return ApiResponder.error(res, { message: err.message, statusCode: err.statusCode || 400 })
@@ -43,7 +44,7 @@ const deleteRole = asyncHandler(async (req, res) => {
 // ================= TOGGLE STATUS =================
 const toggleRoleStatus = asyncHandler(async (req, res) => {
   try {
-    const result = await toggleRoleStatusService(req.params.id)
+    const result = await toggleRoleStatusService(req.params.id, buildAuditContext(req))
     return ApiResponder.okResponse(
       res,
       result,
