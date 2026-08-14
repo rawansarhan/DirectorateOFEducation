@@ -16,7 +16,10 @@ const authMiddleware = async (req, res, next) => {
     const authHeader = req.header('Authorization')
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return ApiResponder.unauthorizedResponse(res, 'No token provided')
+      return ApiResponder.unauthorizedResponse(
+        res,
+        'لم يتم إرسال رمز الدخول — يرجى تسجيل الدخول مجدداً'
+      )
     }
 
     const token = authHeader.split(' ')[1]
@@ -41,10 +44,16 @@ const authMiddleware = async (req, res, next) => {
     next()
   } catch (err) {
     if (err.name === 'TokenExpiredError') {
-      return ApiResponder.unauthorizedResponse(res, 'Token expired')
+      return ApiResponder.unauthorizedResponse(
+        res,
+        'انتهت صلاحية جلسة الدخول — يرجى تسجيل الدخول مجدداً'
+      )
     }
 
-    return ApiResponder.unauthorizedResponse(res, 'Invalid token')
+    return ApiResponder.unauthorizedResponse(
+      res,
+      'رمز الدخول غير صالح — يرجى تسجيل الدخول مجدداً'
+    )
   }
 }
 
@@ -81,7 +90,10 @@ function authorize (...requiredPermissions) {
       const user = req.user
 
       if (!user?.id) {
-        return ApiResponder.unauthorizedResponse(res, 'Unauthorized')
+        return ApiResponder.unauthorizedResponse(
+          res,
+          'غير مصرّح — يرجى تسجيل الدخول'
+        )
       }
 
       const permissionNames = await loadUserPermissionNames(

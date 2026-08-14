@@ -88,7 +88,12 @@ const WORKFLOW_ERROR_CATALOG = {
     status: HTTP_STATUS.BAD_REQUEST
   },
   'Too many requests — please wait before retrying': {
-    message: 'طلبات كثيرة — انتظر قليلاً ثم أعد المحاولة',
+    message: 'تم تجاوز حد الطلبات — انتظر قليلاً ثم أعد المحاولة',
+    code: 'RATE_LIMITED',
+    status: HTTP_STATUS.TOO_MANY_REQUESTS
+  },
+  'تم تجاوز حد الطلبات — انتظر قليلاً ثم أعد المحاولة': {
+    message: 'تم تجاوز حد الطلبات — انتظر قليلاً ثم أعد المحاولة',
     code: 'RATE_LIMITED',
     status: HTTP_STATUS.TOO_MANY_REQUESTS
   },

@@ -96,7 +96,7 @@ const HTTP_STATUS_MESSAGE = Object.freeze({
   [HTTP_STATUS.CONFLICT]: 'Conflict',
   [HTTP_STATUS.UNPROCESSABLE_ENTITY]: 'Unprocessable Entity',
   [HTTP_STATUS.LOCKED]: 'Locked',
-  [HTTP_STATUS.TOO_MANY_REQUESTS]: 'Too Many Requests',
+  [HTTP_STATUS.TOO_MANY_REQUESTS]: 'تم تجاوز حد الطلبات — يرجى المحاولة لاحقاً',
   [HTTP_STATUS.INTERNAL_SERVER_ERROR]: 'Internal Server Error'
 })
 

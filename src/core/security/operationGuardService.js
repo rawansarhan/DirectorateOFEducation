@@ -101,7 +101,7 @@ class OperationGuardService {
     const now = Date.now()
 
     if (now - lastAt < MIN_INTERVAL_MS) {
-      const error = new Error('Too many requests — please wait before retrying')
+      const error = new Error('تم تجاوز حد الطلبات — انتظر قليلاً ثم أعد المحاولة')
       error.code = 'RATE_LIMITED'
       throw error
     }

@@ -62,7 +62,7 @@ function createRateLimiter ({
 
       return ApiResponder.tooManyRequestsResponse(
         res,
-        'Too many requests. Please try again later.',
+        `تم تجاوز حد الطلبات المسموح — يرجى المحاولة بعد ${retryAfter} ثانية`,
         null,
         { retry_after: retryAfter }
       )
