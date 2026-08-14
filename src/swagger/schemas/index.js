@@ -11,5 +11,6 @@ module.exports = {
   ...require('./common'),
   ...require('./transaction'),
   ...require('./workflow'),
-  ...require('./processDefinition')
+  ...require('./processDefinition'),
+  ...require('./appointments')
 }

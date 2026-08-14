@@ -173,7 +173,8 @@ app.use(
 const appUpdatesRoutes = require('./modules/appUpdates/routes/appUpdates')
 app.use('/api/app-updates', appUpdatesRoutes)
 
-
+const appointmentRoutes = require('./modules/appointments/routes/appointment')
+app.use('/api/appointments', appointmentRoutes)
 
 // ====================== ERROR HANDLER ======================
 app.use(errorHandler)

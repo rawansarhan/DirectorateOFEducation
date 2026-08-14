@@ -73,7 +73,9 @@ async function loadUserPermissionNames (userId, roleIds = []) {
 }
 
 /* ================= AUTHORIZE MIDDLEWARE ================= */
-function authorize (requiredPermission) {
+function authorize (...requiredPermissions) {
+  const required = requiredPermissions.flat().filter(Boolean)
+
   return async (req, res, next) => {
     try {
       const user = req.user
@@ -87,7 +89,11 @@ function authorize (requiredPermission) {
         user.roles
       )
 
-      if (!permissionNames.includes(requiredPermission)) {
+      const allowed = required.some((permission) =>
+        permissionNames.includes(permission)
+      )
+
+      if (!allowed) {
         return ApiResponder.forbiddenResponse(
           res,
           'Forbidden - missing permission'

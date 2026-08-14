@@ -154,12 +154,39 @@ function runMulterUpload (middleware) {
   }
 }
 
+const IDENTITY_IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp']
+
+const identityImageFilter = (req, file, cb) => {
+  const ext = path.extname(file.originalname).toLowerCase()
+
+  if (!IDENTITY_IMAGE_EXTENSIONS.includes(ext)) {
+    return cb(
+      new Error(
+        `نوع صورة الهوية غير مسموح — المسموح: ${IDENTITY_IMAGE_EXTENSIONS.map(item => item.slice(1)).join(', ')}`
+      )
+    )
+  }
+
+  cb(null, true)
+}
+
+const uploadIdentityImage = multer({
+  storage,
+  fileFilter: identityImageFilter,
+  limits: {
+    fileSize: TRANSACTION_FILE_MAX_MB * 1024 * 1024,
+    files: 1
+  }
+})
+
 module.exports = {
   uploadBPMN,
   uploadDocumentTemplate,
   uploadTransactionFile,
   uploadFinalTransactionPdf,
+  uploadIdentityImage,
   TRANSACTION_FILE_MAX_MB,
   TRANSACTION_FILE_EXTENSIONS,
+  IDENTITY_IMAGE_EXTENSIONS,
   runMulterUpload
 }

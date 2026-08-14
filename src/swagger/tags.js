@@ -82,5 +82,9 @@ module.exports = [
   {
     "name": "App Updates",
     "description": "التحديث الذاتي داخل التطبيقات (citizen / employee / technical_team) — فحص الإصدار وإدارة الإصدارات"
+  },
+  {
+    "name": "Appointments",
+    "description": "المواعيد المتاحة، الحجز، الموافقة/الرفض، والحضور (Appointments)"
   }
 ]

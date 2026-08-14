@@ -366,7 +366,8 @@ class ProcessRepository {
     const processes = await ProcessDefinition.findAll({
       where: {
         status: 'deployed',
-        approval_status: 'APPROVED'
+        approval_status: 'APPROVED',
+        activation_locked: false
       },
       attributes: ['id', 'is_active', 'start_date', 'end_date']
     })

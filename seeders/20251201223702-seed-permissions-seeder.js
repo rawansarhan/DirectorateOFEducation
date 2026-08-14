@@ -117,11 +117,35 @@ const PERMISSIONS = [
     type: 'employee,citizen,admin'
   },
 
+  // employee, citizen
+  {
+    name: 'عرض المواعيد المتاحة للحجز',
+    code: 'APPOINTMENT_VIEW_AVAILABLE',
+    type: 'employee,citizen'
+  },
+
+  // employee
+  {
+    name: 'ادارة مواعيد الحجز (اضافة/تعديل/حذف/موافقة)',
+    code: 'APPOINTMENT_MANAGE',
+    type: 'employee'
+  },
+
   // citizen
   {
     name: 'اجراءات طلب المعاملة من قبل المواطن',
     code: 'TRANSACTION_SUBMIT',
     type: 'citizen'
+  },
+  {
+    name: 'حجز موعد وعرض حجوزاتي (مواطن)',
+    code: 'APPOINTMENT_BOOK',
+    type: 'citizen'
+  },
+  {
+    name: 'حجز موعد (موظف)',
+    code: 'APPOINTMENT_BOOK_EMPLOYEE',
+    type: 'employee'
   }
 ]
 

@@ -174,7 +174,9 @@ const updateProcessActiveStatusController = asyncHandler(async (req, res) => {
 
     return ApiResponder.okResponse(res, result, 'تم تعديل حالة العملية بنجاح')
   } catch (err) {
-    return ApiResponder.badRequestResponse(res, err.message)
+    const statusCode = err.statusCode || 400
+    if (statusCode === 404) return ApiResponder.notFoundResponse(res, err.message)
+    return ApiResponder.error(res, { message: err.message, statusCode })
   }
 })
 

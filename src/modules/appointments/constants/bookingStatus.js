@@ -1,0 +1,43 @@
+'use strict'
+
+const BOOKING_STATUS = {
+  PENDING: 'pending',
+  APPROVED: 'approved',
+  REJECTED: 'rejected',
+  POSTPONED: 'postponed',
+  CANCELLED: 'cancelled'
+}
+
+const OCCUPIED_STATUSES = [
+  BOOKING_STATUS.APPROVED,
+  BOOKING_STATUS.POSTPONED
+]
+
+const ACTIVE_BOOKING_STATUSES = [
+  BOOKING_STATUS.PENDING,
+  BOOKING_STATUS.APPROVED,
+  BOOKING_STATUS.POSTPONED
+]
+
+const CITIZEN_BOOKING_STATUSES = [
+  BOOKING_STATUS.PENDING,
+  BOOKING_STATUS.APPROVED,
+  BOOKING_STATUS.REJECTED,
+  BOOKING_STATUS.POSTPONED
+]
+
+const STATUS_LABELS = {
+  pending: 'بانتظار الموافقة',
+  approved: 'موافق عليها',
+  rejected: 'مرفوضة',
+  postponed: 'تم تأجيلها',
+  cancelled: 'ملغاة'
+}
+
+module.exports = {
+  BOOKING_STATUS,
+  OCCUPIED_STATUSES,
+  ACTIVE_BOOKING_STATUSES,
+  CITIZEN_BOOKING_STATUSES,
+  STATUS_LABELS
+}

@@ -368,9 +368,11 @@ router.get(
  *   patch:
  *     summary: تعديل حالة العملية (نشط/غير نشط) لكل الأنواع
  *     description: |
- *       يبدّل `is_active` للعملية المحددة سواء كانت:
- *       - `is_complaint = false` (معاملة عادية)
- *       - `is_complaint = true` (عملية شكوى)
+ *       يضبط `is_active` للعملية يدوياً سواء كانت معاملة عادية أو شكوى.
+ *       التعديل يُثبَّت (`activation_locked`) حتى لا تعيد مهمة جدول التواريخ (كل دقيقة)
+ *       كتابة الحالة حسب `start_date` / `end_date`.
+ *
+ *       Body: `{ "is_active": true }` أو `{ "is_active": false }`
  *     tags: [Process Definition]
  *     security:
  *       - bearerAuth: []
@@ -392,13 +394,36 @@ router.get(
  *               is_active:
  *                 type: boolean
  *                 example: false
+ *           examples:
+ *             deactivate:
+ *               summary: إيقاف العملية
+ *               value: { is_active: false }
+ *             activate:
+ *               summary: تفعيل العملية
+ *               value: { is_active: true }
  *     responses:
  *       200:
  *         description: تم تعديل حالة العملية بنجاح
+ *         content:
+ *           application/json:
+ *             examples:
+ *               deactivated:
+ *                 summary: إيقاف
+ *                 value:
+ *                   success: true
+ *                   status_code: 200
+ *                   message: تم تعديل حالة العملية بنجاح
+ *                   data:
+ *                     process_definition_id: 1
+ *                     is_active: false
+ *                     is_complaint: false
+ *                     activation_locked: true
  *       400:
  *         description: بيانات غير صالحة
  *       401:
  *         description: Unauthorized
+ *       404:
+ *         description: العملية غير موجودة
  */
 router.patch(
   '/admin/:id/status',

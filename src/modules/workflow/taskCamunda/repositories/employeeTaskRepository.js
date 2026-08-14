@@ -917,8 +917,11 @@ async function getTerminalInstancesByDepartments ({
   }
 
   const processWhere = buildProcessDefinitionWhere(filters)
+  const processInstanceStatus =
+    transactionStatus === 'rejected' ? 'cancelled' : 'completed'
+
   const baseWhere = {
-    status: 'completed',
+    status: processInstanceStatus,
     transaction_id: { [Op.in]: transactionIds }
   }
 

@@ -425,24 +425,64 @@ async function getProcessesByTypeForAdmin (typeTransID, paginationInput) {
   }
 }
 
-async function updateProcessActiveStatus (processId, isActive, auditContext = {}) {
-  const numericProcessId = Number(processId)
-  if (!Number.isInteger(numericProcessId) || numericProcessId < 1) {
-    throw new Error('معرّف العملية غير صالح')
+function parseActiveFlag (value) {
+  if (value === true || value === 'true' || value === 1 || value === '1') {
+    return true
   }
 
-  if (typeof isActive !== 'boolean') {
-    throw new Error('الحقل is_active يجب أن يكون true أو false')
+  if (value === false || value === 'false' || value === 0 || value === '0') {
+    return false
+  }
+
+  return null
+}
+
+async function updateProcessActiveStatus (processId, isActiveRaw, auditContext = {}) {
+  const numericProcessId = Number(processId)
+  if (!Number.isInteger(numericProcessId) || numericProcessId < 1) {
+    throw createHttpError(
+      'معرّف العملية غير صالح',
+      HTTP_STATUS.BAD_REQUEST,
+      'VALIDATION_ERROR'
+    )
+  }
+
+  const isActive = parseActiveFlag(isActiveRaw)
+  if (isActive == null) {
+    throw createHttpError(
+      'الحقل is_active يجب أن يكون true أو false',
+      HTTP_STATUS.BAD_REQUEST,
+      'VALIDATION_ERROR'
+    )
   }
 
   const process = await processRepository.findById(numericProcessId)
   if (!process) {
-    throw new Error('العملية غير موجودة')
+    throw createHttpError(
+      'العملية غير موجودة',
+      HTTP_STATUS.NOT_FOUND,
+      'NOT_FOUND'
+    )
+  }
+
+  if (isActive && process.is_complaint) {
+    const activeComplaint = await processRepository.existsActiveComplaintProcess()
+
+    if (activeComplaint && Number(activeComplaint.id) !== numericProcessId) {
+      throw createHttpError(
+        `لا يمكن تفعيل هذه الشكوى بينما الشكوى "${activeComplaint.name}" ما زالت نشطة. عطّلها أولاً.`,
+        HTTP_STATUS.BAD_REQUEST,
+        'ACTIVE_COMPLAINT_EXISTS'
+      )
+    }
   }
 
   const previousActive = Boolean(process.is_active)
 
-  await processRepository.update(numericProcessId, { is_active: isActive })
+  await processRepository.update(numericProcessId, {
+    is_active: isActive,
+    activation_locked: true
+  })
 
   await invalidateAllProcessLists()
   await invalidateProcessDefinitionsWithType()
@@ -465,13 +505,15 @@ async function updateProcessActiveStatus (processId, isActive, auditContext = {}
     details: {
       processDefinitionId: numericProcessId,
       before: { is_active: previousActive },
-      after: { is_active: isActive }
+      after: { is_active: isActive, activation_locked: true }
     }
   })
 
   return {
     process_definition_id: numericProcessId,
-    is_active: isActive
+    is_active: isActive,
+    is_complaint: Boolean(process.is_complaint),
+    activation_locked: true
   }
 }
 
