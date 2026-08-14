@@ -1,6 +1,7 @@
 'use strict'
 
 const { Op } = require('sequelize')
+const { likeContains } = require('../../../../core/utils/escapeLike')
 const { FilePicker } = require('../../../../entities')
 
 async function findById (id) {
@@ -27,7 +28,7 @@ async function findAndCountActive ({ limit, offset, search } = {}) {
   const where = { is_active: true }
 
   if (search) {
-    const like = { [Op.iLike]: `%${search}%` }
+    const like = likeContains(search)
     where[Op.or] = [
       { label: like },
       { id_widget: like }

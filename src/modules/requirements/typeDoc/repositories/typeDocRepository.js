@@ -1,7 +1,7 @@
 'use strict'
 
-const { Op } = require('sequelize')
 const { TypeDoc } = require('../../../../entities')
+const { likeContains } = require('../../../../core/utils/escapeLike')
 
 class TypeDocRepository {
   async create (data, options = {}) {
@@ -28,7 +28,7 @@ class TypeDocRepository {
     const where = { is_active: true }
 
     if (search) {
-      where.name = { [Op.iLike]: `%${search}%` }
+      where.name = likeContains(search)
     }
 
     return TypeDoc.findAndCountAll({

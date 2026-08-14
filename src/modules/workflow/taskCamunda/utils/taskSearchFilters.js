@@ -1,7 +1,7 @@
 'use strict'
 
 const { Op } = require('sequelize')
-const { escapeLike, likeContains } = require('../../../../core/utils/escapeLike')
+const { escapeLike, likeContains, arabicIncludes, normalizeArabicAlef } = require('../../../../core/utils/escapeLike')
 
 /**
  * أشكال بحث الاسم / الهوية / رقم المعاملة (نفس منطق بحث المعاملات).
@@ -154,19 +154,18 @@ function taskItemMatchesSearch (item, filters = {}) {
   const hayProcess = String(item?.process_name || item?.type || '').toLowerCase()
   const hayNumber = String(item?.transaction_number || '').toLowerCase()
 
-  const includes = (hay, needle) =>
-    hay.includes(String(needle).trim().toLowerCase())
+  const includes = (hay, needle) => arabicIncludes(hay, needle)
 
   if (filters.q) {
     const q = String(filters.q).trim().toLowerCase()
     if (!q) return true
     if (
-      !hayApplicant.includes(q) &&
-      !hayProcess.includes(q) &&
-      !hayNumber.includes(q)
+      !arabicIncludes(hayApplicant, q) &&
+      !arabicIncludes(hayProcess, q) &&
+      !arabicIncludes(hayNumber, q)
     ) {
-      const tokens = q.split(/\s+/).filter(Boolean)
-      const allInName = tokens.every(t => hayApplicant.includes(t))
+      const tokens = normalizeArabicAlef(q).split(/\s+/).filter(Boolean)
+      const allInName = tokens.every(t => arabicIncludes(hayApplicant, t))
       if (!allInName) return false
     }
   }
@@ -196,8 +195,8 @@ function taskItemMatchesSearch (item, filters = {}) {
   }
 
   if (filters.national_id) {
-    const needle = String(filters.national_id).trim().toLowerCase()
-    if (needle && !hayApplicant.includes(needle) && !hayNumber.includes(needle)) {
+    const needle = String(filters.national_id).trim()
+    if (needle && !arabicIncludes(hayApplicant, needle) && !arabicIncludes(hayNumber, needle)) {
       return false
     }
   }
@@ -264,6 +263,8 @@ function hasAnySearchFilter (filters = {}) {
 module.exports = {
   escapeLike,
   likeContains,
+  normalizeArabicAlef,
+  arabicIncludes,
   buildApplicantNameOrConditions,
   buildTransactionFieldWhere,
   buildProcessNameWhere,

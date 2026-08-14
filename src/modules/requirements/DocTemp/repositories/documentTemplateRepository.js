@@ -1,5 +1,5 @@
-const { Op } = require('sequelize')
 const { DocumentTemplate, TypeDoc } = require('../../../../entities')
+const { likeContains } = require('../../../../core/utils/escapeLike')
 
 async function findById (id) {
   return DocumentTemplate.findByPk(id)
@@ -37,7 +37,7 @@ async function findAndCountActive ({ limit, offset, search } = {}) {
   const where = { is_active: true }
 
   if (search) {
-    where.name = { [Op.iLike]: `%${search}%` }
+    where.name = likeContains(search)
   }
 
   return DocumentTemplate.findAndCountAll({
