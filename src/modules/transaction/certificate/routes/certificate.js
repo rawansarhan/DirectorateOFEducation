@@ -19,6 +19,19 @@ const {
 
 const { authMiddleware, authorize } = require('../../../../core/middleware/authMiddleware')
 
+function isFinalDocumentGenerateQuery (query = {}) {
+  return ['file_order', 'document_instance_ids', 'document_signature_ids']
+    .some(key => Object.prototype.hasOwnProperty.call(query, key))
+}
+
+function authorizeGenerateFinalDocument (req, res, next) {
+  if (!isFinalDocumentGenerateQuery(req.query)) {
+    return next()
+  }
+
+  return authorize('VIEW_CREATE_FINAL_DOCUMENT')(req, res, next)
+}
+
 /**
  * @swagger
  * /api/transaction/my/final-documents:
@@ -328,7 +341,7 @@ router.get(
  *                 value:
  *                   success: false
  *                   status_code: 403
- *                   message: لا تملك صلاحية الوصول لهذه المعاملة
+ *                   message: هذه المعاملة ليست لك — لا يمكنك الاطلاع على طلب ليس لك
  *                   error: FORBIDDEN
  *                   data: null
  *       404:
@@ -355,24 +368,19 @@ router.post(
  * @swagger
  * /api/transaction/{transactionId}/final-document:
  *   get:
- *     summary: جلب الوثيقة النهائية أو توليدها حسب IDs مختارة
+ *     summary: جلب الوثيقة النهائية المحفوظة (أو توليدها حسب IDs)
  *     description: |
- *       **بدون query IDs:** يعيد الوثيقة المحفوظة فقط (إن وُجدت).
+ *       **بدون query (transaction_id فقط):** يعيد الوثيقة النهائية المحفوظة للمالك.
+ *       - لست مالك المعاملة (`transaction.user_id` ≠ مستخدم التوكن) → 403:
+ *         «هذه المعاملة ليست لك — لا يمكنك الاطلاع على طلب ليس لك»
+ *       - لا يوجد ملف محفوظ → 404:
+ *         «عذراً، لا يوجد ملف نهائي لطلبك بعد»
  *
- *       **مع query (موصى به للخلط):**
- *       `file_order=signature:3,instance:2,signature:1,instance:5`
- *       ⇒ بعد الغلاف يُدمَج بنفس التسلسل المخلوط (مو كل signatures ثم كل instances).
+ *       **مع query (توليد للموظف):**
+ *       `file_order=signature:3,instance:2,...` أو `document_instance_ids` / `document_signature_ids`.
+ *       يتطلب صلاحية `VIEW_CREATE_FINAL_DOCUMENT` ومعاملة `completed`.
  *
- *       اختصار: `file_order=s:3,i:2,s:1,i:5`
- *
- *       **بديل قديم (مجموعتان منفصلتان):**
- *       `document_signature_ids=...&document_instance_ids=...`
- *       (كل نوع ورا بعض: signatures ثم instances)
- *
- *       يمكن إرسال `file_order=` فارغ → غلاف + QR فقط
- *
- *       المعاملة يجب أن تكون `completed` عند التوليد.
- *       **Auth:** Bearer + `VIEW_CREATE_FINAL_DOCUMENT`
+ *       **Auth:** Bearer — الجلب بدون query للمالك فقط
  *     tags: [Certificate & Integrity Chain]
  *     security:
  *       - bearerAuth: []
@@ -388,7 +396,7 @@ router.post(
  *         name: file_order
  *         schema:
  *           type: string
- *         description: ترتيب مخلوط signature:ID,instance:ID,...
+ *         description: ترتيب مخلوط signature:ID,instance:ID,... (وضع التوليد)
  *         example: signature:3,instance:2,signature:1
  *       - in: query
  *         name: document_instance_ids
@@ -404,16 +412,36 @@ router.post(
  *         example: 3,1
  *     responses:
  *       200:
- *         description: تم جلب/توليد الوثيقة النهائية بنجاح
+ *         description: تم جلب الوثيقة النهائية بنجاح
  *       403:
- *         description: لا تملك صلاحية VIEW_CREATE_FINAL_DOCUMENT
+ *         description: هذه المعاملة ليست لك
+ *         content:
+ *           application/json:
+ *             examples:
+ *               not_owner:
+ *                 value:
+ *                   success: false
+ *                   status_code: 403
+ *                   message: هذه المعاملة ليست لك — لا يمكنك الاطلاع على طلب ليس لك
+ *                   error: NOT_TRANSACTION_OWNER
+ *                   data: null
  *       404:
- *         description: لا توجد وثيقة محفوظة ولم يُطلب توليد
+ *         description: لا توجد وثيقة نهائية محفوظة
+ *         content:
+ *           application/json:
+ *             examples:
+ *               no_final_file:
+ *                 value:
+ *                   success: false
+ *                   status_code: 404
+ *                   message: عذراً، لا يوجد ملف نهائي لطلبك بعد
+ *                   error: FINAL_DOCUMENT_NOT_FOUND
+ *                   data: null
  */
 router.get(
   '/:transactionId/final-document',
   authMiddleware,
-  authorize('VIEW_CREATE_FINAL_DOCUMENT'),
+  authorizeGenerateFinalDocument,
   getFinalDocumentController
 )
 

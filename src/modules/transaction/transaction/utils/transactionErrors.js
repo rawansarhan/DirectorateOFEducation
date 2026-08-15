@@ -10,6 +10,8 @@ const MESSAGES = {
   DRAFT_INACTIVE: 'المسودة غير مفعّلة',
   TRANSACTION_NOT_FOUND: 'المعاملة غير موجودة',
   UNAUTHORIZED: 'لا تملك صلاحية الوصول إلى هذه المعاملة',
+  NOT_TRANSACTION_OWNER: 'هذه المعاملة ليست لك — لا يمكنك الاطلاع على طلب ليس لك',
+  FINAL_DOCUMENT_NOT_FOUND: 'عذراً، لا يوجد ملف نهائي لطلبك بعد',
   SUBMIT_NOT_DRAFT: 'لا يمكن تقديم المعاملة إلا وهي في حالة مسودة',
   EMPLOYEE_FORBIDDEN_CITIZEN_ROUTE:
     'هذا المسار مخصّص للمواطن فقط. كموظف، قدّم معاملتك عبر مسار الموظف: أنشئ تحدي التوقيع أولاً عبر POST /api/transaction/process/{processId}/submit-documents/signing-challenge ثم وقّع وأرسل التقديم مع التوقيع',
@@ -94,6 +96,7 @@ function httpStatusForError (error) {
   if (
     error?.code === 'UNAUTHORIZED' ||
     error?.code === 'FORBIDDEN' ||
+    error?.code === 'NOT_TRANSACTION_OWNER' ||
     error?.code === 'EMPLOYEE_FORBIDDEN_CITIZEN_ROUTE' ||
     msg.includes('Unauthorized')
   ) {
@@ -105,6 +108,7 @@ function httpStatusForError (error) {
     error?.code === 'TRANSACTION_NOT_FOUND' ||
     error?.code === 'FIRST_STAGE_NOT_FOUND' ||
     error?.code === 'FIRST_STAGE_CONTENT_NOT_FOUND' ||
+    error?.code === 'FINAL_DOCUMENT_NOT_FOUND' ||
     error?.code === 'NOT_FOUND' ||
     msg.includes('not found')
   ) {

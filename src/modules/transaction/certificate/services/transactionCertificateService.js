@@ -84,7 +84,7 @@ async function loadAuthorizedTransaction (
     )
   }
 
-  throw createTransactionError('UNAUTHORIZED')
+  throw createTransactionError('NOT_TRANSACTION_OWNER')
 }
 
 async function buildStageNamesByCode (processDefinitionId) {
@@ -243,17 +243,18 @@ async function getFinalDocument (
     documentInstanceIds !== undefined ||
     documentSignatureIds !== undefined
 
-  // بدون ترتيب/IDs: قراءة الوثيقة المحفوظة فقط
+  // بدون ترتيب/IDs: قراءة الوثيقة المحفوظة — للمالك فقط
   if (!selectiveMode) {
+    if (!userId || Number(transaction.user_id) !== Number(userId)) {
+      throw createTransactionError('NOT_TRANSACTION_OWNER')
+    }
+
     const row = await documentFinalTransactionRepository.findByTransactionIdCached(
       numericTransactionId
     )
 
-    if (!row) {
-      throw createTransactionError(
-        'NOT_FOUND',
-        'لا توجد وثيقة نهائية محفوظة — أرسل file_order (موصى به) أو document_*_ids لتوليدها'
-      )
+    if (!row?.file_path) {
+      throw createTransactionError('FINAL_DOCUMENT_NOT_FOUND')
     }
 
     return toFinalDocumentDTO(row, { includeQrSnapshot: true })
