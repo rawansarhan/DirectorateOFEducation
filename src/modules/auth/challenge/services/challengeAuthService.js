@@ -11,7 +11,10 @@ const authChallengeRepository = require('../repositories/authChallengeRepository
 const securityGuardService = require('../../../../core/security/securityGuardService')
 const tokenService = require('../../shared/services/tokenService')
 
-const { LoginOutputDTO } = require('../../session/dto/LoginOutputDTO')
+const {
+  LoginOutputDTO,
+  resolveHasAppPin
+} = require('../../session/dto/LoginOutputDTO')
 
 const {
   generateNonce,
@@ -91,7 +94,8 @@ async function buildAuthResponse (user, clientMeta = {}) {
     token: accessToken,
     refreshToken,
     user: new LoginOutputDTO(user),
-    roles: roleAssign.map(item => item.organization_department_roles_id)
+    roles: roleAssign.map(item => item.organization_department_roles_id),
+    has_app_pin: resolveHasAppPin(user)
   }
 }
 

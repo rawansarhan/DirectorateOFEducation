@@ -1,5 +1,6 @@
 'use strict'
 
+const { resolveHasAppPin } = require('../../session/dto/LoginOutputDTO')
 
 class RegisterCitizenOutputDTO {
   constructor (field) {
@@ -14,6 +15,7 @@ class RegisterCitizenOutputDTO {
     this.phone_number = plain?.phone_number
     this.created_at = plain?.created_at
     this.updated_at = plain?.updated_at
+    this.has_app_pin = resolveHasAppPin(plain)
   }
 }
 

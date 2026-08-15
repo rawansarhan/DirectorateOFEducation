@@ -10,6 +10,8 @@ const {
 } = require('../services/sessionAuthService')
 
 const tokenService = require('../../shared/services/tokenService')
+const userRepository = require('../../shared/repositories/userRepository')
+const { resolveHasAppPin } = require('../dto/LoginOutputDTO')
 
 const {
   validateRefreshToken,
@@ -92,11 +94,14 @@ const refreshTokenUser = async (req, res) => {
       getClientMeta(req)
     )
 
+    const user = await userRepository.findById(result.userId)
+
     return ApiResponder.okResponse(
       res,
       {
         token: result.accessToken,
-        refreshToken: result.refreshToken
+        refreshToken: result.refreshToken,
+        has_app_pin: resolveHasAppPin(user)
       },
       'تم تحديث رمز الدخول بنجاح'
     )

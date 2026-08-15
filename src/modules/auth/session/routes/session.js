@@ -177,6 +177,7 @@ router.post('/device-token', authMiddleware, accountLockMiddleware, registerDevi
  *       يتحقق من الـ refresh token ويُصدر زوجاً جديداً (access + refresh).
  *       يتم تدوير الـ refresh token: القديم يُبطَل ويُصدَر جديد.
  *       عند كشف إعادة استخدام توكن مُبطَل تُلغى كل جلسات المستخدم.
+ *       الاستجابة تتضمن `has_app_pin` (من وجود `users.pin_hash`) لمزامنة قفل PIN على الجهاز.
  *     security: []
  *     requestBody:
  *       required: true

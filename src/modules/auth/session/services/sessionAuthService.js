@@ -16,7 +16,7 @@ const {
 } = require('../validations/sessionValidations')
 
 const { LoginInputDTO } = require('../dto/LoginInputDTO')
-const { LoginOutputDTO } = require('../dto/LoginOutputDTO')
+const { LoginOutputDTO, resolveHasAppPin } = require('../dto/LoginOutputDTO')
 
 
 const {
@@ -294,6 +294,7 @@ async function verifyLoginOtp (
     }),
     token: accessToken,
     refreshToken,
+    has_app_pin: resolveHasAppPin(user)
   }
 }
 

@@ -25,6 +25,11 @@ module.exports = {
       "updated_at": {
         "type": "string",
         "format": "date-time"
+      },
+      "has_app_pin": {
+        "type": "boolean",
+        "description": "true إذا كان للمستخدم pin_hash على السيرفر (أنشأ PIN مسبقاً)",
+        "example": true
       }
     }
   },
@@ -582,6 +587,11 @@ module.exports = {
           "refreshToken": {
             "type": "string",
             "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6..."
+          },
+          "has_app_pin": {
+            "type": "boolean",
+            "description": "true إذا كان الحساب أنشأ PIN على السيرفر (من users.pin_hash)",
+            "example": true
           }
         }
       }

@@ -35,3 +35,6 @@ Thumbs.db
 # Optional: OS temp files
 *.swp
 *.swo
+
+# Local documentation (not for remote)
+docs/

@@ -22,6 +22,7 @@ const {
 
 const { RegisterCitizenInputDTO } = require('../dto/RegisterCitizenInputDTO')
 const { RegisterCitizenOutputDTO } = require('../dto/RegisterCitizenOutputDTO')
+const { resolveHasAppPin } = require('../../session/dto/LoginOutputDTO')
 
 const {
   computeKeyFingerprint,
@@ -484,6 +485,7 @@ async function verifyRegisterOtp (
     user: new RegisterCitizenOutputDTO(user),
     role_code: 'CITIZEN',
     message: 'تم تفعيل الحساب بنجاح',
+    has_app_pin: resolveHasAppPin(user)
   }
 }
 
