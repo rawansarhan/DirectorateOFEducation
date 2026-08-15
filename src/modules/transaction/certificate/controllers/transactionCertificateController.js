@@ -2,17 +2,14 @@
 
 const {
   getCertificateBundle,
-  saveFinalDocument,
   getFinalDocument,
+  getMyFinalDocument,
   deleteFinalDocument,
   listMyFinalDocuments,
   listTransactionSourceDocuments,
   parseIdList,
   parseFileOrder
 } = require('../services/transactionCertificateService')
-const {
-  parseQrPayloadFromBody
-} = require('../mappers/certificateMapper')
 const {
   successResponse,
   errorResponse
@@ -45,17 +42,15 @@ async function getCertificateController (req, res) {
   }
 }
 
-async function uploadFinalDocumentController (req, res) {
+async function getMyFinalDocumentController (req, res) {
   try {
-    const data = await saveFinalDocument({
-      transactionId: req.params.transactionId,
-      userId: req.user.id,
-      file: req.file,
-      qrPayloadSnapshot: parseQrPayloadFromBody(req.body)
-    })
+    const data = await getMyFinalDocument(
+      req.params.transactionId,
+      req.user.id
+    )
 
     return successResponse(res, {
-      message: 'تم حفظ الوثيقة النهائية بنجاح',
+      message: 'تم جلب الوثيقة النهائية بنجاح',
       data
     })
   } catch (err) {
@@ -142,7 +137,7 @@ async function listMyFinalDocumentsController (req, res) {
 
 module.exports = {
   getCertificateController,
-  uploadFinalDocumentController,
+  getMyFinalDocumentController,
   getFinalDocumentController,
   listSourceDocumentsController,
   deleteFinalDocumentController,

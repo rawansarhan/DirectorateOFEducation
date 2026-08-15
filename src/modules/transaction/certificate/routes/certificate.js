@@ -5,32 +5,14 @@ const router = express.Router()
 
 const {
   getCertificateController,
-  uploadFinalDocumentController,
+  getMyFinalDocumentController,
   getFinalDocumentController,
   listSourceDocumentsController,
   deleteFinalDocumentController,
   listMyFinalDocumentsController
 } = require('../controllers/transactionCertificateController')
 
-const {
-  uploadFinalTransactionPdf,
-  runMulterUpload
-} = require('../../../../core/middleware/upload')
-
 const { authMiddleware, authorize } = require('../../../../core/middleware/authMiddleware')
-
-function isFinalDocumentGenerateQuery (query = {}) {
-  return ['file_order', 'document_instance_ids', 'document_signature_ids']
-    .some(key => Object.prototype.hasOwnProperty.call(query, key))
-}
-
-function authorizeGenerateFinalDocument (req, res, next) {
-  if (!isFinalDocumentGenerateQuery(req.query)) {
-    return next()
-  }
-
-  return authorize('VIEW_CREATE_FINAL_DOCUMENT')(req, res, next)
-}
 
 /**
  * @swagger
@@ -141,6 +123,79 @@ router.get(
 
 /**
  * @swagger
+ * /api/transaction/my/{transactionId}/final-document:
+ *   get:
+ *     summary: وثيقتي النهائية (صاحب الطلب فقط)
+ *     description: |
+ *       **GET.** معامل `transactionId` فقط + Bearer.
+ *       بدون file وبدون qr_payload وبدون صلاحية موظف.
+ *
+ *       يشوف الملف فقط إذا `transaction.user_id` = مستخدم التوكن.
+ *     tags: [Certificate & Integrity Chain]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: transactionId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *         example: 12
+ *     responses:
+ *       200:
+ *         description: سجل document_final_transactions
+ *         content:
+ *           application/json:
+ *             examples:
+ *               owned:
+ *                 value:
+ *                   success: true
+ *                   status_code: 200
+ *                   message: تم جلب الوثيقة النهائية بنجاح
+ *                   data:
+ *                     id: 3
+ *                     transaction_id: 12
+ *                     file_path: /uploads/final-merged-12-123.pdf
+ *                     file_url: /uploads/final-merged-12-123.pdf
+ *                     original_name: final-merged-12.pdf
+ *                     mime_type: application/pdf
+ *                     generated_at: "2026-08-15T18:30:00.000Z"
+ *       401:
+ *         description: يلزم تسجيل الدخول
+ *       403:
+ *         description: هذه المعاملة ليست لك
+ *         content:
+ *           application/json:
+ *             examples:
+ *               not_owner:
+ *                 value:
+ *                   success: false
+ *                   status_code: 403
+ *                   message: هذه المعاملة ليست لك — لا يمكنك الاطلاع على طلب ليس لك
+ *                   error: NOT_TRANSACTION_OWNER
+ *                   data: null
+ *       404:
+ *         description: لا يوجد ملف نهائي
+ *         content:
+ *           application/json:
+ *             examples:
+ *               no_final_file:
+ *                 value:
+ *                   success: false
+ *                   status_code: 404
+ *                   message: عذراً، لا يوجد ملف نهائي لطلبك بعد
+ *                   error: FINAL_DOCUMENT_NOT_FOUND
+ *                   data: null
+ */
+router.get(
+  '/my/:transactionId/final-document',
+  authMiddleware,
+  getMyFinalDocumentController
+)
+
+/**
+ * @swagger
  * /api/transaction/{transactionId}/certificate:
  *   get:
  *     summary: بيانات الشهادة للطباعة (transaction_history)
@@ -223,164 +278,14 @@ router.get(
 /**
  * @swagger
  * /api/transaction/{transactionId}/final-document:
- *   post:
- *     summary: رفع وحفظ PDF النهائي بعد توليده من الفرونت
- *     description: |
- *       يرفع الفرونت ملف PDF الشهادة بعد بنائه من بيانات
- *       `GET /api/transaction/{transactionId}/certificate`، فيُحفَظ كوثيقة نهائية للمعاملة.
- *
- *       **Auth:** Bearer — **مالك المعاملة فقط**
- *
- *       **الحالة:** `completed` فقط
- *
- *       **ملاحظات:**
- *       - `file` إلزامي ونوعه PDF.
- *       - `qr_payload` اختياري؛ إن تُرك فارغاً يُؤخذ snapshot الـ QR من سلسلة النزاهة.
- *       - رفع ملف جديد يستبدل الوثيقة النهائية السابقة لنفس المعاملة.
- *     tags: [Certificate & Integrity Chain]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: transactionId
- *         required: true
- *         schema:
- *           type: integer
- *           minimum: 1
- *         example: 12
- *     requestBody:
- *       required: true
- *       content:
- *         multipart/form-data:
- *           schema:
- *             type: object
- *             required: [file]
- *             properties:
- *               file:
- *                 type: string
- *                 format: binary
- *                 description: ملف PDF النهائي (إلزامي)
- *               qr_payload:
- *                 type: string
- *                 description: JSON string — snapshot QR عند الطباعة (اختياري)
- *                 example: '{"v":1,"tx":12,"genesis":"abc","head":"def","links":2}'
- *           examples:
- *             upload_pdf_only:
- *               summary: رفع PDF فقط (بدون qr_payload)
- *               value:
- *                 file: (binary PDF)
- *             upload_with_qr:
- *               summary: رفع PDF مع qr_payload
- *               value:
- *                 file: (binary PDF)
- *                 qr_payload: '{"v":1,"tx":12,"genesis":"a1b2c3","head":"d4e5f6","links":2,"pin":"482193"}'
- *     responses:
- *       200:
- *         description: تم حفظ الوثيقة النهائية بنجاح
- *         content:
- *           application/json:
- *             schema:
- *               allOf:
- *                 - $ref: '#/components/schemas/ApiSuccessResponse'
- *                 - type: object
- *                   properties:
- *                     data:
- *                       $ref: '#/components/schemas/FinalDocumentRecord'
- *             examples:
- *               saved:
- *                 summary: وثيقة نهائية محفوظة
- *                 value:
- *                   success: true
- *                   status_code: 200
- *                   message: تم حفظ الوثيقة النهائية بنجاح
- *                   data:
- *                     id: 3
- *                     file_path: /uploads/final-documents/final-txn-12.pdf
- *                     file_url: /uploads/final-documents/final-txn-12.pdf
- *                     original_name: certificate-12.pdf
- *                     mime_type: application/pdf
- *                     file_size_bytes: 245760
- *                     generated_at: "2026-08-05T18:30:00.000Z"
- *                     qr_payload_snapshot:
- *                       v: 1
- *                       tx: 12
- *                       genesis: a1b2c3
- *                       head: d4e5f6
- *                       links: 2
- *                       pin: "482193"
- *       400:
- *         description: الملف مفقود أو المعاملة ليست completed
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ApiErrorResponse'
- *             examples:
- *               missing_file:
- *                 summary: الملف مفقود
- *                 value:
- *                   success: false
- *                   status_code: 400
- *                   message: ملف PDF مطلوب
- *                   error: VALIDATION_ERROR
- *                   data: null
- *               not_completed:
- *                 summary: المعاملة ليست مكتملة
- *                 value:
- *                   success: false
- *                   status_code: 400
- *                   message: لا يمكن حفظ الوثيقة النهائية إلا بعد اكتمال المعاملة
- *                   error: BAD_REQUEST
- *                   data: null
- *       403:
- *         description: لا تملك صلاحية الوصول (لست مالك المعاملة)
- *         content:
- *           application/json:
- *             examples:
- *               not_owner:
- *                 summary: لست مالك المعاملة
- *                 value:
- *                   success: false
- *                   status_code: 403
- *                   message: هذه المعاملة ليست لك — لا يمكنك الاطلاع على طلب ليس لك
- *                   error: FORBIDDEN
- *                   data: null
- *       404:
- *         description: المعاملة غير موجودة
- *         content:
- *           application/json:
- *             examples:
- *               not_found:
- *                 value:
- *                   success: false
- *                   status_code: 404
- *                   message: المعاملة غير موجودة
- *                   error: TRANSACTION_NOT_FOUND
- *                   data: null
- */
-router.post(
-  '/:transactionId/final-document',
-  authMiddleware,
-  runMulterUpload(uploadFinalTransactionPdf.single('file')),
-  uploadFinalDocumentController
-)
-
-/**
- * @swagger
- * /api/transaction/{transactionId}/final-document:
  *   get:
- *     summary: جلب الوثيقة النهائية المحفوظة (أو توليدها حسب IDs)
+ *     summary: توليد/جلب الوثيقة النهائية (موظف)
  *     description: |
- *       **بدون query (transaction_id فقط):** يعيد الوثيقة النهائية المحفوظة للمالك.
- *       - لست مالك المعاملة (`transaction.user_id` ≠ مستخدم التوكن) → 403:
- *         «هذه المعاملة ليست لك — لا يمكنك الاطلاع على طلب ليس لك»
- *       - لا يوجد ملف محفوظ → 404:
- *         «عذراً، لا يوجد ملف نهائي لطلبك بعد»
+ *       للموظف بصلاحية `VIEW_CREATE_FINAL_DOCUMENT`.
+ *       أرسلي `file_order` أو `document_instance_ids` / `document_signature_ids`.
  *
- *       **مع query (توليد للموظف):**
- *       `file_order=signature:3,instance:2,...` أو `document_instance_ids` / `document_signature_ids`.
- *       يتطلب صلاحية `VIEW_CREATE_FINAL_DOCUMENT` ومعاملة `completed`.
- *
- *       **Auth:** Bearer — الجلب بدون query للمالك فقط
+ *       صاحب الطلب يعرض وثيقته من:
+ *       `GET /api/transaction/my/{transactionId}/final-document`
  *     tags: [Certificate & Integrity Chain]
  *     security:
  *       - bearerAuth: []
@@ -396,23 +301,37 @@ router.post(
  *         name: file_order
  *         schema:
  *           type: string
- *         description: ترتيب مخلوط signature:ID,instance:ID,... (وضع التوليد)
- *         example: signature:3,instance:2,signature:1
+ *         description: اختياري — توليد للموظف فقط، اتركيه فارغاً للعرض
  *       - in: query
  *         name: document_instance_ids
  *         schema:
  *           type: string
- *         description: IDs مفصولة بفواصل (يُستخدم إن لم يُرسل file_order)
- *         example: 2,5
+ *         description: اختياري — توليد للموظف فقط
  *       - in: query
  *         name: document_signature_ids
  *         schema:
  *           type: string
- *         description: IDs مفصولة بفواصل (يُستخدم إن لم يُرسل file_order)
- *         example: 3,1
+ *         description: اختياري — توليد للموظف فقط
  *     responses:
  *       200:
- *         description: تم جلب الوثيقة النهائية بنجاح
+ *         description: سجل document_final_transactions
+ *         content:
+ *           application/json:
+ *             examples:
+ *               owned:
+ *                 value:
+ *                   success: true
+ *                   status_code: 200
+ *                   message: تم جلب الوثيقة النهائية بنجاح
+ *                   data:
+ *                     id: 3
+ *                     transaction_id: 12
+ *                     file_path: /uploads/final-merged-12-123.pdf
+ *                     file_url: /uploads/final-merged-12-123.pdf
+ *                     original_name: final-merged-12.pdf
+ *                     mime_type: application/pdf
+ *                     file_size_bytes: 245760
+ *                     generated_at: "2026-08-15T18:30:00.000Z"
  *       403:
  *         description: هذه المعاملة ليست لك
  *         content:
@@ -441,7 +360,7 @@ router.post(
 router.get(
   '/:transactionId/final-document',
   authMiddleware,
-  authorizeGenerateFinalDocument,
+  authorize('VIEW_CREATE_FINAL_DOCUMENT'),
   getFinalDocumentController
 )
 

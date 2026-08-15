@@ -1629,6 +1629,10 @@ module.exports = {
         "type": "integer",
         "example": 1
       },
+      "transaction_id": {
+        "type": "integer",
+        "example": 12
+      },
       "file_path": {
         "type": "string",
         "example": "/uploads/final-documents/final-txn-12.pdf"

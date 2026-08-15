@@ -9,6 +9,7 @@ class FinalDocumentOutputDTO {
     }
 
     this.id = row.id
+    this.transaction_id = row.transaction_id ?? null
     this.file_path = row.file_path
     this.file_url = row.file_url ?? row.file_path
     this.original_name = row.original_name

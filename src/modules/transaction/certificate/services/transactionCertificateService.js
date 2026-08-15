@@ -243,21 +243,11 @@ async function getFinalDocument (
     documentInstanceIds !== undefined ||
     documentSignatureIds !== undefined
 
-  // بدون ترتيب/IDs: قراءة الوثيقة المحفوظة — للمالك فقط
   if (!selectiveMode) {
-    if (!userId || Number(transaction.user_id) !== Number(userId)) {
-      throw createTransactionError('NOT_TRANSACTION_OWNER')
-    }
-
-    const row = await documentFinalTransactionRepository.findByTransactionIdCached(
-      numericTransactionId
+    throw createTransactionError(
+      'VALIDATION_ERROR',
+      'لعرض وثيقتك النهائية استخدم GET /api/transaction/my/{transactionId}/final-document'
     )
-
-    if (!row?.file_path) {
-      throw createTransactionError('FINAL_DOCUMENT_NOT_FOUND')
-    }
-
-    return toFinalDocumentDTO(row, { includeQrSnapshot: true })
   }
 
   if (!COMPLETED_STATUSES.has(transaction.status)) {
@@ -293,6 +283,34 @@ async function getFinalDocument (
       'NOT_FOUND',
       'تعذّر حفظ الوثيقة النهائية بعد التوليد'
     )
+  }
+
+  return toFinalDocumentDTO(row, { includeQrSnapshot: true })
+}
+
+async function getMyFinalDocument (transactionId, userId) {
+  const numericTransactionId = Number.parseInt(transactionId, 10)
+
+  if (!Number.isInteger(numericTransactionId) || numericTransactionId < 1) {
+    throw createTransactionError('VALIDATION_ERROR', 'معرّف المعاملة غير صالح')
+  }
+
+  const transaction = await transactionRepository.findById(numericTransactionId)
+
+  if (!transaction) {
+    throw createTransactionError('TRANSACTION_NOT_FOUND')
+  }
+
+  if (!userId || Number(transaction.user_id) !== Number(userId)) {
+    throw createTransactionError('NOT_TRANSACTION_OWNER')
+  }
+
+  const row = await documentFinalTransactionRepository.findByTransactionIdCached(
+    numericTransactionId
+  )
+
+  if (!row?.file_path) {
+    throw createTransactionError('FINAL_DOCUMENT_NOT_FOUND')
   }
 
   return toFinalDocumentDTO(row, { includeQrSnapshot: true })
@@ -497,6 +515,7 @@ module.exports = {
   getCertificateBundle,
   saveFinalDocument,
   getFinalDocument,
+  getMyFinalDocument,
   deleteFinalDocument,
   listMyFinalDocuments,
   listTransactionSourceDocuments,

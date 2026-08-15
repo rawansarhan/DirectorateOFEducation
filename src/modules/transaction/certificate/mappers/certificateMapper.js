@@ -30,6 +30,7 @@ function toFinalDocumentDTO (row, options = {}) {
 
   return new FinalDocumentOutputDTO({
     id: plain.id,
+    transaction_id: plain.transaction_id,
     file_path: plain.file_path,
     file_url: plain.file_url ?? plain.file_path,
     original_name: plain.original_name,
