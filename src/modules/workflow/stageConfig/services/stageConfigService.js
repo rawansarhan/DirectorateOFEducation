@@ -68,57 +68,93 @@ function throwBusinessError (message, statusCode = HTTP_STATUS.BAD_REQUEST) {
 // 0 / '0' / null تعني "لا يوجد" عند البحث عن الدور (مؤسسة/قسم عامّ)
 const normalizeOrgId = (v) => (v === 0 || v === '0' || v == null ? null : v)
 
+function positiveIdOrNull (value) {
+  if (value === 0 || value === '0' || value == null || value === '') {
+    return null
+  }
+
+  const numeric = Number(value)
+  return Number.isInteger(numeric) && numeric > 0 ? numeric : null
+}
+
+function coerceAssignmentItem (raw) {
+  if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) {
+    return null
+  }
+
+  return {
+    organization_id: positiveIdOrNull(
+      raw.organization_id ?? raw.organizationId ?? raw.organization?.id
+    ),
+    department_id: positiveIdOrNull(
+      raw.department_id ?? raw.departmentId ?? raw.department?.id
+    ),
+    role_id: positiveIdOrNull(
+      raw.role_id ?? raw.roleId ?? raw.role?.id
+    )
+  }
+}
+
 function isNullStageAssignment (assignment = {}) {
   const organizationId = normalizeOrgId(assignment.organization_id)
   const departmentId = normalizeOrgId(assignment.department_id)
-  const roleId =
-    assignment.role_id === 0 || assignment.role_id === '0' || assignment.role_id == null
-      ? null
-      : Number(assignment.role_id)
+  const roleId = positiveIdOrNull(assignment.role_id)
 
   return organizationId == null && departmentId == null && roleId == null
 }
 
-function isOdrAssignmentItem (value) {
+/** CITIZEN في الداتا: مؤسسة/قسم null حتى لو role_id=2 */
+function isCitizenLikeAssignment (assignment = {}) {
   return (
-    value != null &&
-    typeof value === 'object' &&
-    !Array.isArray(value) &&
-    Object.prototype.hasOwnProperty.call(value, 'organization_id') &&
-    Object.prototype.hasOwnProperty.call(value, 'department_id') &&
-    Object.prototype.hasOwnProperty.call(value, 'role_id')
+    normalizeOrgId(assignment.organization_id) == null &&
+    normalizeOrgId(assignment.department_id) == null
   )
 }
 
-function isCitizenPlaceholderAssignment (assignment = {}) {
-  return isNullStageAssignment(assignment)
+function assignmentKey (assignment = {}) {
+  return [
+    normalizeOrgId(assignment.organization_id) ?? 'null',
+    normalizeOrgId(assignment.department_id) ?? 'null',
+    positiveIdOrNull(assignment.role_id) ?? 'null'
+  ].join('_')
+}
+
+function uniqueAssignments (items = []) {
+  const seen = new Set()
+  const unique = []
+
+  for (const item of items) {
+    if (!item) continue
+    const key = assignmentKey(item)
+    if (seen.has(key)) continue
+    seen.add(key)
+    unique.push(item)
+  }
+
+  return unique
 }
 
 /**
  * يرفع assignments من داخل config_json إن أُرسلت كمصفوفة ODR بالخطأ
- * (شائع مع is_assignment=true في الواجهة)، ويفضّل التعيين غير الـ CITIZEN.
+ * (شائع مع is_assignment=true)، ويفضّل التعيين الفعلي على شكل CITIZEN
+ * مثل `{ organization_id: null, department_id: null, role_id: 2 }`.
  */
 function normalizeStageCreateItem (stage = {}) {
   const configJson = { ...(stage.config_json || {}) }
-  let assignments = Array.isArray(stage.assignments)
-    ? stage.assignments.filter(isOdrAssignmentItem)
+  const topLevel = Array.isArray(stage.assignments)
+    ? stage.assignments.map(coerceAssignmentItem).filter(Boolean)
+    : []
+  const lifted = Array.isArray(configJson.assignments)
+    ? configJson.assignments.map(coerceAssignmentItem).filter(Boolean)
     : []
 
   if (Array.isArray(configJson.assignments)) {
-    const lifted = configJson.assignments.filter(isOdrAssignmentItem)
-
-    if (lifted.length) {
-      const topLevelOnlyCitizen =
-        !assignments.length ||
-        assignments.every(isCitizenPlaceholderAssignment)
-
-      if (topLevelOnlyCitizen) {
-        assignments = lifted
-      }
-
-      delete configJson.assignments
-    }
+    delete configJson.assignments
   }
+
+  const merged = uniqueAssignments([...topLevel, ...lifted])
+  const concrete = merged.filter(item => !isCitizenLikeAssignment(item))
+  const assignments = concrete.length ? concrete : merged
 
   return {
     ...stage,
@@ -362,11 +398,23 @@ async function createStageConfigService (data) {
 
     if (stage.type === 'USER_TASK') {
       const assignments = item.assignments || []
+      const wantsDynamicAssignment = item.config_json?.is_assignment === true
+      const hasConcreteAssignment = assignments.some(
+        a => !isCitizenLikeAssignment(a)
+      )
+
+      if (wantsDynamicAssignment && assignments.length && !hasConcreteAssignment) {
+        throwBusinessError(
+          `المرحلة ${item.stage_id}: is_assignment=true يتطلب assignments فعلية ` +
+          `{ organization_id, department_id, role_id } لمن يستلم هذه المرحلة — ` +
+          `لا تُرسل شكل CITIZEN (organization_id/department_id = null أو role_id=2)`
+        )
+      }
 
       for (const a of assignments) {
         let orgDeptRole = null
 
-        if (isNullStageAssignment(a)) {
+        if (isCitizenLikeAssignment(a)) {
           orgDeptRole = await getCitizenRole()
 
           if (!orgDeptRole) {
