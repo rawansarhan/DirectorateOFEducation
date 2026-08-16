@@ -25,7 +25,7 @@ const {
  *       - `message` (مطلوب)
  *       - `title` (اختياري)
  *       - `type` (اختياري): نوع الإشعار في جدول notifications
- *       - أحد الأهداف: `to` (user_id → WebSocket) أو `to_camunda_group_key: AUTH` (Firebase)
+ *       - أحد الأهداف: `to` (user_id → WebSocket) أو `to_camunda_group_key: AUTH` (صاحب المعاملة: مواطن→Firebase / موظف→WebSocket)
  *         أو `(organization_id, department_id, role_id)` لموظفي الدور (WebSocket)
  *     tags: [Stage Config]
  *     security:

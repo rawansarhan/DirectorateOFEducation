@@ -72,9 +72,11 @@ async function resolveNotificationRecipients (payload, context) {
       attributes: ['id', 'userName', 'email']
     })
 
+    // لا نفرض Firebase: CITIZEN → firebase، موظف/مسؤول → websocket
+    // (يُحسم داخل deliverNotificationToUser عند channel = null)
     return {
       targetType: 'transaction_owner',
-      channel: 'firebase',
+      channel: null,
       organization_department_roles_id: roleId || null,
       camunda_group_key: resolveCamundaGroupKey(payload) || orgDeptRole?.camunda_group_key || 'AUTH',
       users: owner ? [owner] : []
@@ -190,9 +192,21 @@ class SendNotificationStrategy {
       status = 'skipped'
     }
 
+    const deliveredChannels = [
+      ...new Set(
+        deliveryResults
+          .map(item => item.channel)
+          .filter(Boolean)
+      )
+    ]
+    const resolvedChannel =
+      target.channel ||
+      (deliveredChannels.length === 1 ? deliveredChannels[0] : null) ||
+      (deliveredChannels.length > 1 ? 'mixed' : null)
+
     return {
       type: 'notification',
-      channel: target.channel,
+      channel: resolvedChannel,
       status,
       targetType: target.targetType,
       organization_department_roles_id: target.organization_department_roles_id,
