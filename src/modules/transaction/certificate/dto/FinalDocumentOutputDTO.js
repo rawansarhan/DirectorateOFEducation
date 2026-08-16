@@ -21,6 +21,10 @@ class FinalDocumentOutputDTO {
       this.content_hash = row.content_hash
     }
 
+    if (row.source_seal_hashes !== undefined) {
+      this.source_seal_hashes = row.source_seal_hashes
+    }
+
     if (includeQrSnapshot && row.qr_payload_snapshot !== undefined) {
       this.qr_payload_snapshot = row.qr_payload_snapshot ?? null
     }

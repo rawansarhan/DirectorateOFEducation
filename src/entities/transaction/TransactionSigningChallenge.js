@@ -58,6 +58,14 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING(64),
         allowNull: false
       },
+      stage_data_hash: {
+        type: DataTypes.STRING(64),
+        allowNull: true
+      },
+      payload_snapshot: {
+        type: DataTypes.JSON,
+        allowNull: true
+      },
       message: {
         type: DataTypes.TEXT,
         allowNull: false

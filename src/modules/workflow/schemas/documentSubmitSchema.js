@@ -1,22 +1,21 @@
 'use strict'
 
 const Joi = require('joi')
+const { pinSchema, normalizeSigningDecision } = require('./signingChallengeSchema')
 const {
   buildStrictFormPayloadSchema,
   formatStrictFormJoiError
 } = require('../services/unifiedFormPayloadService')
 
-const documentSubmitSigningChallengeSchema = Joi.object({
-  pin: Joi.string()
-    .length(6)
-    .pattern(/^\d+$/)
-    .required()
-    .messages({
-      'string.length': 'رمز PIN يجب أن يتكون من 6 أرقام',
-      'string.pattern.base': 'رمز PIN يجب أن يحتوي على أرقام فقط',
-      'any.required': 'رمز PIN مطلوب'
-    })
-}).unknown(false)
+const documentSubmitSigningChallengeSchema = buildStrictFormPayloadSchema({
+  includeTemplates: true,
+  includeDecision: true,
+  includeExpectedVersion: false,
+  requireSignature: false
+}).keys({
+  pin: pinSchema,
+  decision: Joi.string().valid('approve').default('approve')
+})
 
 const documentSubmitCompleteSchema = buildStrictFormPayloadSchema({
   includeTemplates: true,
@@ -33,17 +32,31 @@ const documentSubmitCompleteSchema = buildStrictFormPayloadSchema({
 function validateDocumentSubmitSigningChallenge (payload = {}) {
   const { error, value } = documentSubmitSigningChallengeSchema.validate(payload, {
     abortEarly: false,
-    stripUnknown: true
+    stripUnknown: false
   })
 
   if (error) {
     return {
       value: null,
-      error: error.details.map(d => d.message).join('; ')
+      error: formatStrictFormJoiError(
+        error,
+        'POST .../submit-documents/signing-challenge'
+      )
     }
   }
 
-  return { value, error: null }
+  return {
+    value: {
+      ...value,
+      note: value.note ?? '',
+      templates: (value.templates || []).map(template => ({
+        id: template.id,
+        widgets: template.widgets || []
+      })),
+      decision: normalizeSigningDecision(value.decision || 'approve')
+    },
+    error: null
+  }
 }
 
 function validateDocumentSubmitComplete (payload = {}) {

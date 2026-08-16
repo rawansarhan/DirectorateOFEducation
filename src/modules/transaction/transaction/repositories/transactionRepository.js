@@ -83,9 +83,20 @@ async function updateDataOptimistic (id, data, expectedVersion, dbTransaction = 
     throw error
   }
 
+  const {
+    freezeSealedStageData
+  } = require('../../process_instance_stage/services/processInstanceStageService')
+
+  const frozenData = await freezeSealedStageData({
+    transactionId: id,
+    incomingData: data,
+    existingData: transaction.data || {},
+    dbTransaction
+  })
+
   const [affectedRows] = await Transaction.update(
     {
-      data,
+      data: frozenData,
       version: expectedVersion + 1
     },
     {

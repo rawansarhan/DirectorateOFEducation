@@ -86,15 +86,26 @@ function mapStageAssignment (assignment) {
     return mapped
   }
 
+  // نفس شكل الإدخال في POST /stage_config/create
+  mapped.organization_id = odr.organization_id ?? null
+  mapped.department_id = odr.department_id ?? null
+  mapped.role_id = odr.role_id ?? odr.role?.id ?? null
+
   mapped.role = {
-    id: odr.id,
+    id: mapped.role_id,
     name: odr.role?.name ?? null,
     is_active: odr.is_active,
     organization: odr.organization
-      ? { name: odr.organization.name ?? null }
+      ? {
+          id: odr.organization.id ?? odr.organization_id ?? null,
+          name: odr.organization.name ?? null
+        }
       : null,
     department: odr.department
-      ? { name: odr.department.name ?? null }
+      ? {
+          id: odr.department.id ?? odr.department_id ?? null,
+          name: odr.department.name ?? null
+        }
       : null
   }
 

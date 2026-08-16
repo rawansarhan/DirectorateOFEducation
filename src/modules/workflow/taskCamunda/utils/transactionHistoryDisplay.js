@@ -68,6 +68,11 @@ function copyFormRootFields (source = {}, target = {}) {
     target[key] = source[key]
   }
 
+  if (source.stage_code != null) target.stage_code = source.stage_code
+  if (source.sealed != null) target.sealed = Boolean(source.sealed)
+  if (source.content_hash != null) target.content_hash = source.content_hash
+  if (source.challenge_id != null) target.challenge_id = source.challenge_id
+
   return target
 }
 
@@ -105,6 +110,22 @@ function buildHistoryStageEntry (stageData = {}) {
     rejection_reason: stageData.rejection_reason ?? null,
     completed_by: stageData.completed_by ?? null,
     completed_at: formatTransactionDate(stageData.completed_at) ?? null
+  }
+
+  if (stageData.stage_code != null) {
+    entry.stage_code = stageData.stage_code
+  }
+
+  if (stageData.sealed != null) {
+    entry.sealed = Boolean(stageData.sealed)
+  }
+
+  if (stageData.content_hash != null) {
+    entry.content_hash = stageData.content_hash
+  }
+
+  if (stageData.challenge_id != null) {
+    entry.challenge_id = stageData.challenge_id
   }
 
   if (Array.isArray(stageData.widgets) && stageData.widgets.length) {

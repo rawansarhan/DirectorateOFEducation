@@ -2,6 +2,7 @@
 
 const { createHash } = require('crypto')
 const { verifyChallengeSignature } = require('../../../auth/shared/services/cryptoAuthService')
+const { buildCanonicalStageSnapshot } = require('./stageSnapshotHash')
 
 const INTEGRITY_CHAIN_VERSION = '1.0'
 
@@ -44,7 +45,7 @@ function stableStringify (value) {
     .join(',')}}`
 }
 
-function sanitizeStageDataForHash (stageData = {}) {
+function sanitizeStageDataForHashLegacy (stageData = {}) {
   if (!stageData || typeof stageData !== 'object' || Array.isArray(stageData)) {
     return {}
   }
@@ -60,6 +61,10 @@ function sanitizeStageDataForHash (stageData = {}) {
   }
 
   return sanitized
+}
+
+function sanitizeStageDataForHash (stageData = {}, extras = {}) {
+  return buildCanonicalStageSnapshot(stageData, extras)
 }
 
 /**
@@ -117,8 +122,24 @@ function buildGenesisHash ({ transactionId, processCode, createdAt }) {
   )
 }
 
-function computeStageDataHash (stageData = {}) {
-  return hashValue(stableStringify(sanitizeStageDataForHash(stageData)))
+function computeStageDataHash (stageData = {}, extras = {}) {
+  return hashValue(stableStringify(sanitizeStageDataForHash(stageData, extras)))
+}
+
+function computeLegacyStageDataHash (stageData = {}) {
+  return hashValue(stableStringify(sanitizeStageDataForHashLegacy(stageData)))
+}
+
+function stageDataHashMatches (stageData, storedHash, extras = {}) {
+  if (!storedHash) {
+    return false
+  }
+
+  if (computeStageDataHash(stageData, extras) === storedHash) {
+    return true
+  }
+
+  return computeLegacyStageDataHash(stageData) === storedHash
 }
 
 function computeCumulativeHash ({
@@ -200,9 +221,12 @@ module.exports = {
   hashValue,
   stableStringify,
   sanitizeStageDataForHash,
+  buildCanonicalStageSnapshot,
   resolveStageDataForIntegrity,
   buildGenesisHash,
   computeStageDataHash,
+  computeLegacyStageDataHash,
+  stageDataHashMatches,
   computeCumulativeHash,
   computeLinkHash,
   extractStageEntries,

@@ -81,9 +81,21 @@ module.exports = {
     return require('../integrityChain/services/integrityChainService')
       .appendIntegrityLink
   },
+  get resolveTemplateValuesFromSealedStages () {
+    return require('../integrityChain/services/sealedSnapshotService')
+      .resolveTemplateValuesFromSealedStages
+  },
+  get loadSealedSourceForDocumentGeneration () {
+    return require('../integrityChain/services/sealedSnapshotService')
+      .loadSealedSourceForDocumentGeneration
+  },
   get createProcessStage () {
     return require('../process_instance_stage/services/processInstanceStageService')
       .createProcessStage
+  },
+  get getTransactionDataForDisplay () {
+    return require('../process_instance_stage/services/sealedDisplayDataService')
+      .getTransactionDataForDisplay
   },
 
   // ── Internal application API (replaces transactionClient in-process) ─

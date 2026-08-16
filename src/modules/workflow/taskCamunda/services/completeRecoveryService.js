@@ -2,7 +2,6 @@
 
 const { Op } = require('sequelize')
 const { Transaction, ProcessInstance } = require('../../../../entities')
-const { transactionRepository } = require('../../../transaction/public')
 const processInstanceRepository = require('../repositories/processInstanceRepository')
 const stageRepository = require('../../processDefinition/repositories/stageRepository')
 const camundaClient = require('../../../../core/shared/clients/camunda/camundaClient')
@@ -20,6 +19,9 @@ const {
   getNextCompleteRecoveryStep,
   incrementRecoveryAttempt
 } = require('./completeTask/completeSideEffectsState')
+const {
+  persistOptimisticWithConflictRetry
+} = require('./completeTask/completeOptimisticPersist')
 
 const LOG_PREFIX = '[CompleteRecovery]'
 
@@ -34,16 +36,15 @@ async function persistRecoveryState ({
   sideEffects
 }) {
   const payload = attachCompleteSideEffects(transactionData, sideEffects)
-//هذه الدالة تستخدم لتحديث البيانات  بشكل امتثالي ولمنع التعديلا المتعددة على البيانات 
-  const updated = await transactionRepository.updateDataOptimistic(
+  const updated = await persistOptimisticWithConflictRetry({
     transactionId,
-    payload,
-    expectedVersion
-  )
+    expectedVersion,
+    transactionData: payload
+  })
 
   return {
     version: updated.version,
-    transactionData: updated.data || payload
+    transactionData: updated.transactionData
   }
 }
 //هذه الدالة تستخدم للتحقق من حالة المعاملة التي تم انشائها في camunda 

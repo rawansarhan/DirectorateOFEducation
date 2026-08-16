@@ -79,6 +79,54 @@ function isNullStageAssignment (assignment = {}) {
   return organizationId == null && departmentId == null && roleId == null
 }
 
+function isOdrAssignmentItem (value) {
+  return (
+    value != null &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    Object.prototype.hasOwnProperty.call(value, 'organization_id') &&
+    Object.prototype.hasOwnProperty.call(value, 'department_id') &&
+    Object.prototype.hasOwnProperty.call(value, 'role_id')
+  )
+}
+
+function isCitizenPlaceholderAssignment (assignment = {}) {
+  return isNullStageAssignment(assignment)
+}
+
+/**
+ * يرفع assignments من داخل config_json إن أُرسلت كمصفوفة ODR بالخطأ
+ * (شائع مع is_assignment=true في الواجهة)، ويفضّل التعيين غير الـ CITIZEN.
+ */
+function normalizeStageCreateItem (stage = {}) {
+  const configJson = { ...(stage.config_json || {}) }
+  let assignments = Array.isArray(stage.assignments)
+    ? stage.assignments.filter(isOdrAssignmentItem)
+    : []
+
+  if (Array.isArray(configJson.assignments)) {
+    const lifted = configJson.assignments.filter(isOdrAssignmentItem)
+
+    if (lifted.length) {
+      const topLevelOnlyCitizen =
+        !assignments.length ||
+        assignments.every(isCitizenPlaceholderAssignment)
+
+      if (topLevelOnlyCitizen) {
+        assignments = lifted
+      }
+
+      delete configJson.assignments
+    }
+  }
+
+  return {
+    ...stage,
+    config_json: configJson,
+    ...(assignments.length ? { assignments } : {})
+  }
+}
+
 async function assertFilePickerTypeDocsExist (configJson = {}) {
   for (const widget of configJson.widgets || []) {
     if (widget.widget_type !== 'file_picker') {
@@ -138,14 +186,17 @@ async function createStageConfigService (data) {
     data = {
       ...data,
       stages: data.stages.map(stage => {
-        const { error, value } = validateStageConfigJson(stage.config_json || {})
+        const normalized = normalizeStageCreateItem(stage)
+        const { error, value } = validateStageConfigJson(
+          normalized.config_json || {}
+        )
 
         if (error) {
           throwBusinessError(formatJoiError(error))
         }
 
         return {
-          ...stage,
+          ...normalized,
           config_json: value
         }
       })
@@ -303,8 +354,11 @@ async function createStageConfigService (data) {
     // USER TASK ASSIGNMENTS
     // =================================
     // is_assignment في config_json لا يغيّر سلوك الحفظ — يُخزَّن مثل باقي الحقول فقط.
-    // USER_TASK: assignments مطلوبة وتُحفظ في stage_assignments
+    // USER_TASK: assignments مطلوبة وتُحفظ في stage_assignments كما أُرسلت.
     // SERVICE_TASK: لا تُرسل assignments
+    // CITIZEN فقط عند organization_id=department_id=role_id=null صراحةً.
+
+    const savedAssignments = []
 
     if (stage.type === 'USER_TASK') {
       const assignments = item.assignments || []
@@ -321,10 +375,24 @@ async function createStageConfigService (data) {
             )
           }
         } else {
+          const organizationId = normalizeOrgId(a.organization_id)
+          const departmentId = normalizeOrgId(a.department_id)
+          const roleId =
+            a.role_id === 0 || a.role_id === '0' || a.role_id == null
+              ? null
+              : Number(a.role_id)
+
+          if (roleId == null) {
+            throwBusinessError(
+              `المرحلة ${item.stage_id}: role_id مطلوب في assignments (أو أرسل الثلاثة null لتعيين CITIZEN)`
+            )
+          }
+
+          // تعيين جزئي (مثلاً org/dept null مع role_id) يُحفظ كما هو عبر البحث — لا يُحوَّل لـ CITIZEN
           orgDeptRole = await findOrgDeptRole({
-            organization_id: normalizeOrgId(a.organization_id),
-            department_id: normalizeOrgId(a.department_id),
-            role_id: a.role_id
+            organization_id: organizationId,
+            department_id: departmentId,
+            role_id: roleId
           })
 
           if (!orgDeptRole) {
@@ -337,6 +405,12 @@ async function createStageConfigService (data) {
         const existingKey = `${stage.id}_${orgDeptRole.id}`
 
         if (existingSet.has(existingKey)) {
+          savedAssignments.push({
+            organization_id: orgDeptRole.organization_id ?? null,
+            department_id: orgDeptRole.department_id ?? null,
+            role_id: orgDeptRole.role_id ?? null,
+            organization_department_roles_id: orgDeptRole.id
+          })
           continue
         }
 
@@ -346,12 +420,20 @@ async function createStageConfigService (data) {
         })
 
         existingSet.add(existingKey)
+
+        savedAssignments.push({
+          organization_id: orgDeptRole.organization_id ?? null,
+          department_id: orgDeptRole.department_id ?? null,
+          role_id: orgDeptRole.role_id ?? null,
+          organization_department_roles_id: orgDeptRole.id
+        })
       }
     }
 
     results.push({
       stage_id: stage.id,
-      config: item.config_json
+      config: item.config_json,
+      assignments: savedAssignments
     })
   }
 

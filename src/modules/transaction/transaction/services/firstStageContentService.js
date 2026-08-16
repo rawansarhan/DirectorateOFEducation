@@ -7,6 +7,9 @@ const {
   buildHistoryStageEntry
 } = require('../../../workflow/public')
 const {
+  getTransactionDataForDisplay
+} = require('../../process_instance_stage/services/sealedDisplayDataService')
+const {
   parsePositiveInt
 } = require('../validations/transactionValidations')
 const {
@@ -118,8 +121,10 @@ async function getFirstStageContentByTransactionId (transactionId, userId) {
     )
   }
 
+  const displayData = await getTransactionDataForDisplay(transaction)
+
   const rawSubmission = resolveApplicantSubmissionRaw(
-    transaction.data,
+    displayData,
     authStage,
     userId
   )

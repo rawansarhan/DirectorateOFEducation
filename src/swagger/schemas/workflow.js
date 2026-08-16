@@ -106,23 +106,42 @@ module.exports = {
     }
   },
   "DocumentSubmitSigningChallengePayload": {
-    "type": "object",
-    "required": [
-      "pin"
-    ],
-    "additionalProperties": false,
-    "properties": {
-      "pin": {
-        "type": "string",
-        "minLength": 6,
-        "maxLength": 6,
-        "pattern": "^[0-9]{6}$",
-        "example": "123456",
-        "description": "رمز PIN للموظف — decision ثابت approve على السيرفر"
+    "allOf": [
+      {
+        "$ref": "#/components/schemas/UnifiedFormPayload"
+      },
+      {
+        "type": "object",
+        "required": [
+          "pin"
+        ],
+        "properties": {
+          "pin": {
+            "type": "string",
+            "minLength": 6,
+            "maxLength": 6,
+            "pattern": "^[0-9]{6}$",
+            "example": "123456",
+            "description": "رمز PIN للموظف — decision ثابت approve على السيرفر"
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "approve"
+            ],
+            "example": "approve"
+          }
+        }
       }
-    },
+    ],
     "example": {
-      "pin": "123456"
+      "pin": "123456",
+      "decision": "approve",
+      "form_id": "submit_docs",
+      "form_name": "تقديم المعاملة",
+      "widgets": [],
+      "templates": [],
+      "note": ""
     }
   },
   "DocumentSubmitCompletePayload": {
@@ -999,7 +1018,12 @@ module.exports = {
         "description": "النص الذي يُوقَّع بـ USB private key"
       },
       "payload_hash": {
-        "type": "string"
+        "type": "string",
+        "description": "SHA-256 لهاش الحمولة الموقّعة (معرّفات المهمة + decision + stage_data_hash)"
+      },
+      "stage_data_hash": {
+        "type": "string",
+        "description": "SHA-256 للقطة المرحلة (widgets/templates/decision/note) المضمّنة في توقيع USB"
       },
       "expires_at": {
         "type": "string",
@@ -1063,32 +1087,65 @@ module.exports = {
     }
   },
   "SigningChallengePayload": {
-    "type": "object",
-    "required": [
-      "pin",
-      "decision"
-    ],
-    "additionalProperties": false,
-    "properties": {
-      "pin": {
-        "type": "string",
-        "example": "123456",
-        "description": "رمز PIN للموظف"
+    "allOf": [
+      {
+        "$ref": "#/components/schemas/UnifiedFormPayload"
       },
-      "decision": {
-        "type": "string",
-        "enum": [
-          "approve",
-          "reject",
-          "rejected"
+      {
+        "type": "object",
+        "required": [
+          "pin",
+          "decision"
         ],
-        "example": "approve",
-        "description": "قرار الموظف للتوقيع — يُقارَن عند complete (approve / reject)"
+        "properties": {
+          "pin": {
+            "type": "string",
+            "example": "123456",
+            "description": "رمز PIN للموظف"
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "approve",
+              "reject",
+              "rejected"
+            ],
+            "example": "approve",
+            "description": "قرار الموظف — يُضمَّن مع هاش widgets في رسالة USB"
+          },
+          "assignments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "organization_id",
+                "department_id",
+                "role_id"
+              ],
+              "properties": {
+                "organization_id": {
+                  "type": "integer"
+                },
+                "department_id": {
+                  "type": "integer"
+                },
+                "role_id": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        }
       }
-    },
+    ],
     "example": {
       "pin": "123456",
-      "decision": "approve"
+      "decision": "approve",
+      "form_id": "leave_process_review",
+      "form_name": "مراجعة المدير",
+      "widgets": [],
+      "templates": [],
+      "note": ""
     }
   },
   "CompleteTaskRejectExample": {

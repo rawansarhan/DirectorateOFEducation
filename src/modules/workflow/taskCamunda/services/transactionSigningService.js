@@ -13,6 +13,12 @@ const stageConfigRepository = require('../../stageConfig/repositories/stageConfi
 const userRepository = require('../../../auth/shared/repositories/userRepository')
 const userKeyRepository = require('../../../auth/shared/repositories/userKeyRepository')
 const { validateSigningChallengePayload } = require('../../schemas/signingChallengeSchema')
+const {
+  validateAndNormalizeUnifiedFormPayload
+} = require('../../services/unifiedFormPayloadService')
+const {
+  computeStageDataHash
+} = require('../../../transaction/integrityChain/utils/integrityChainUtils')
 const transactionSigningChallengeRepository =
   require('../repositories/transactionSigningChallengeRepository')
 const documentSignatureRepository =
@@ -107,15 +113,50 @@ function buildSigningPayload ({
   task,
   transaction,
   stage,
-  decision
+  decision,
+  stageDataHash
 }) {
   return {
     taskId: task.id,
     transactionId: transaction.id,
     stageCode: stage.code,
     stageId: stage.id,
-    decision
+    decision,
+    stageDataHash
   }
+}
+
+async function normalizeFormForSigning ({
+  payload = {},
+  stageConfig = null,
+  stageName = null,
+  mode = 'complete'
+}) {
+  if (!stageConfig?.config_json) {
+    return payload
+  }
+
+  try {
+    return await validateAndNormalizeUnifiedFormPayload(
+      payload,
+      stageConfig.config_json,
+      {
+        mode,
+        stageName
+      }
+    )
+  } catch (validationError) {
+    const error = new Error(validationError.message)
+    error.code = 'VALIDATION_ERROR'
+    throw error
+  }
+}
+
+function computeSigningStageDataHash (payload = {}, decision = null) {
+  return computeStageDataHash(payload, {
+    decision: decision || payload.decision || null,
+    assignments: payload.assignments
+  })
 }
 
 const DRAFT_SUBMIT_TASK_PREFIX = 'draft-submit'
@@ -211,6 +252,21 @@ async function createSigningChallenge ({
     taskId
   })
 
+  const formPayload = await normalizeFormForSigning({
+    payload: validatedPayload,
+    stageConfig: context.stageConfig,
+    stageName: context.stage.name,
+    mode: 'complete'
+  })
+
+  const stageDataHash = computeSigningStageDataHash(
+    {
+      ...formPayload,
+      assignments: validatedPayload.assignments
+    },
+    validatedPayload.decision
+  )
+
   const userKey = await userKeyRepository.findActiveLatestByUserId(userId)
 
   if (!userKey) {
@@ -221,7 +277,8 @@ async function createSigningChallenge ({
     task: context.task,
     transaction: context.transaction,
     stage: context.stage,
-    decision: validatedPayload.decision
+    decision: validatedPayload.decision,
+    stageDataHash
   })
 
   const payloadHash = buildCanonicalPayloadHash(signingPayload)
@@ -252,6 +309,16 @@ async function createSigningChallenge ({
     transaction_id: context.transaction.id,
     stage_id: context.stage.id,
     payload_hash: payloadHash,
+    stage_data_hash: stageDataHash,
+    payload_snapshot: {
+      form_id: formPayload.form_id ?? null,
+      form_name: formPayload.form_name ?? null,
+      widgets: formPayload.widgets || [],
+      templates: formPayload.templates || [],
+      decision: validatedPayload.decision,
+      note: formPayload.note ?? '',
+      assignments: formPayload.assignments || validatedPayload.assignments || null
+    },
     message,
     message_hash: hashValue(message),
     expires_at: expiresAt
@@ -268,7 +335,8 @@ async function createSigningChallenge ({
       signingId: challenge.id,
       transactionId: context.transaction.id,
       stageCode: context.stage.code,
-      decision: validatedPayload.decision
+      decision: validatedPayload.decision,
+      stageDataHash
     }
   })
 
@@ -279,6 +347,7 @@ async function createSigningChallenge ({
     stage: context.stage,
     userKey,
     payloadHash,
+    stageDataHash,
     expiresInSeconds: Math.floor(TX_SIGN_TTL_MS / 1000)
   })
 }
@@ -331,20 +400,35 @@ async function createDraftSubmitSigningChallenge ({
     throw new Error('لا توجد مرحلة AUTH لهذه العملية')
   }
 
-  const pin = payload.pin
+  const stageConfig = await stageConfigRepository.findByStageId(stage.id)
 
-  if (!pin) {
-    throw new Error('رمز PIN مطلوب')
+  const { error: validationError, value: validatedPayload } =
+    validateSigningChallengePayload({
+      ...payload,
+      decision: payload.decision || 'approve'
+    })
+
+  if (validationError) {
+    throw new Error(validationError)
   }
 
   const syntheticTaskId = buildDraftSubmitTaskId(numericTransactionId)
 
   await assertValidPinForSigning({
     userId,
-    pin,
+    pin: validatedPayload.pin,
     clientMeta,
     taskId: syntheticTaskId
   })
+
+  const formPayload = await normalizeFormForSigning({
+    payload: validatedPayload,
+    stageConfig,
+    stageName: stage.name,
+    mode: 'submit'
+  })
+
+  const stageDataHash = computeSigningStageDataHash(formPayload, 'approve')
 
   const userKey = await userKeyRepository.findActiveLatestByUserId(userId)
 
@@ -356,7 +440,8 @@ async function createDraftSubmitSigningChallenge ({
     task: { id: syntheticTaskId },
     transaction,
     stage,
-    decision: 'approve'
+    decision: 'approve',
+    stageDataHash
   })
 
   const payloadHash = buildCanonicalPayloadHash(signingPayload)
@@ -387,6 +472,15 @@ async function createDraftSubmitSigningChallenge ({
     transaction_id: transaction.id,
     stage_id: stage.id,
     payload_hash: payloadHash,
+    stage_data_hash: stageDataHash,
+    payload_snapshot: {
+      form_id: formPayload.form_id ?? null,
+      form_name: formPayload.form_name ?? null,
+      widgets: formPayload.widgets || [],
+      templates: formPayload.templates || [],
+      decision: 'approve',
+      note: formPayload.note ?? ''
+    },
     message,
     message_hash: hashValue(message),
     expires_at: expiresAt
@@ -404,7 +498,8 @@ async function createDraftSubmitSigningChallenge ({
       transactionId: transaction.id,
       stageCode: stage.code,
       decision: 'approve',
-      draft_submit: true
+      draft_submit: true,
+      stageDataHash
     }
   })
 
@@ -415,13 +510,15 @@ async function createDraftSubmitSigningChallenge ({
     stage,
     userKey,
     payloadHash,
+    stageDataHash,
     expiresInSeconds: Math.floor(TX_SIGN_TTL_MS / 1000)
   })
 }
 async function assertSigningChallengeReady ({
   challenge,
   userId,
-  decision
+  decision,
+  stageDataHash = null
 }) {
   if (!challenge) {
     throw new Error('Signing challenge not found')
@@ -443,20 +540,34 @@ async function assertSigningChallengeReady ({
     throw new Error('decision is required to verify signing challenge')
   }
 
+  const resolvedStageDataHash = stageDataHash || challenge.stage_data_hash || null
+
+  if (!resolvedStageDataHash) {
+    throw new Error('stage snapshot hash is required to verify signing challenge')
+  }
+
+  if (
+    challenge.stage_data_hash &&
+    challenge.stage_data_hash !== resolvedStageDataHash
+  ) {
+    throw new Error('stage snapshot does not match the signed signing challenge')
+  }
+
   const stage = await stageRepository.findById(challenge.stage_id)
   const signedPayload = buildSigningPayload({
     task: { id: challenge.task_id },
     transaction: { id: challenge.transaction_id },
     stage: { code: stage?.code, id: challenge.stage_id },
-    decision
+    decision,
+    stageDataHash: resolvedStageDataHash
   })
   const requestPayloadHash = buildCanonicalPayloadHash(signedPayload)
 
   if (requestPayloadHash !== challenge.payload_hash) {
-    throw new Error('decision does not match the signed signing challenge')
+    throw new Error('stage snapshot does not match the signed signing challenge')
   }
 
-  return { stage, requestPayloadHash }
+  return { stage, requestPayloadHash, stageDataHash: resolvedStageDataHash }
 }
 
 /**
@@ -468,7 +579,8 @@ async function verifySignatureForComplete ({
   userId,
   decision = null,
   clientMeta = {},
-  expectedTaskId = null
+  expectedTaskId = null,
+  stageDataHash = null
 }) {
   await securityGuardService.assertAccountNotLocked(userId)
 
@@ -478,7 +590,8 @@ async function verifySignatureForComplete ({
   const { stage } = await assertSigningChallengeReady({
     challenge,
     userId,
-    decision
+    decision,
+    stageDataHash
   })
 
   if (
@@ -545,7 +658,8 @@ async function verifySignatureForComplete ({
   return {
     challenge,
     userKey,
-    stage
+    stage,
+    stageDataHash: challenge.stage_data_hash || stageDataHash || null
   }
 }
 
@@ -743,5 +857,6 @@ module.exports = {
   persistVerifiedSignature,
   verifyAndPersistSignature,
   buildTransactionSignatureLedger,
-  appendSignatureToTransactionData
+  appendSignatureToTransactionData,
+  computeSigningStageDataHash
 }

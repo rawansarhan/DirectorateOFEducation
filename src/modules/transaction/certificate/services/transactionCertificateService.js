@@ -15,6 +15,9 @@ const documentFinalTransactionRepository = require('../repositories/documentFina
 const transactionSignatureLinkRepository =
   require('../../integrityChain/repositories/transactionSignatureLinkRepository')
 const { getIntegrityChain } = require('../../integrityChain/services/integrityChainService')
+const {
+  getTransactionDataForDisplay
+} = require('../../process_instance_stage/services/sealedDisplayDataService')
 const { createTransactionError } = require('../../transaction/utils/transactionErrors')
 const {
   toFinalDocumentDTO,
@@ -127,8 +130,10 @@ async function getCertificateBundle (
 
   const stageNamesByCode = await buildStageNamesByCode(process?.id ?? null)
 
+  const displayData = await getTransactionDataForDisplay(transaction)
+
   const historyData = enrichHistoryTemplatesWithDocumentInstances(
-    formatTransactionHistoryForDisplay(transaction.data || {}, transaction),
+    formatTransactionHistoryForDisplay(displayData, transaction),
     documentInstances
   )
 

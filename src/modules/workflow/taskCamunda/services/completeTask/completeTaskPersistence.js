@@ -2,7 +2,6 @@
 
 const processInstanceRepository = require('../../repositories/processInstanceRepository')
 const {
-  transactionRepository,
   appendIntegrityLink,
   createProcessStage
 } = require('../../../../transaction/public')
@@ -10,6 +9,11 @@ const {
   persistVerifiedSignature,
   appendSignatureToTransactionData
 } = require('../transactionSigningService')
+const transactionSigningChallengeRepository =
+  require('../../repositories/transactionSigningChallengeRepository')
+const {
+  computeStageDataHash
+} = require('../../../../transaction/integrityChain/utils/integrityChainUtils')
 const { toPublicSignatureRecord } = require('../../mappers/completeTaskMapper')
 const securityGuardService = require('../../../../../core/security/securityGuardService')
 const {
@@ -88,22 +92,43 @@ async function persistCompleteTaskSideEffects ({
       version: nextVersion
     })
 
-    const updatedTransaction = await transactionRepository.updateDataOptimistic(
-      transaction.id,
+    const {
+      persistOptimisticWithConflictRetry
+    } = require('./completeOptimisticPersist')
+
+    const updatedTransaction = await persistOptimisticWithConflictRetry({
+      transactionId: transaction.id,
+      expectedVersion: nextVersion,
       transactionData,
-      nextVersion,
-      dbTx
-    )
+      dbTransaction: dbTx
+    })
 
     nextVersion = updatedTransaction.version
+    transactionData = updatedTransaction.transactionData
 
     logStep('TRANSACTION_DATA_SAVED', {
       transactionId: transaction.id,
-      version: nextVersion
+      version: nextVersion,
+      conflictRetried: Boolean(updatedTransaction.conflictRetried)
     })
 
     if (digitalSignatureRecord) {
       logStep('PHASE_15_APPEND_INTEGRITY_LINK')
+
+      const stageRecord = persistAuthSubmissionAtRoot
+        ? buildRootSubmissionSnapshot(transactionData)
+        : transactionData[stage.code]
+
+      let signedStageHash = null
+
+      if (signingRequest?.challengeId) {
+        const challenge = await transactionSigningChallengeRepository.findById(
+          signingRequest.challengeId
+        )
+        signedStageHash = challenge?.stage_data_hash || null
+      }
+
+      const stageDataHash = signedStageHash || computeStageDataHash(stageRecord)
 
       await appendIntegrityLink({
         transactionId: transaction.id,
@@ -111,15 +136,14 @@ async function persistCompleteTaskSideEffects ({
         challengeId: signingRequest?.challengeId || null,
         stageId: stage.id,
         stageCode: stage.code,
-        stageData: persistAuthSubmissionAtRoot
-          ? buildRootSubmissionSnapshot(transactionData)
-          : transactionData[stage.code],
+        stageData: stageRecord,
+        stageDataHash,
         signatureHash: digitalSignatureRecord.signed_hash,
         signedAt: digitalSignatureRecord.signed_at,
         dbTransaction: dbTx
       })
 
-      logStep('INTEGRITY_LINK_APPENDED')
+      logStep('INTEGRITY_LINK_APPENDED', { stageDataHash })
     }
 
     logStep('PHASE_16_CREATE_PROCESS_STAGE', { status: stagePersistenceStatus })
@@ -134,7 +158,10 @@ async function persistCompleteTaskSideEffects ({
       stageName: stage.name,
       status: stagePersistenceStatus,
       data: processStageData,
-      assigned_to: userId
+      assigned_to: userId,
+      contentHash: computeStageDataHash(processStageData),
+      challengeId: signingRequest?.challengeId || null,
+      sealed: true
     }, { transaction: dbTx })
 
     logStep('PROCESS_STAGE_CREATED', { status: stagePersistenceStatus })

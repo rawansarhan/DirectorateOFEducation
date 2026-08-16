@@ -50,9 +50,26 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.ENUM('pending','in_progress','completed','rejected'),
         defaultValue: 'pending',
       },
-         version: {
+      version: {
         type: DataTypes.INTEGER,
         defaultValue: 1
+      },
+      content_hash: {
+        type: DataTypes.STRING(64),
+        allowNull: true
+      },
+      sealed: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false
+      },
+      sealed_at: {
+        type: DataTypes.DATE,
+        allowNull: true
+      },
+      challenge_id: {
+        type: DataTypes.UUID,
+        allowNull: true
       },
       created_at: {
         type: DataTypes.DATE,

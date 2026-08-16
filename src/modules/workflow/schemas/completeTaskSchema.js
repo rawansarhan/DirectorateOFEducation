@@ -1,29 +1,15 @@
 'use strict'
 
-const Joi = require('joi')
 const {
   taskDecisionSchema,
-  normalizeSigningDecision
+  normalizeSigningDecision,
+  completeAssignmentItemSchema,
+  completeAssignmentsSchema
 } = require('./signingChallengeSchema')
 const {
   buildStrictFormPayloadSchema,
   formatStrictFormJoiError
 } = require('../services/unifiedFormPayloadService')
-
-const completeAssignmentItemSchema = Joi.object({
-  organization_id: Joi.number().integer().positive().required(),
-  department_id: Joi.number().integer().positive().required(),
-  role_id: Joi.number().integer().positive().required()
-}).unknown(false)
-
-const completeAssignmentsSchema = Joi.array()
-  .items(completeAssignmentItemSchema)
-  .min(1)
-  .max(1)
-  .messages({
-    'array.min': 'assignments يجب أن يحتوي عنصراً واحداً',
-    'array.max': 'assignments يقبل عنصراً واحداً فقط'
-  })
 
 const completeTaskPayloadSchema = buildStrictFormPayloadSchema({
   includeTemplates: true,

@@ -80,7 +80,7 @@ async function createDocumentSubmitSigningChallenge ({
           createDraftSubmitSigningChallenge({
             transactionId: numericTransactionId,
             userId,
-            payload: { pin: value.pin },
+            payload: value,
             clientMeta
           }),
         { label: `documentSubmit.draftSigningChallenge:${numericTransactionId}` }
@@ -104,7 +104,7 @@ async function createDocumentSubmitSigningChallenge ({
         taskId: resolvedTaskId,
         userId,
         payload: {
-          pin: value.pin,
+          ...value,
           decision: 'approve'
         },
         clientMeta,
@@ -139,7 +139,7 @@ async function createDocumentSubmitSigningChallengeByProcess ({
       createDraftSubmitSigningChallenge({
         transactionId: draft.id,
         userId,
-        payload: { pin: value.pin },
+        payload: value,
         clientMeta
       }),
     { label: `documentSubmit.draftSigningChallenge:process:${processId}` }

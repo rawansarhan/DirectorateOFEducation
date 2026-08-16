@@ -6,7 +6,8 @@ const {
 } = require('../../../services/unifiedFormPayloadService')
 const {
   requiresDigitalSignature,
-  verifySignatureForComplete
+  verifySignatureForComplete,
+  computeSigningStageDataHash
 } = require('../transactionSigningService')
 const { normalizeSigningDecision } = require('../../../schemas/signingChallengeSchema')
 const {
@@ -170,7 +171,14 @@ async function resolveDecisionAndValidateComplete ({
       userId,
       decision: signingDecision,
       clientMeta,
-      expectedTaskId: task.id
+      expectedTaskId: task.id,
+      stageDataHash: computeSigningStageDataHash(
+        {
+          ...normalizedPayload,
+          assignments: payload.assignments
+        },
+        signingDecision
+      )
     })
 
     logStep('SIGNATURE_VERIFIED', { challengeId, decision: signingDecision })

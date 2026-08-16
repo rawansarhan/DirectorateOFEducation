@@ -4,7 +4,8 @@ class StageConfigMapper {
 
     return results.map(r => ({
       stage_id: r.stage_id,
-      config: r.config
+      config: r.config,
+      assignments: Array.isArray(r.assignments) ? r.assignments : []
     }))
   }
 }

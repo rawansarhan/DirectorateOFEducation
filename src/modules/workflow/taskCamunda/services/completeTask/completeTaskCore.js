@@ -25,15 +25,15 @@ const {
 } = require('../transactionSigningService')
 const { toPublicSignatureRecord } = require('../../mappers/completeTaskMapper')
 const {
-  transactionRepository
-} = require('../../../../transaction/public')
-const {
   initCompleteSideEffects,
   attachCompleteSideEffects,
   markCompleteSideEffectStep,
   markCompleteSideEffectsDone,
   markCompleteSideEffectsFailed
 } = require('./completeSideEffectsState')
+const {
+  persistOptimisticWithConflictRetry
+} = require('./completeOptimisticPersist')
 
 async function persistCompleteCheckpoint ({
   transactionId,
@@ -43,16 +43,17 @@ async function persistCompleteCheckpoint ({
   dbTransaction = null
 }) {
   const payload = attachCompleteSideEffects(transactionData, sideEffects)
-  const updated = await transactionRepository.updateDataOptimistic(
+  const updated = await persistOptimisticWithConflictRetry({
     transactionId,
-    payload,
     expectedVersion,
+    transactionData: payload,
     dbTransaction
-  )
+  })
 
   return {
     version: updated.version,
-    transactionData: updated.data || payload
+    transactionData: updated.transactionData,
+    conflictRetried: updated.conflictRetried
   }
 }
 
@@ -424,8 +425,10 @@ async function completeTaskCore ({
     transactionData = attachCompleteSideEffects(transactionData, sideEffects)
 
     if (sideEffects.camunda_done) {
+      let recoverySaved = false
+
       try {
-        await persistCompleteCheckpoint({
+        const recovery = await persistCompleteCheckpoint({
           transactionId: transaction.id,
           transactionData,
           sideEffects,
@@ -433,9 +436,14 @@ async function completeTaskCore ({
           dbTransaction
         })
 
+        currentVersion = recovery.version
+        transactionData = recovery.transactionData
+        recoverySaved = true
+
         logStep('COMPLETE_CHECKPOINT_SAVED_FOR_RECOVERY', {
           transactionId: transaction.id,
-          taskId: task.id
+          taskId: task.id,
+          conflictRetried: Boolean(recovery.conflictRetried)
         })
       } catch (persistErr) {
         const exceptionLogger = require('../../../../../core/logging/exceptionLogger')
@@ -445,6 +453,26 @@ async function completeTaskCore ({
           user_id: userId,
           taskId: task?.id,
           transactionId: transaction?.id
+        })
+      }
+
+      // Camunda خلّص التاسك — لا نرجع VERSION_CONFLICT للعميل (يظهر «غلط ثم منجزة»)
+      if (err.code === 'VERSION_CONFLICT') {
+        logStep('COMPLETE_ACCEPTED_AFTER_CAMUNDA_VERSION_CONFLICT', {
+          transactionId: transaction.id,
+          taskId: task.id,
+          recoverySaved
+        })
+
+        return buildCompleteResponse({
+          stage,
+          stageSnapshot,
+          variables: null,
+          signingRequest,
+          idempotencyKey: issuedIdempotencyKey,
+          idempotentReplay: false,
+          workflowStatus: sideEffects.workflow_status || 'running',
+          templates: responseTemplates || []
         })
       }
     }

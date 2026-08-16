@@ -253,6 +253,26 @@ function getTransactionSignExpiresAt () {
   return new Date(Date.now() + TX_SIGN_TTL_MS)
 }
 
+function parseTransactionSignMessage (message) {
+  const parts = String(message || '').split('|')
+
+  if (parts.length < 10 || `${parts[0]}|${parts[1]}` !== TX_SIGN_PREFIX) {
+    return null
+  }
+
+  return {
+    prefix: TX_SIGN_PREFIX,
+    signingId: parts[2],
+    taskId: parts[3],
+    transactionId: parts[4],
+    stageCode: parts[5],
+    payloadHash: parts[6],
+    expiresAt: parts[7],
+    userId: parts[8],
+    keyFingerprint: parts.slice(9).join('|')
+  }
+}
+
 function buildCanonicalPayloadHash (payload) {
   return hashValue(JSON.stringify(payload))
 }
@@ -281,6 +301,7 @@ module.exports = {
   generateNonce,
   buildChallengeMessage,
   buildTransactionSignMessage,
+  parseTransactionSignMessage,
   buildCanonicalPayloadHash,
   verifyChallengeSignature,
   getChallengeExpiresAt,

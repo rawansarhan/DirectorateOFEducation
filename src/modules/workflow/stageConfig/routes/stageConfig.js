@@ -106,9 +106,11 @@ const {
  *                       type: array
  *                       description: |
  *                         مطلوب لـ USER_TASK فقط — يُحفظ في stage_assignments (نفس السلوك سواء is_assignment true أو false).
+ *                         يجب أن تكون على مستوى المرحلة (sibling لـ config_json) وليس داخل config_json.
  *                         لا تُرسل لـ SERVICE_TASK.
  *                         مثال: `[{ organization_id, department_id, role_id }]`
  *                         أو CITIZEN: `[{ organization_id: null, department_id: null, role_id: null }]`
+ *                         ملاحظة: إن وُضعت مصفوفة ODR داخل config_json.assignments بالخطأ تُرفع تلقائياً إلى assignments.
  *                       items:
  *                         type: object
  *                         required:

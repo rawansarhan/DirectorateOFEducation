@@ -165,6 +165,10 @@ async function mergeStageSnapshotIntoTransactionData ({
     skipServiceTasks
   })
 
+  const {
+    freezeSealedStageData
+  } = require('../../../../transaction/process_instance_stage/services/processInstanceStageService')
+
   let transactionData = {
     ...(transaction.data || {})
   }
@@ -194,6 +198,13 @@ async function mergeStageSnapshotIntoTransactionData ({
       completed_at: completedAt
     }
   }
+
+  transactionData = await freezeSealedStageData({
+    transactionId: transaction.id,
+    incomingData: transactionData,
+    existingData: transaction.data || {},
+    allowStageCode: persistAuthSubmissionAtRoot ? null : stage.code
+  })
 
   if (!isReject && !skipServiceTasks) {
     transactionData = await runServiceTaskActions({

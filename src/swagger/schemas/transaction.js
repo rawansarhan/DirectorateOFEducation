@@ -1659,6 +1659,25 @@ module.exports = {
         "format": "date-time",
         "example": "2026-08-05T18:30:00.000Z"
       },
+      "content_hash": {
+        "type": "string",
+        "nullable": true,
+        "description": "SHA-256 لبايتات PDF النهائي المدمج"
+      },
+      "source_seal_hashes": {
+        "type": "array",
+        "nullable": true,
+        "description": "بصمات اللقطات المختومة التي بُنيت عليها الوثيقة",
+        "items": {
+          "type": "object",
+          "properties": {
+            "stage_code": { "type": "string" },
+            "content_hash": { "type": "string" },
+            "challenge_id": { "type": "string", "nullable": true },
+            "sealed_at": { "type": "string", "format": "date-time", "nullable": true }
+          }
+        }
+      },
       "qr_payload_snapshot": {
         "oneOf": [
           {

@@ -37,7 +37,12 @@ function toFinalDocumentDTO (row, options = {}) {
     mime_type: plain.mime_type,
     file_size_bytes: plain.file_size_bytes,
     generated_at: plain.generated_at,
-    content_hash: plain.content_hash,
+    content_hash: plain.content_hash
+      ?? plain.qr_payload_snapshot?.merged_content_hash
+      ?? null,
+    source_seal_hashes: plain.source_seal_hashes
+      ?? plain.qr_payload_snapshot?.source_seal_hashes
+      ?? null,
     qr_payload_snapshot: plain.qr_payload_snapshot
   }, options)
 }

@@ -56,6 +56,9 @@ const {
   loadAuthorizedTransaction,
   CERTIFICATE_AUDIENCE
 } = require('./transactionCertificateService')
+const {
+  loadSealedSourceForDocumentGeneration
+} = require('../../integrityChain/services/sealedSnapshotService')
 
 const A4 = { width: 595.28, height: 841.89 }
 const PAGE_MARGIN = 40
@@ -112,6 +115,7 @@ function mapFinalDocumentRow (row) {
     mime_type: row.mime_type,
     file_size_bytes: row.file_size_bytes,
     content_hash: snapshot.merged_content_hash ?? null,
+    source_seal_hashes: snapshot.source_seal_hashes ?? null,
     generated_at: row.generated_at
   }
 }
@@ -464,6 +468,23 @@ async function generateMergedFinalDocument (
     )
   }
 
+  // مصدر الحقيقة: لقطات مختومة سليمة + سلسلة غير مزوّرة
+  let sealedSource
+  try {
+    sealedSource = await loadSealedSourceForDocumentGeneration(
+      numericTransactionId,
+      { requireIntegrityChain: true }
+    )
+  } catch (sealError) {
+    if (
+      sealError.code === 'SEALED_SNAPSHOT_TAMPERED' ||
+      sealError.code === 'INTEGRITY_CHAIN_FORGED'
+    ) {
+      throw createTransactionError(sealError.code, sealError.message)
+    }
+    throw sealError
+  }
+
   const [instances, uploadedRows] = await Promise.all([
     documentInstanceRepository.findAllByTransactionId(numericTransactionId),
     documentSignatureRepository.findAllWithSignaturesByTransactionId(
@@ -573,6 +594,26 @@ async function generateMergedFinalDocument (
     .filter(item => item.kind === 'instance')
     .map(item => item.row)
 
+  if (sealedSource.source_seal_hashes.length) {
+    const sealHashSet = new Set(
+      sealedSource.source_seal_hashes.map(item => item.content_hash)
+    )
+
+    for (const instance of generatedInstances) {
+      const sealHash = instance?.data_json?._seal?.content_hash
+        || instance?.data_json?._seal_content_hash
+      if (!sealHash) {
+        continue
+      }
+      if (!sealHashSet.has(sealHash)) {
+        throw createTransactionError(
+          'SEALED_SNAPSHOT_TAMPERED',
+          `نسخة PDF (document_instance#${instance.id}) لا تطابق أي لقطة مختومة للمعاملة`
+        )
+      }
+    }
+  }
+
   const process = transaction.code
     ? await processRepository.findByCode(transaction.code)
     : null
@@ -648,15 +689,22 @@ async function generateMergedFinalDocument (
 
   const contentHash = createHash('sha256').update(pdfBytes).digest('hex')
 
+  const qrPayloadSnapshot = {
+    ...(finalQr || {}),
+    merged_content_hash: contentHash,
+    source_seal_hashes: sealedSource.source_seal_hashes,
+    integrity_chain_status: sealedSource.chain?.chain_status || null,
+    integrity_head_hash: sealedSource.chain?.head_hash || null,
+    integrity_genesis_hash: sealedSource.chain?.genesis_hash || null
+  }
+
   const saved = await documentFinalTransactionRepository.upsertForTransaction({
     transactionId: numericTransactionId,
     filePath: storedPath,
     originalName: fileName,
     mimeType: 'application/pdf',
     fileSizeBytes: pdfBytes.length,
-    qrPayloadSnapshot: finalQr
-      ? { ...finalQr, merged_content_hash: contentHash }
-      : { merged_content_hash: contentHash },
+    qrPayloadSnapshot,
     generatedByUserId: userId,
     generatedAt: new Date()
   })
@@ -682,7 +730,9 @@ async function generateMergedFinalDocument (
       document_instance_ids: selectedInstanceIds,
       document_signature_ids: selectedSignatureIds,
       mergedGenerated,
-      mergedUploaded
+      mergedUploaded,
+      source_seal_hashes: sealedSource.source_seal_hashes,
+      integrity_chain_status: sealedSource.chain?.chain_status || null
     }
   })
 
@@ -697,7 +747,8 @@ async function generateMergedFinalDocument (
       mime_type: saved.mime_type,
       file_size_bytes: saved.file_size_bytes,
       content_hash: contentHash,
-      generated_at: saved.generated_at
+      generated_at: saved.generated_at,
+      source_seal_hashes: sealedSource.source_seal_hashes
     },
     final_qr: finalQr || {
       available: false,

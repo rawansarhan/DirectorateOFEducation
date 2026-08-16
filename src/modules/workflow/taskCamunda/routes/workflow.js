@@ -989,7 +989,13 @@ router.post('/tasks/:taskId/release', authMiddleware,
 
  *
 
- *       **تسلسل:** GET task → signing-challenge → وقّع message → complete
+ *       **تسلسل:** GET task → signing-challenge (نفس widgets) → وقّع message → complete
+
+ *
+
+ *       **هام:** أرسل `form_id` و `form_name` و `widgets[]` مع `pin` و `decision`. هاش اللقطة يُضمَّن في رسالة USB.
+
+ *       طلب `complete` يجب أن يحمل نفس بيانات المرحلة وإلا يُرفض التوقيع.
 
  *
 

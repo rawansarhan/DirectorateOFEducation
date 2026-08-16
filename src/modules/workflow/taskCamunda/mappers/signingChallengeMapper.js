@@ -9,6 +9,7 @@ function toSigningChallenge ({
   stage,
   userKey,
   payloadHash,
+  stageDataHash = null,
   expiresInSeconds
 }) {
   return new SigningChallengeOutputDTO({
@@ -18,6 +19,7 @@ function toSigningChallenge ({
     stage,
     userKey,
     payloadHash,
+    stageDataHash,
     expiresInSeconds
   })
 }

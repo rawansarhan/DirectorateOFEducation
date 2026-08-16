@@ -7,13 +7,34 @@ class ProcessInstanceStageRepository {
     return ProcessInstanceStage.create(data, { transaction: dbTransaction })
   }
 
-  async findByTransactionAndStageCode (transactionId, stageCode) {
+  async findByTransactionAndStageCode (transactionId, stageCode, dbTransaction = null) {
     return ProcessInstanceStage.findOne({
       where: {
         transaction_id: transactionId,
         stage_code: stageCode
       },
-      order: [['created_at', 'ASC']]
+      order: [['created_at', 'ASC']],
+      transaction: dbTransaction
+    })
+  }
+
+  async findSealedByTransactionId (transactionId, dbTransaction = null) {
+    return ProcessInstanceStage.findAll({
+      where: {
+        transaction_id: transactionId,
+        sealed: true
+      },
+      transaction: dbTransaction
+    })
+  }
+
+  async findByTransactionId (transactionId, dbTransaction = null) {
+    return ProcessInstanceStage.findAll({
+      where: {
+        transaction_id: transactionId
+      },
+      order: [['created_at', 'ASC']],
+      transaction: dbTransaction
     })
   }
 }

@@ -8,6 +8,7 @@ class SigningChallengeOutputDTO {
     stage,
     userKey,
     payloadHash,
+    stageDataHash = null,
     expiresInSeconds
   }) {
     this.signing_id = challenge.id
@@ -18,6 +19,7 @@ class SigningChallengeOutputDTO {
     this.key_fingerprint = userKey.key_fingerprint
     this.message = challenge.message
     this.payload_hash = payloadHash
+    this.stage_data_hash = stageDataHash || challenge.stage_data_hash || null
     this.expires_at = challenge.expires_at
     this.expires_in_seconds = expiresInSeconds
   }

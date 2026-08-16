@@ -19,12 +19,19 @@ const {
   INTEGRITY_CHAIN_VERSION,
   buildGenesisHash,
   computeStageDataHash,
+  stageDataHashMatches,
   computeCumulativeHash,
   computeLinkHash,
   buildQrPayload,
   verifySignatureValue,
   resolveStageDataForIntegrity
 } = require('../utils/integrityChainUtils')
+const {
+  parseTransactionSignMessage,
+  buildCanonicalPayloadHash
+} = require('../../../auth/shared/services/cryptoAuthService')
+const processInstanceStageRepository =
+  require('../../process_instance_stage/repositories/processInstanceStageRepository')
 const {
   toVerifyResultDTO,
   toIntegrityChainDTO,
@@ -71,6 +78,7 @@ async function appendIntegrityLink ({
   stageId = null,
   stageCode = null,
   stageData = {},
+  stageDataHash = null,
   signatureHash,
   signedAt = new Date(),
   dbTransaction = null
@@ -86,11 +94,11 @@ async function appendIntegrityLink ({
     .findLatestByTransactionId(transactionId)
 
   const signatureOrder = (previousLink?.signature_order || 0) + 1
-  const stageDataHash = computeStageDataHash(stageData)
+  const resolvedStageDataHash = stageDataHash || computeStageDataHash(stageData)
   const cumulativeHash = computeCumulativeHash({
     genesisHash,
     previousCumulativeHash: previousLink?.cumulative_hash || null,
-    stageDataHash
+    stageDataHash: resolvedStageDataHash
   })
   const linkHash = computeLinkHash({
     cumulativeHash,
@@ -105,7 +113,7 @@ async function appendIntegrityLink ({
     stage_id: stageId,
     stage_code: stageCode,
     signature_order: signatureOrder,
-    stage_data_hash: stageDataHash,
+    stage_data_hash: resolvedStageDataHash,
     cumulative_hash: cumulativeHash,
     link_hash: linkHash,
     previous_link_hash: previousLink?.link_hash || null,
@@ -161,13 +169,49 @@ async function verifyLinksCryptographically (transactionId, links = []) {
 
     if (!valid) {
       issues.push(`invalid Ed25519 signature for link #${link.signature_order}`)
+      continue
+    }
+
+    const parsedMessage = parseTransactionSignMessage(challenge.message)
+    const signedPayloadHash = parsedMessage?.payloadHash || challenge.payload_hash
+
+    if (signedPayloadHash && signedPayloadHash !== challenge.payload_hash) {
+      issues.push(
+        `USB payload hash mismatch inside signed message at link #${link.signature_order}`
+      )
+    }
+
+    if (challenge.stage_data_hash && link.stage_data_hash !== challenge.stage_data_hash) {
+      issues.push(
+        `USB-signed stage hash does not match integrity link #${link.signature_order}`
+      )
+    }
+
+    const signedDecision = challenge.payload_snapshot?.decision
+    const signedStageCode = parsedMessage?.stageCode || link.stage_code
+
+    if (challenge.stage_data_hash && signedDecision) {
+      const rebuiltPayloadHash = buildCanonicalPayloadHash({
+        taskId: challenge.task_id,
+        transactionId: challenge.transaction_id,
+        stageCode: signedStageCode,
+        stageId: challenge.stage_id,
+        decision: signedDecision,
+        stageDataHash: challenge.stage_data_hash
+      })
+
+      if (rebuiltPayloadHash !== challenge.payload_hash) {
+        issues.push(
+          `stored signing challenge was altered at link #${link.signature_order}`
+        )
+      }
     }
   }
 
   return issues
 }
 
-function verifyLinkChainStructure (transaction, links = []) {
+async function verifyLinkChainStructure (transaction, links = []) {
   const issues = []
 
   if (!transaction.genesis_hash) {
@@ -185,6 +229,13 @@ function verifyLinkChainStructure (transaction, links = []) {
     issues.push('genesis_hash does not match transaction metadata')
   }
 
+  const sealedRows = await processInstanceStageRepository.findSealedByTransactionId(
+    transaction.id
+  )
+  const sealedByCode = new Map(
+    (sealedRows || []).map(row => [row.stage_code, row])
+  )
+
   let previousLinkHash = null
   let previousCumulativeHash = null
 
@@ -197,12 +248,39 @@ function verifyLinkChainStructure (transaction, links = []) {
       issues.push(`broken chain at link #${link.signature_order}`)
     }
 
-    const stageDataHash = computeStageDataHash(
-      resolveStageDataForIntegrity(transaction.data, link.stage_code)
+    const liveStageData = resolveStageDataForIntegrity(
+      transaction.data,
+      link.stage_code
     )
+    const sealedRow = sealedByCode.get(link.stage_code)
+    const sealedData = sealedRow?.data && typeof sealedRow.data === 'object'
+      ? sealedRow.data
+      : null
 
-    if (stageDataHash !== link.stage_data_hash) {
+    if (!stageDataHashMatches(liveStageData, link.stage_data_hash)) {
       issues.push(`stage data hash mismatch at link #${link.signature_order}`)
+    }
+
+    if (sealedRow) {
+      const sealedMatchesLink =
+        (sealedRow.content_hash && sealedRow.content_hash === link.stage_data_hash) ||
+        (sealedData && stageDataHashMatches(sealedData, link.stage_data_hash))
+
+      if (!sealedMatchesLink) {
+        issues.push(
+          `sealed snapshot hash mismatch at link #${link.signature_order}`
+        )
+      }
+
+      if (
+        sealedData &&
+        computeStageDataHash(liveStageData) !== computeStageDataHash(sealedData) &&
+        !stageDataHashMatches(liveStageData, sealedRow.content_hash)
+      ) {
+        issues.push(
+          `live data does not match sealed snapshot at link #${link.signature_order}`
+        )
+      }
     }
 
     const expectedCumulativeHash = computeCumulativeHash({
@@ -235,7 +313,7 @@ async function verifyIntegrityChain (transactionId, hints = {}) {
   const links = await transactionSignatureLinkRepository
     .findByTransactionIdOrdered(transactionId)
 
-  const structure = verifyLinkChainStructure(transaction, links)
+  const structure = await verifyLinkChainStructure(transaction, links)
   const cryptoIssues = await verifyLinksCryptographically(transactionId, links)
   const issues = [...structure.issues, ...cryptoIssues]
 

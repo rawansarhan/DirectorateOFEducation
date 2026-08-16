@@ -9,27 +9,14 @@ const {
   ensureGenesisHash
 } = require('../../../transaction/public')
 const {
+  resolveTemplateValuesFromSealedStages,
+  extractTemplateValuesFromList
+} = require('../../../transaction/integrityChain/services/sealedSnapshotService')
+const {
   buildGeneratedPdfHistoryFields,
   findGeneratePdfStageKey,
-  attachGeneratedPdfToUserTaskTemplates,
-  stripPdfMetaFromTemplateValues
+  attachGeneratedPdfToUserTaskTemplates
 } = require('../../taskCamunda/utils/generatedPdfHistory')
-
-function extractTemplateValuesFromList (templates, templateId) {
-  for (const item of templates || []) {
-    const id = Number(item?.id_template ?? item?.id ?? item?.template_id)
-
-    if (id === Number(templateId)) {
-      const values = item.values ?? item.value ?? null
-
-      if (values && typeof values === 'object') {
-        return stripPdfMetaFromTemplateValues(values)
-      }
-    }
-  }
-
-  return null
-}
 
 function findTemplateValuesInTransactionData (data, templateId) {
   if (!data || typeof data !== 'object') {
@@ -82,15 +69,38 @@ async function resolveDocumentInstance ({
   )
 }
 
+/**
+ * مصدر القيم لـ GENERATE_PDF:
+ * 1) لقطات process_instance_stage المختومة فقط (الأولوية والأمان)
+ * 2) إن لم توجد أي لقطة مختومة (معاملات قديمة قبل الختم) → fallback legacy على transactions.data
+ * لا يُستخدم document_instance.data_json كمصدر مستقل — يُعاد ملؤه من الختم.
+ */
 async function resolveTemplateValues ({
   transactionId,
-  templateId,
-  documentInstance = null
+  templateId
 }) {
-  if (documentInstance?.data_json && typeof documentInstance.data_json === 'object') {
-    return documentInstance.data_json
+  const sealedResult = await resolveTemplateValuesFromSealedStages(
+    transactionId,
+    templateId
+  )
+
+  if (sealedResult.sealed_count > 0) {
+    if (!sealedResult.values) {
+      const error = new Error(
+        `قيم القالب (template_id=${templateId}) غير موجودة في اللقطات المختومة — أرسل templates في USER_TASK قبل GENERATE_PDF`
+      )
+      error.code = 'SEALED_TEMPLATE_VALUES_MISSING'
+      throw error
+    }
+
+    return {
+      values: sealedResult.values,
+      source: 'sealed_stage',
+      seal: sealedResult.source
+    }
   }
 
+  // legacy: معاملات بلا ختم
   const transaction = await transactionRepository.findById(transactionId)
   const fromTransaction = findTemplateValuesInTransactionData(
     transaction?.data,
@@ -98,10 +108,18 @@ async function resolveTemplateValues ({
   )
 
   if (fromTransaction) {
-    return fromTransaction
+    return {
+      values: fromTransaction,
+      source: 'legacy_transaction_data',
+      seal: null
+    }
   }
 
-  return null
+  return {
+    values: null,
+    source: null,
+    seal: null
+  }
 }
 
 async function applyGeneratedPdfToTransactionHistory ({
@@ -218,11 +236,12 @@ async function executeGeneratePdfJob ({
     )
   }
 
-  const values = await resolveTemplateValues({
+  const resolved = await resolveTemplateValues({
     transactionId: numericTransactionId,
-    templateId: numericTemplateId,
-    documentInstance
+    templateId: numericTemplateId
   })
+
+  const values = resolved.values
 
   if (!values) {
     throw new Error(
@@ -239,18 +258,27 @@ async function executeGeneratePdfJob ({
   const genesisHash = await ensureGenesisHash({ id: numericTransactionId })
 
   const createdNow = !documentInstance
+  const dataJsonWithSealMeta = {
+    ...values,
+    _seal: {
+      source: resolved.source,
+      stage_code: resolved.seal?.stage_code || null,
+      content_hash: resolved.seal?.content_hash || null,
+      challenge_id: resolved.seal?.challenge_id || null
+    }
+  }
 
   if (!documentInstance) {
     documentInstance = await documentInstanceRepository.create({
       transaction_id: numericTransactionId,
       document_template_id: numericTemplateId,
-      data_json: values,
+      data_json: dataJsonWithSealMeta,
       generated_pdf_path: null,
       status: 'generated'
     })
   } else {
     await documentInstanceRepository.updateInstance(documentInstance, {
-      data_json: values
+      data_json: dataJsonWithSealMeta
     })
   }
 
@@ -272,7 +300,7 @@ async function executeGeneratePdfJob ({
       generated_pdf_path: generation.generated_pdf_path,
       content_hash: generation.content_hash,
       status: 'generated',
-      data_json: values
+      data_json: dataJsonWithSealMeta
     })
 
     if (persistHistory) {
@@ -296,7 +324,10 @@ async function executeGeneratePdfJob ({
       filled_keys: generation.filled_keys,
       skipped_keys: generation.skipped_keys,
       values_used: generation.values_used,
-      engine_type: documentTemplate.engine_type
+      engine_type: documentTemplate.engine_type,
+      seal_source: resolved.source,
+      seal_stage_code: resolved.seal?.stage_code || null,
+      seal_content_hash: resolved.seal?.content_hash || null
     }
   } catch (error) {
     // إن فشل الحفظ بعد إنشاء الصف — احذفه حتى لا تبقى نسخ فاشلة

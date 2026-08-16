@@ -6,7 +6,8 @@ const stageRepository = require('../../processDefinition/repositories/stageRepos
 const stageConfigRepository = require('../../stageConfig/repositories/stageConfigRepository')
 const {
   documentInstanceRepository,
-  getTransactionById
+  getTransactionById,
+  getTransactionDataForDisplay
 } = require('../../../transaction/public')
 const {
   acquireTaskLock,
@@ -203,8 +204,10 @@ async function loadTaskDetailsContext ({ taskId, userId }) {
     processInstance
   })
 
+  const displayData = await getTransactionDataForDisplay(transaction)
+
   const previousStagesData = enrichHistoryTemplatesWithDocumentInstances(
-    formatTransactionHistoryForDisplay(transaction?.data || {}, transaction),
+    formatTransactionHistoryForDisplay(displayData, transaction),
     transaction?.id
       ? await documentInstanceRepository.findAllByTransactionId(transaction.id)
       : []

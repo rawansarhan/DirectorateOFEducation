@@ -34,6 +34,11 @@ const userRepository = require('../../../auth/shared/repositories/userRepository
 const userRoleAssignmentRepository = require('../../../auth/shared/repositories/userRoleAssignmentRepository')
 const { ensureGenesisHash, appendIntegrityLink } =
   require('../../integrityChain/services/integrityChainService')
+const { createProcessStage } =
+  require('../../process_instance_stage/services/processInstanceStageService')
+const {
+  computeStageDataHash
+} = require('../../integrityChain/utils/integrityChainUtils')
 const { ensureTransactionIdProcess } =
   require('./transactionIdProcessService')
 const {
@@ -344,7 +349,10 @@ async function submitTransaction (
           userId,
           decision: 'approve',
           clientMeta,
-          expectedTaskId: buildDraftSubmitTaskId(current.id)
+          expectedTaskId: buildDraftSubmitTaskId(current.id),
+          stageDataHash: computeStageDataHash(normalized, {
+            decision: 'approve'
+          })
         })
       } else if (submitSignature) {
         throw createTransactionError(
@@ -410,6 +418,11 @@ async function submitTransaction (
         await ensureTransactionIdProcess(current, { transaction: dbTransaction })
         await ensureGenesisHash(current, { transaction: dbTransaction })
 
+        // ختم مرحلة التقديم دائماً (مواطن بدون USB أو موظف مع توقيع)
+        const stageDataHash = digitalSignatureRecord && submitSignature
+          ? computeStageDataHash(normalized, { decision: 'approve' })
+          : computeStageDataHash(storedData)
+
         if (digitalSignatureRecord) {
           await appendIntegrityLink({
             transactionId: current.id,
@@ -418,11 +431,28 @@ async function submitTransaction (
             stageId: stage.id,
             stageCode: stage.code,
             stageData: storedData,
+            stageDataHash,
             signatureHash: digitalSignatureRecord.signed_hash,
             signedAt: digitalSignatureRecord.signed_at,
             dbTransaction
           })
         }
+
+        await createProcessStage({
+          transactionId: current.id,
+          stageCode: stage.code,
+          stageName: stage.name,
+          status: 'completed',
+          data: {
+            ...storedData,
+            completed_by: userId,
+            completed_at: new Date().toISOString()
+          },
+          assigned_to: userId,
+          contentHash: stageDataHash,
+          challengeId: submitSignature?.challengeId || null,
+          sealed: true
+        }, { transaction: dbTransaction })
       })
 
       try {

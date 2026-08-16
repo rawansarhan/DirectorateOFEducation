@@ -67,6 +67,16 @@ const WORKFLOW_ERROR_CATALOG = {
     code: 'SIGNING_DECISION_MISMATCH',
     status: HTTP_STATUS.BAD_REQUEST
   },
+  'stage snapshot does not match the signed signing challenge': {
+    message: 'بيانات المرحلة لا تطابق اللقطة التي وُقّعت عبر USB — أعد signing-challenge بنفس widgets ثم complete',
+    code: 'SIGNING_SNAPSHOT_MISMATCH',
+    status: HTTP_STATUS.BAD_REQUEST
+  },
+  'stage snapshot hash is required to verify signing challenge': {
+    message: 'هاش لقطة المرحلة مطلوب للتحقق من التوقيع — أرسل نفس widgets عند complete',
+    code: 'SIGNING_SNAPSHOT_REQUIRED',
+    status: HTTP_STATUS.BAD_REQUEST
+  },
   'Invalid digital signature': {
     message: 'التوقيع الرقمي غير صالح — تحقق من USB والمفتاح',
     code: 'INVALID_SIGNATURE',
@@ -86,6 +96,11 @@ const WORKFLOW_ERROR_CATALOG = {
     message: 'decision مطلوب (approve / reject) عند إكمال مهمة تتطلب توقيعاً',
     code: 'DECISION_REQUIRED',
     status: HTTP_STATUS.BAD_REQUEST
+  },
+  'لا يمكن تعديل بيانات مرحلة مكتملة ومختومة': {
+    message: 'لا يمكن تعديل بيانات مرحلة مكتملة ومختومة',
+    code: 'STAGE_SEALED',
+    status: HTTP_STATUS.CONFLICT
   },
   'Too many requests — please wait before retrying': {
     message: 'تم تجاوز حد الطلبات — انتظر قليلاً ثم أعد المحاولة',
@@ -179,6 +194,18 @@ function enrichWorkflowError (error = {}) {
     }
   }
 
+  // STAGE_SEALED message includes stage_code: "... (STAGE_X)"
+  if (
+    error.code === 'STAGE_SEALED' ||
+    String(error.message || '').startsWith('لا يمكن تعديل بيانات مرحلة مكتملة ومختومة')
+  ) {
+    return {
+      message: error.message || WORKFLOW_ERROR_CATALOG['لا يمكن تعديل بيانات مرحلة مكتملة ومختومة'].message,
+      code: 'STAGE_SEALED',
+      status: HTTP_STATUS.CONFLICT
+    }
+  }
+
   if (error.code && CONFLICT_ERROR_MESSAGES[error.code]) {
     return {
       message: CONFLICT_ERROR_MESSAGES[error.code],
@@ -236,7 +263,8 @@ function resolveWorkflowStatusCode (error, defaultStatus = HTTP_STATUS.BAD_REQUE
     'TASK_LOCK_NOT_HELD',
     'VERSION_CONFLICT',
     'DUPLICATE_IN_FLIGHT',
-    'IDEMPOTENT_REPLAY'
+    'IDEMPOTENT_REPLAY',
+    'STAGE_SEALED'
   ]
 
   if (conflictCodes.includes(normalized.code)) {

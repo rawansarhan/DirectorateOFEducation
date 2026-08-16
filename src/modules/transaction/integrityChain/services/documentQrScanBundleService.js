@@ -18,6 +18,9 @@ const documentFinalTransactionRepository =
 const transactionSignatureLinkRepository =
   require('../repositories/transactionSignatureLinkRepository')
 const {
+  getTransactionDataForDisplay
+} = require('../../process_instance_stage/services/sealedDisplayDataService')
+const {
   toIdentityPersonDTO,
   toSignerDTO,
   toFinalDocumentPublicDTO,
@@ -57,8 +60,10 @@ async function buildDocumentQrScanBundle (transaction) {
       )
     ])
 
+  const displayData = await getTransactionDataForDisplay(transaction)
+
   const historyData = enrichHistoryTemplatesWithDocumentInstances(
-    formatTransactionHistoryForDisplay(transaction.data || {}, transaction),
+    formatTransactionHistoryForDisplay(displayData, transaction),
     documentInstances
   )
 
