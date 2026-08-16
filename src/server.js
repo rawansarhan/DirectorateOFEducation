@@ -29,9 +29,12 @@ sequelize.authenticate()
   .then(() => {
     console.log('Database connected');
 
+    server.keepAliveTimeout = 65000
+    server.headersTimeout = 66000
+
     server.listen(PORT, () => {
-      console.log(`Server is running on port ${PORT} (HTTP + WebSocket /ws)`);
-    });
+      console.log(`Server is running on port ${PORT} (HTTP + WebSocket /ws)`)
+    })
   })
   .catch(err => {
     console.error('Unable to connect to the database:', err);
