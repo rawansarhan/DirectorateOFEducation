@@ -125,6 +125,10 @@ module.exports = {
   // ── Camunda ────────────────────────────────────────────────────────────
   CAMUNDA_URL: required('CAMUNDA_URL'),
   CAMUNDA_TIMEOUT_MS: intOptional('CAMUNDA_TIMEOUT_MS', 30000),
+  GENERATE_PDF_REQUEST_TIMEOUT_MS: intOptional(
+    'GENERATE_PDF_REQUEST_TIMEOUT_MS',
+    8000
+  ),
 
   // ── Redis / Cache ──────────────────────────────────────────────────────
   REDIS_URL: optional('REDIS_URL'),

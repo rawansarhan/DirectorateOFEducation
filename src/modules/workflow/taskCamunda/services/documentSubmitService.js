@@ -243,17 +243,13 @@ async function completeDocumentSubmit ({
     note: value.note
   }
 
-  const result = await retryWithBackoff(
-    () =>
-      completeTaskService.completeTask({
-        taskId: resolvedTaskId,
-        userId,
-        payload: completePayload,
-        clientMeta,
-        requireSignature: true
-      }),
-    { label: `documentSubmit.complete:${resolvedTaskId}` }
-  )
+  const result = await completeTaskService.completeTask({
+    taskId: resolvedTaskId,
+    userId,
+    payload: completePayload,
+    clientMeta,
+    requireSignature: true
+  })
 
   return {
     message: 'تم تقديم الوثائق الموقّعة بنجاح',

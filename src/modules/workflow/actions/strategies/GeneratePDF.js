@@ -16,6 +16,19 @@ const {
   executeGeneratePdfJob
 } = require('../services/generatePdfJobService')
 const EVENTS = require('../../../../core/shared/events/types')
+const { GENERATE_PDF_REQUEST_TIMEOUT_MS } = require('../../../../core/config/env')
+
+function withTimeout (promise, ms, label) {
+  let timer
+
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error(`${label} تجاوز ${ms}ms`))
+    }, ms)
+  })
+
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer))
+}
 
 class GeneratePdfStrategy {
   async execute ({ payload, context }) {
@@ -68,10 +81,14 @@ class GeneratePdfStrategy {
     }
 
     try {
-      const result = await executeGeneratePdfJob({
-        ...jobPayload,
-        persist_history: false
-      })
+      const result = await withTimeout(
+        executeGeneratePdfJob({
+          ...jobPayload,
+          persist_history: false
+        }),
+        GENERATE_PDF_REQUEST_TIMEOUT_MS,
+        'GENERATE_PDF'
+      )
 
       return {
         type: 'pdf',
