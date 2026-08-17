@@ -2,7 +2,8 @@
 
 const {
   buildApplicantName,
-  resolveDepartmentName
+  resolveDepartmentName,
+  isLockedByUser
 } = require('../utils/employeeTaskStatus')
 const {
   normalizeProcessPriority,
@@ -14,6 +15,7 @@ class EmployeeTaskOutputDTO {
     processInstance,
     activeTask,
     activeStage = null,
+    userId = null,
     progressPercent,
     employeeStatus,
     stageNameOverride = null
@@ -48,6 +50,11 @@ class EmployeeTaskOutputDTO {
     this.status_label = employeeStatus?.status_label ?? null
     this.task_id = activeTask?.id ?? null
     this.task_name = stageName
+    this.is_locked_by_me = Boolean(
+      this.status === 'in_progress' &&
+        activeTask?.id &&
+        isLockedByUser(processInstance, activeTask.id, userId)
+    )
     this.process_name = processDefinitionName
     this.process_priority = normalizeProcessPriority(processDefinition?.priority)
     this.activity_at = transaction?.created_at ?? null

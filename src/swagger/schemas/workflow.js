@@ -476,6 +476,11 @@ module.exports = {
         "type": "string",
         "example": "بانتظار الاستلام"
       },
+      "is_locked_by_me": {
+        "type": "boolean",
+        "example": false,
+        "description": "true فقط إذا الحالة in_progress والقفل عند الموظف الحالي"
+      },
       "task_id": {
         "type": "string",
         "nullable": true,
