@@ -411,10 +411,13 @@ async function createDraftSubmitSigningChallenge ({
   const stageConfig = await stageConfigRepository.findByStageId(stage.id)
 
   const { error: validationError, value: validatedPayload } =
-    validateSigningChallengePayload({
-      ...payload,
-      decision: payload.decision || DRAFT_SUBMIT_DECISION
-    })
+    validateSigningChallengePayload(
+      {
+        ...payload,
+        decision: payload.decision || DRAFT_SUBMIT_DECISION
+      },
+      { allowSubmitDecision: true }
+    )
 
   if (validationError) {
     throw new Error(validationError)
