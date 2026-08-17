@@ -65,6 +65,10 @@ module.exports = {
     return require('../taskCamunda/services/transactionSigningService')
       .buildDraftSubmitTaskId
   },
+  get DRAFT_SUBMIT_DECISION () {
+    return require('../taskCamunda/services/transactionSigningService')
+      .DRAFT_SUBMIT_DECISION
+  },
   get createDraftSubmitSigningChallenge () {
     return require('../taskCamunda/services/transactionSigningService')
       .createDraftSubmitSigningChallenge

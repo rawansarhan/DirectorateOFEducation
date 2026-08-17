@@ -23,7 +23,8 @@ const {
   loadAuthStageByProcessCode,
   verifySignatureForComplete,
   persistVerifiedSignature,
-  buildDraftSubmitTaskId
+  buildDraftSubmitTaskId,
+  DRAFT_SUBMIT_DECISION
 } = require('../../../workflow/public')
 const db = require('../../../../entities')
 const { formatClientErrorMessage } = require('../../../../core/utils/errorMessageHelper')
@@ -347,11 +348,11 @@ async function submitTransaction (
           challengeId: submitSignature.challengeId,
           signature: submitSignature.signature,
           userId,
-          decision: 'approve',
+          decision: DRAFT_SUBMIT_DECISION,
           clientMeta,
           expectedTaskId: buildDraftSubmitTaskId(current.id),
           stageDataHash: computeStageDataHash(normalized, {
-            decision: 'approve'
+            decision: DRAFT_SUBMIT_DECISION
           })
         })
       } else if (submitSignature) {
@@ -419,9 +420,12 @@ async function submitTransaction (
         await ensureGenesisHash(current, { transaction: dbTransaction })
 
         // ختم مرحلة التقديم دائماً (مواطن بدون USB أو موظف مع توقيع)
-        const stageDataHash = digitalSignatureRecord && submitSignature
-          ? computeStageDataHash(normalized, { decision: 'approve' })
-          : computeStageDataHash(storedData)
+        //
+        // هاش واحد للتوقيع والختم والرابط معاً: يُحسب من storedData
+        // (نفس ما يُحفظ في data) بلا فرض decision — لأن assertSealedRowsIntact
+        // و verifyIntegrityChain كلاهما يعيد الحساب من الصف المخزّن.
+        // اللقطة الكانونية تُسقط type_doc_id فيتطابق مع هاش التحدي الموقّع.
+        const stageDataHash = computeStageDataHash(storedData)
 
         if (digitalSignatureRecord) {
           await appendIntegrityLink({

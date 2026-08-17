@@ -161,6 +161,14 @@ function computeSigningStageDataHash (payload = {}, decision = null) {
 
 const DRAFT_SUBMIT_TASK_PREFIX = 'draft-submit'
 
+/**
+ * قرار مرحلة التقديم كما يُخزَّن فعلياً في data.decision
+ * (validateSubmitTransactionRequest تفرض 'submit').
+ * يجب أن يُستعمل في التحدي والتحقق والختم معاً حتى يبقى
+ * content_hash قابلاً لإعادة الإنتاج من البيانات المخزّنة.
+ */
+const DRAFT_SUBMIT_DECISION = 'submit'
+
 function buildDraftSubmitTaskId (transactionId) {
   return `${DRAFT_SUBMIT_TASK_PREFIX}:${transactionId}`
 }
@@ -405,7 +413,7 @@ async function createDraftSubmitSigningChallenge ({
   const { error: validationError, value: validatedPayload } =
     validateSigningChallengePayload({
       ...payload,
-      decision: payload.decision || 'approve'
+      decision: payload.decision || DRAFT_SUBMIT_DECISION
     })
 
   if (validationError) {
@@ -428,7 +436,10 @@ async function createDraftSubmitSigningChallenge ({
     mode: 'submit'
   })
 
-  const stageDataHash = computeSigningStageDataHash(formPayload, 'approve')
+  const stageDataHash = computeSigningStageDataHash(
+    formPayload,
+    DRAFT_SUBMIT_DECISION
+  )
 
   const userKey = await userKeyRepository.findActiveLatestByUserId(userId)
 
@@ -440,7 +451,7 @@ async function createDraftSubmitSigningChallenge ({
     task: { id: syntheticTaskId },
     transaction,
     stage,
-    decision: 'approve',
+    decision: DRAFT_SUBMIT_DECISION,
     stageDataHash
   })
 
@@ -478,7 +489,7 @@ async function createDraftSubmitSigningChallenge ({
       form_name: formPayload.form_name ?? null,
       widgets: formPayload.widgets || [],
       templates: formPayload.templates || [],
-      decision: 'approve',
+      decision: DRAFT_SUBMIT_DECISION,
       note: formPayload.note ?? ''
     },
     message,
@@ -497,7 +508,7 @@ async function createDraftSubmitSigningChallenge ({
       signingId: challenge.id,
       transactionId: transaction.id,
       stageCode: stage.code,
-      decision: 'approve',
+      decision: DRAFT_SUBMIT_DECISION,
       draft_submit: true,
       stageDataHash
     }
@@ -851,6 +862,7 @@ module.exports = {
   requiresDigitalSignature,
   buildDraftSubmitTaskId,
   isDraftSubmitTaskId,
+  DRAFT_SUBMIT_DECISION,
   createSigningChallenge,
   createDraftSubmitSigningChallenge,
   verifySignatureForComplete,

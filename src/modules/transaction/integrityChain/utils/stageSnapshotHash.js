@@ -5,7 +5,7 @@
  * widgets (id + value) + templates + decision + note + assignments
  * بدون completed_by / digital_signature / مسارات التسجيل اللاحقة.
  *
- * قيم file_picker تُختزل إلى path + type_doc_id حتى يطابق هاش
+ * قيم file_picker تُختزل إلى path وحده حتى يطابق هاش
  * تحدي USB هاش البيانات المخزّنة بعد تسجيل الملفات.
  */
 
@@ -32,18 +32,26 @@ function stripPdfMetaFromValueMap (values = {}) {
   return cleaned
 }
 
+/**
+ * الملف يُختزل إلى path فقط.
+ *
+ * type_doc_id مُستبعد عمداً: وقت إنشاء تحدي التوقيع لم تُسجَّل الملفات بعد
+ * (القيمة string أو بلا type_doc_id)، ويُضاف لاحقاً في
+ * registerTransactionFiles قبل الختم. لو دخل في اللقطة الكانونية لاختلف
+ * هاش التوقيع عن هاش الختم حتماً، فينكسر verifyIntegrityChain.
+ * الـ path وحده يعرّف الملف وهو ما وقّع عليه المستخدم فعلاً.
+ */
 function normalizeFileToken (entry) {
   if (typeof entry === 'string') {
-    return { path: entry, type_doc_id: null }
+    return { path: entry }
   }
 
   if (!entry || typeof entry !== 'object') {
-    return { path: null, type_doc_id: null }
+    return { path: null }
   }
 
   return {
-    path: entry.path ?? entry.url ?? null,
-    type_doc_id: entry.type_doc_id ?? null
+    path: entry.path ?? entry.url ?? null
   }
 }
 
