@@ -127,13 +127,21 @@ async function registerTransactionFile ({
   assertUploadedFileExists(stored.path, file.key || file.name || 'unknown')
   await assertUploadedFileOwnedByUser(stored.path, userId, file.key || file.name || 'unknown')
 
+  // استرداد بصمة الملف من pending_file_uploads (محسوبة عند الرفع)
+  const pendingRecord = await pendingFileUploadRepository.findByPathAndUser(
+    stored.path,
+    userId
+  )
+  const contentHash = pendingRecord?.content_hash ?? null
+
   const document = await retryWithBackoff(
     () =>
       documentSignatureRepository.create(
         {
           transaction_id: transactionId,
           file_path: stored.path,
-          type_doc_id: typeDocId
+          type_doc_id: typeDocId,
+          content_hash: contentHash
         },
         { transaction: dbTransaction }
       ),

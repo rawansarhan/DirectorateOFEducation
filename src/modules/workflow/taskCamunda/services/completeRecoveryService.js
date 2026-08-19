@@ -311,7 +311,7 @@ async function resumeCompleteSideEffectsForTransaction (transactionRow) {
     throw err
   }
 }
-
+//
 async function findTransactionsNeedingCompleteRecovery ({ batchSize = 20 } = {}) {
   const sequelize = Transaction.sequelize
 

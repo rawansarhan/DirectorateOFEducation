@@ -340,7 +340,7 @@ router.post(
  *       مع Redis cache (TTL = API_CACHE_TTL_SECONDS).
  *
  *       يتحقق أن `stageAssignment` يطابق أدوار المستخدم الحالي (التحقق خارج الكاش).
- *       إن وُجد `is_assignment` / `assignments` يُحذفان من الاستجابة للمواطن.
+ *       إن وُجد `assignments` يُحذف من الاستجابة للمواطن، بينما `is_assignment` يُعاد كما هو.
  *     tags: [Complaint]
  *     security:
  *       - bearerAuth: []
@@ -437,7 +437,7 @@ router.get(
  *     description: |
  *       يجلب استمارة التقديم من مرحلة AUTH:
  *       - يُعاد `stageConfig.config_json` (القالب) بنفس شكل الرد السابق
- *       - إن وُجد `is_assignment` / `assignments` يُحذفان من الاستجابة
+ *       - إن وُجد `assignments` يُحذف من الاستجابة (أما `is_assignment` فيُعاد)
  *       - يتحقق أن `organization_department_roles_id` في `stage_assignments`
  *         لمرحلة AUTH موجود أيضاً في `user_role_assignments` لصاحب التوكن
  *       - التحقق خارج الكاش؛ الكاش يخزّن القالب فقط مع معرفات التعيين الداخلية

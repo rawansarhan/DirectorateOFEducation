@@ -582,8 +582,8 @@ async function loadAuthStageConfigPayload (numericProcessId) {
   const configJson = stageConfig.config_json || {}
   let citizenConfig = configJson
 
-  if (configJson.is_assignment || configJson.assignments) {
-    const { is_assignment, assignments: _a, ...rest } = configJson
+  if (configJson.assignments) {
+    const { assignments: _a, ...rest } = configJson
     citizenConfig = rest
   }
 
@@ -703,8 +703,8 @@ async function loadComplaintConfigPayload () {
   const configJson = stageConfig.config_json || {}
   let citizenConfig = configJson
 
-  if (configJson.is_assignment || configJson.assignments) {
-    const { is_assignment, assignments: _a, ...rest } = configJson
+  if (configJson.assignments) {
+    const { assignments: _a, ...rest } = configJson
     citizenConfig = rest
   }
 
