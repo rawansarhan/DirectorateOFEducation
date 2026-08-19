@@ -32,6 +32,11 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING,
         allowNull: false
       },
+      content_hash: {
+        type: DataTypes.STRING(64),
+        allowNull: true,
+        comment: 'SHA-256 للملف المرفوع — يُنسخ من pending_file_uploads.content_hash عند التسجيل'
+      },
       type_doc_id: {
         type: DataTypes.INTEGER,
         allowNull: true

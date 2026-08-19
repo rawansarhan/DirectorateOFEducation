@@ -105,7 +105,7 @@ async function buildStageNamesByCode (processDefinitionId) {
       .map(stage => [stage.code, stage.name ?? null])
   )
 }
-
+//يجمع كل بيانات الشهادة (المعاملة، التاريخ، الموقّعين، الوثيقة النهائية) في استجابة واحدة.
 async function getCertificateBundle (
   transactionId,
   { userId: _userId = null, audience: _audience = CERTIFICATE_AUDIENCE.OWNER } = {}
@@ -159,7 +159,7 @@ async function getCertificateBundle (
     final_document: finalDocument
   })
 }
-
+//يحفظ ملف PDF النهائي بعد توليده مع بيانات الـ QR والتدقيق (Audit).
 async function saveFinalDocument (payload) {
   const input = toSaveFinalDocumentInput(payload)
   const transaction = await loadAuthorizedTransaction(
@@ -221,7 +221,7 @@ async function saveFinalDocument (payload) {
 
   return toFinalDocumentDTO(saved, { includeQrSnapshot: true })
 }
-
+//يولّد PDF نهائي جديد عند الطلب (مع إمكانية اختيار ملفات معينة).
 async function getFinalDocument (
   transactionId,
   {
@@ -292,7 +292,7 @@ async function getFinalDocument (
 
   return toFinalDocumentDTO(row, { includeQrSnapshot: true })
 }
-
+//يعيد للمواطن رابط الوثيقة النهائية المحفوظة فقط.
 async function getMyFinalDocument (transactionId, userId) {
   const numericTransactionId = Number.parseInt(transactionId, 10)
 

@@ -49,7 +49,7 @@ async function resolveTaskIdForDocumentSubmit ({
     transactionId: resolved.transaction.id
   }
 }
-
+//
 async function createDocumentSubmitSigningChallenge ({
   taskId = null,
   transactionId = null,

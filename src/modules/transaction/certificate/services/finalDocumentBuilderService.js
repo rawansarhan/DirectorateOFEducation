@@ -131,6 +131,50 @@ function readUploadBytes (storedPath) {
 }
 
 /**
+ * يحسب SHA-256 للملف بـ stream لتجنب تحميل ملفات ضخمة في الذاكرة دفعة واحدة.
+ */
+function computeFileHashStream (absolutePath) {
+  return new Promise((resolve, reject) => {
+    const hash = createHash('sha256')
+    const stream = fs.createReadStream(absolutePath)
+
+    stream.on('data', chunk => hash.update(chunk))
+    stream.on('end', () => resolve(hash.digest('hex')))
+    stream.on('error', reject)
+  })
+}
+
+/**
+ * يتحقق أن بصمة الملف الحقيقي على القرص تطابق الـ content_hash المختوم.
+ * - إذا content_hash = null (صف قديم) → يُتجاوز التحقق (backward-compatible).
+ * - إذا الملف مفقود → يرفع SEALED_SNAPSHOT_TAMPERED.
+ * - إذا الـ hash لا يطابق → يرفع SEALED_SNAPSHOT_TAMPERED.
+ */
+async function assertSignatureFileIntact (row) {
+  if (!row.content_hash) {
+    return
+  }
+
+  const absolutePath = resolveAbsoluteUploadPath(row.file_path)
+
+  if (!fs.existsSync(absolutePath)) {
+    throw createTransactionError(
+      'SEALED_SNAPSHOT_TAMPERED',
+      `ملف document_signature#${row.id} مفقود من القرص`
+    )
+  }
+
+  const actualHash = await computeFileHashStream(absolutePath)
+
+  if (actualHash !== row.content_hash) {
+    throw createTransactionError(
+      'SEALED_SNAPSHOT_TAMPERED',
+      `تم تعديل الملف المرفوع (document_signature#${row.id}) بعد تسجيله`
+    )
+  }
+}
+
+/**
  * رابط QR النهائي — كل مسح يُصدر رمز تفاصيل جديد (6 أرقام، 5 دقائق).
  * - إن وُجد GENERATE_PDF: الربط على آخر document_instance.
  * - وإلا: ربط على مستوى المعاملة (doc=0) إن وُجد genesis + مفتاح السلطة.
@@ -622,6 +666,13 @@ async function generateMergedFinalDocument (
     transaction,
     generatedInstances
   })
+
+  // تحقق من سلامة كل ملف مرفوع قبل الشروع في الدمج
+  for (const item of orderedFiles) {
+    if (item.kind === 'signature') {
+      await assertSignatureFileIntact(item.row)
+    }
+  }
 
   const mergedPdf = await PDFDocument.create()
   const bodyFont = await embedUnicodeFont(mergedPdf)
