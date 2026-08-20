@@ -25,7 +25,10 @@ const {
   toCertificateBundleDTO,
   toSaveFinalDocumentInput
 } = require('../mappers/certificateMapper')
-const { toPublicFileUrl } = require('../../../../core/utils/filePath')
+const {
+  toPublicFileUrl,
+  isSyntheticSignatureDocumentPath
+} = require('../../../../core/utils/filePath')
 const { paginateArray } = require('../../../../core/utils/pagination')
 
 const COMPLETED_STATUSES = new Set(['completed'])
@@ -419,6 +422,7 @@ async function listTransactionSourceDocuments (transactionId) {
       const plain = typeof row.get === 'function' ? row.get({ plain: true }) : row
       return {
         id: plain.id,
+        name: plain.name ?? null,
         document_template_id: plain.document_template_id ?? null,
         generated_pdf_path: plain.generated_pdf_path ?? null,
         file_url: plain.generated_pdf_path
@@ -429,17 +433,18 @@ async function listTransactionSourceDocuments (transactionId) {
         created_at: plain.created_at ?? null
       }
     }),
-    document_signatures: (signatures || []).map(row => {
-      const plain = typeof row.get === 'function' ? row.get({ plain: true }) : row
-      return {
+    document_signatures: (signatures || [])
+      .map(row => (typeof row.get === 'function' ? row.get({ plain: true }) : row))
+      .filter(plain => !isSyntheticSignatureDocumentPath(plain.file_path))
+      .map(plain => ({
         id: plain.id,
+        name: plain.name ?? null,
         type_doc_id: plain.type_doc_id ?? null,
         type_doc_name: plain.type_doc?.name ?? null,
         file_path: plain.file_path ?? null,
         file_url: plain.file_path ? toPublicFileUrl(plain.file_path) : null,
         created_at: plain.created_at ?? null
-      }
-    })
+      }))
   }
 }
 

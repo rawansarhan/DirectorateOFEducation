@@ -252,6 +252,9 @@ router.get(
  *     summary: عرض document_instance + document_signature لمعاملة
  *     description: |
  *       قائمة الملفات المرشّحة لبناء الوثيقة النهائية.
+ *       `document_signatures` تعرض الملفات المرفوعة فقط (مع `name` = file_picker.label).
+ *       `document_instances` تعرض `name` = document_templates.name.
+ *       سجلات التوقيع الاصطناعي `transaction://...` لا تُعاد.
  *       استخدم الـ `id` منها في `GET .../final-document`.
  *
  *       **Auth:** Bearer + `VIEW_CREATE_FINAL_DOCUMENT`

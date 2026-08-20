@@ -120,6 +120,7 @@ function toStoredFileValue (file) {
     type_doc_id: file.type_doc_id ?? null,
     type_doc: file.type_doc ?? null,
     original_name: file.original_name ?? null,
+    name: file.name ?? null,
     mime_type: file.mime_type ?? null
   }
 }
@@ -213,7 +214,8 @@ function extractFieldsFilesFromWidgets (widgets = []) {
             type_doc_id: entry.type_doc_id ?? null,
             type_doc: entry.type_doc ?? null,
             document_id: entry.document_id ?? null,
-            original_name: entry.original_name ?? null
+            original_name: entry.original_name ?? null,
+            name: entry.name ?? null
           })
         }
       }

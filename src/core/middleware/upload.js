@@ -1,10 +1,18 @@
 'use strict'
 
-const multer = require('multer')
+const fs = require('fs')
 const path = require('path')
+const { pipeline, Transform } = require('stream')
+const { createHash } = require('crypto')
+const multer = require('multer')
 const { TRANSACTION_FILE_MAX_MB } = require('../config/env')
 const { normalizeUploadedFiles } = require('../utils/uploadFilename')
 const { ensureUploadsRoot } = require('../utils/filePath')
+
+function buildUploadFilename (originalName) {
+  const ext = path.extname(originalName || '')
+  return `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`
+}
 
 // =========================================
 // STORAGE — مجلد uploads ثابت بجذر المشروع
@@ -15,14 +23,50 @@ const storage = multer.diskStorage({
   },
 
   filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname)
-
-    const filename =
-      Date.now() + '-' + Math.round(Math.random() * 1e9) + ext
-
-    cb(null, filename)
+    cb(null, buildUploadFilename(file.originalname))
   }
 })
+
+/**
+ * يكتب الملف على القرص ويحسب SHA-256 في نفس الـ stream
+ * حتى لا نعيد قراءة الملف بعد انتهاء Multer.
+ */
+function hashingDiskStorage () {
+  return {
+    _handleFile (req, file, cb) {
+      const destination = ensureUploadsRoot()
+      const filename = buildUploadFilename(file.originalname)
+      const absolutePath = path.join(destination, filename)
+      const hash = createHash('sha256')
+      const hasher = new Transform({
+        transform (chunk, _enc, next) {
+          hash.update(chunk)
+          next(null, chunk)
+        }
+      })
+      const outStream = fs.createWriteStream(absolutePath)
+
+      pipeline(file.stream, hasher, outStream, (err) => {
+        if (err) {
+          fs.unlink(absolutePath, () => cb(err))
+          return
+        }
+
+        cb(null, {
+          destination,
+          filename,
+          path: absolutePath,
+          size: outStream.bytesWritten,
+          contentHash: hash.digest('hex')
+        })
+      })
+    },
+
+    _removeFile (req, file, cb) {
+      fs.unlink(file.path, () => cb(null))
+    }
+  }
+}
 
 // =========================================
 // BPMN ONLY
@@ -104,7 +148,7 @@ const transactionFileFilter = (req, file, cb) => {
 }
 
 const uploadTransactionFile = multer({
-  storage,
+  storage: hashingDiskStorage(),
   fileFilter: transactionFileFilter,
   limits: {
     fileSize: TRANSACTION_FILE_MAX_MB * 1024 * 1024,

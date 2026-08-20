@@ -52,7 +52,8 @@ async function buildStageSnapshot ({
       const registeredFiles = await registerTransactionFiles({
         transactionId: transaction.id,
         files: normalizedPayload.files,
-        userId
+        userId,
+        configJson: stageConfig?.config_json || null
       })
 
       collectedFiles.push(...registeredFiles)

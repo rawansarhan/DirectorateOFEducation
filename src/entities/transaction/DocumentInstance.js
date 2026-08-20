@@ -41,6 +41,12 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: true
       },
 
+      name: {
+        type: DataTypes.STRING(256),
+        allowNull: true,
+        comment: 'اسم العرض من document_templates.name — يُحفظ وقت GENERATE_PDF'
+      },
+
       generated_pdf_path: {
         type: DataTypes.STRING,
         allowNull: true

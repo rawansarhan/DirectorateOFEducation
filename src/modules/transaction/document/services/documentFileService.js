@@ -9,7 +9,8 @@
  *   { key, path, type_doc_id }
  *
  * - type_doc_id من stage_config (file_picker.data.type_doc_id) أو من files[] في الطلب
- * - يُخزَّن في document_signature.type_doc_id
+ * - name من file_picker.data.label في config_json (fallback: type_docs.name)
+ * - يُخزَّن في document_signature.type_doc_id / document_signature.name
  *
  * APIs: POST /api/transaction/files/upload  ← رفع الملف (multipart)
  *       POST /api/transaction/submit/{transactionId}
@@ -79,6 +80,8 @@ async function assertUploadedFileOwnedByUser (storedPath, userId, fileKey) {
       `الملف "${normalizedPath}" للحقل "${fileKey}" غير مرفوع من حسابك — ارفعه عبر POST /api/transaction/files/upload`
     )
   }
+
+  return ownership
 }
 
 async function resolveTypeDoc (file = {}) {
@@ -108,29 +111,71 @@ async function resolveTypeDoc (file = {}) {
   return { typeDocId, typeDoc }
 }
 
+function buildFilePickerLabelMap (configJson = {}) {
+  const labels = new Map()
+
+  for (const widget of configJson.widgets || []) {
+    if (widget?.widget_type !== 'file_picker') {
+      continue
+    }
+
+    const widgetId = widget.data?.id == null
+      ? ''
+      : String(widget.data.id).trim()
+    const label = typeof widget.data?.label === 'string'
+      ? widget.data.label.trim()
+      : ''
+
+    if (widgetId && label) {
+      labels.set(widgetId, label)
+    }
+  }
+
+  return labels
+}
+
+function resolveStoredFileName ({ fileKey, labelMap, typeDocName }) {
+  const fromWidget = fileKey ? labelMap.get(String(fileKey)) : null
+
+  if (fromWidget) {
+    return fromWidget.slice(0, 256)
+  }
+
+  if (typeof typeDocName === 'string' && typeDocName.trim()) {
+    return typeDocName.trim().slice(0, 256)
+  }
+
+  return null
+}
+
 async function registerTransactionFile ({
   transactionId,
   file,
   userId,
-  dbTransaction = null
+  dbTransaction = null,
+  labelMap = new Map()
 }) {
   const { typeDocId, typeDoc } = await resolveTypeDoc(file)
+  const fileKey = file.key || file.name || 'unknown'
+  const storedName = resolveStoredFileName({
+    fileKey,
+    labelMap,
+    typeDocName: typeDoc.name
+  })
 
   const stored = buildStoredFileEntry(
     {
       ...file,
-      name: file.key || file.name
+      name: fileKey
     },
     userId
   )
 
-  assertUploadedFileExists(stored.path, file.key || file.name || 'unknown')
-  await assertUploadedFileOwnedByUser(stored.path, userId, file.key || file.name || 'unknown')
-
-  // استرداد بصمة الملف من pending_file_uploads (محسوبة عند الرفع)
-  const pendingRecord = await pendingFileUploadRepository.findByPathAndUser(
+  assertUploadedFileExists(stored.path, fileKey)
+  const pendingRecord = await assertUploadedFileOwnedByUser(
     stored.path,
-    userId
+    userId,
+    fileKey
   )
   const contentHash = pendingRecord?.content_hash ?? null
 
@@ -140,6 +185,7 @@ async function registerTransactionFile ({
         {
           transaction_id: transactionId,
           file_path: stored.path,
+          name: storedName,
           type_doc_id: typeDocId,
           content_hash: contentHash
         },
@@ -151,7 +197,8 @@ async function registerTransactionFile ({
   await pendingFileUploadRepository.markAttachedByPath(stored.path, userId)
 
   return {
-    key: file.key || file.name,
+    key: fileKey,
+    name: storedName,
     path: stored.path,
     url: stored.url,
     original_name: stored.original_name,
@@ -169,12 +216,14 @@ async function registerTransactionFiles ({
   transactionId,
   files = [],
   userId,
-  dbTransaction = null
+  dbTransaction = null,
+  configJson = null
 }) {
   if (!Array.isArray(files) || !files.length) {
     return []
   }
 
+  const labelMap = buildFilePickerLabelMap(configJson || {})
   const registered = []
 
   for (const file of files) {
@@ -183,7 +232,8 @@ async function registerTransactionFiles ({
         transactionId,
         file,
         userId,
-        dbTransaction
+        dbTransaction,
+        labelMap
       })
     )
   }

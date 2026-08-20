@@ -24,9 +24,15 @@ function createUploadError (message, code = 'VALIDATION_ERROR', statusCode = 400
   return err
 }
 
-function computeFileContentHash (absolutePath) {
-  const bytes = fs.readFileSync(absolutePath)
-  return createHash('sha256').update(bytes).digest('hex')
+async function computeFileContentHash (absolutePath) {
+  const hash = createHash('sha256')
+  const stream = fs.createReadStream(absolutePath)
+
+  for await (const chunk of stream) {
+    hash.update(chunk)
+  }
+
+  return hash.digest('hex')
 }
 
 function safeUnlinkUpload (storedPath) {
@@ -115,7 +121,7 @@ async function processStagedFileUpload ({
 
   const newStoredPath = normalizeStoredFilePath(`/uploads/${file.filename}`)
   const absoluteNewPath = resolveAbsoluteUploadPath(newStoredPath)
-  const contentHash = computeFileContentHash(absoluteNewPath)
+  const contentHash = file.contentHash || await computeFileContentHash(absoluteNewPath)
   const originalName = decodeMultipartFilename(file.originalname)
 
   const existingByHash = await pendingFileUploadRepository.findByUserContentHash({

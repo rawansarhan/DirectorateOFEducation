@@ -268,16 +268,22 @@ async function executeGeneratePdfJob ({
     }
   }
 
+  const templateName = typeof documentTemplate?.name === 'string'
+    ? documentTemplate.name.trim().slice(0, 256)
+    : null
+
   if (!documentInstance) {
     documentInstance = await documentInstanceRepository.create({
       transaction_id: numericTransactionId,
       document_template_id: numericTemplateId,
+      name: templateName,
       data_json: dataJsonWithSealMeta,
       generated_pdf_path: null,
       status: 'generated'
     })
   } else {
     await documentInstanceRepository.updateInstance(documentInstance, {
+      name: templateName || documentInstance.name,
       data_json: dataJsonWithSealMeta
     })
   }

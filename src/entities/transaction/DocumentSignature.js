@@ -32,6 +32,11 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING,
         allowNull: false
       },
+      name: {
+        type: DataTypes.STRING(256),
+        allowNull: true,
+        comment: 'اسم العرض من file_picker.label — يُحفظ وقت التسجيل'
+      },
       content_hash: {
         type: DataTypes.STRING(64),
         allowNull: true,

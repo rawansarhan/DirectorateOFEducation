@@ -384,7 +384,8 @@ async function submitTransaction (
             transactionId: current.id,
             files: normalized.files,
             userId,
-            dbTransaction
+            dbTransaction,
+            configJson
           })
         }
 

@@ -90,6 +90,7 @@ function summarizeUploadedFiles (rows = []) {
 
       return {
         id: row.id,
+        name: row.name ?? null,
         file_path: normalized,
         file_on_disk: fileExistsOnDisk(normalized),
         type_doc_id: row.type_doc_id
