@@ -5,8 +5,8 @@ const { QueryTypes, Op } = require('sequelize')
 /**
  * يربط role_permissions حسب camunda_group_key:
  *
- * CITIZEN            → permission.type IN ('citizen', 'employee,citizen,admin')
- * TECHNICAL_OFFICER  → permission.type IN ('admin', 'employee,citizen,admin')
+ * CITIZEN            → permission.type IN ('citizen', 'employee,citizen', 'employee,citizen,admin')
+ * TECHNICAL_OFFICER  → permission.type IN ('admin', 'employee,citizen', 'employee,citizen,admin')
  *
  * يجب تشغيله بعد:
  * - seed permissions
@@ -17,11 +17,11 @@ const { QueryTypes, Op } = require('sequelize')
 const BINDINGS = [
   {
     camundaGroupKey: 'CITIZEN',
-    permissionTypes: ['citizen', 'employee,citizen,admin']
+    permissionTypes: ['citizen', 'employee,citizen', 'employee,citizen,admin']
   },
   {
     camundaGroupKey: 'TECHNICAL_OFFICER',
-    permissionTypes: ['admin', 'employee,citizen,admin']
+    permissionTypes: ['admin', 'employee,citizen', 'employee,citizen,admin']
   }
 ]
 
