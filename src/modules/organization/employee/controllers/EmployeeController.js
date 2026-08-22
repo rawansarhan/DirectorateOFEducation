@@ -105,11 +105,29 @@ const updateEmployee = asyncHandler(async (req, res) => {
   }
 })
 
+const getEmployeeSelfCard = asyncHandler(async (req, res) => {
+  try {
+    const {
+      getEmployeeSelfCard: getSelfCard
+    } = require('../../selfCard/services/employeeSelfCardService')
+
+    const result = await getSelfCard(req.params.id)
+    return ApiResponder.okResponse(res, result.data, result.message)
+  } catch (err) {
+    return ApiResponder.error(res, {
+      message: err.message,
+      statusCode: err.statusCode || 400,
+      error: err.code || undefined
+    })
+  }
+})
+
 module.exports = {
   getAllEmployees,
   searchEmployees,
   getEmployeeById,
   getEmployeesByDepartments,
   getUsersByOrgRoleDept,
-  updateEmployee
+  updateEmployee,
+  getEmployeeSelfCard
 }

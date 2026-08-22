@@ -13,7 +13,8 @@ const WIDGET_TYPES = [
   'dropdown',
   'radio_group',
   'check_list',
-  'file_picker'
+  'file_picker',
+  'employee_picker'
 ]
 
 const TEXT_FIELD_INPUT_TYPES = [
@@ -28,7 +29,8 @@ const TEXT_FIELD_INPUT_TYPES = [
 const STAGE_ACTION_NAMES = [
   'SEND_EMAIL',
   'SEND_NOTIFICATION',
-  'GENERATE_PDF'
+  'GENERATE_PDF',
+  'SYNC_SELF_CARD'
 ]
 
 const widgetOptionSchema = Joi.object({
@@ -130,6 +132,20 @@ const filePickerDataSchema = Joi.object({
   TypeDoc_id: Joi.any().strip()
 }).unknown(false)
 
+/**
+ * اختيار موظف إداري — الخيارات تُجلب ديناميكياً من:
+ * GET /api/employees/search
+ * القيمة عند الإرسال: user_id (رقم).
+ */
+const employeePickerDataSchema = Joi.object({
+  id: widgetIdSchema,
+  label: widgetLabelSchema,
+  is_required: Joi.boolean().default(true),
+  options_source: Joi.string()
+    .valid('employees_search')
+    .default('employees_search')
+}).unknown(false)
+
 const widgetSchema = Joi.object({
   widget_type: Joi.string().valid(...WIDGET_TYPES).required(),
   data: Joi.alternatives().conditional('widget_type', {
@@ -139,7 +155,8 @@ const widgetSchema = Joi.object({
       { is: 'dropdown', then: dropdownDataSchema },
       { is: 'radio_group', then: radioGroupDataSchema },
       { is: 'check_list', then: checkListDataSchema },
-      { is: 'file_picker', then: filePickerDataSchema }
+      { is: 'file_picker', then: filePickerDataSchema },
+      { is: 'employee_picker', then: employeePickerDataSchema }
     ],
     otherwise: Joi.forbidden()
   })
@@ -152,49 +169,64 @@ const templateItemSchema = Joi.object({
 const stageActionSchema = Joi.object({
   name: Joi.string().valid(...STAGE_ACTION_NAMES).required(),
   payload: Joi.when('name', {
-    is: 'SEND_NOTIFICATION',
-    then: Joi.object({
-      message: Joi.string().trim().min(1).max(2000).required(),
-      title: Joi.string().trim().max(255).allow('', null).optional(),
-      subject: Joi.string().trim().max(255).allow('', null).optional(),
-      type: Joi.string().trim().max(100).default('workflow_notification'),
-      // المُستلِم عبر الدور: organization_id + department_id + role_id
-      organization_id: Joi.number().integer().positive().optional().messages({
-        'number.base': 'SEND_NOTIFICATION payload.organization_id يجب أن يكون رقماً',
-        'number.positive': 'SEND_NOTIFICATION payload.organization_id يجب أن يكون رقماً موجباً'
-      }),
-      department_id: Joi.number().integer().positive().optional().messages({
-        'number.base': 'SEND_NOTIFICATION payload.department_id يجب أن يكون رقماً',
-        'number.positive': 'SEND_NOTIFICATION payload.department_id يجب أن يكون رقماً موجباً'
-      }),
-      role_id: Joi.number().integer().positive().optional().messages({
-        'number.base': 'SEND_NOTIFICATION payload.role_id يجب أن يكون رقماً',
-        'number.positive': 'SEND_NOTIFICATION payload.role_id يجب أن يكون رقماً موجباً'
-      }),
-      // مُستلِم مباشر: user_id (payload.to) → WebSocket
-      to: Joi.number().integer().positive().optional().messages({
-        'number.base': 'SEND_NOTIFICATION payload.to يجب أن يكون رقماً (user_id)',
-        'number.positive': 'SEND_NOTIFICATION payload.to يجب أن يكون رقماً موجباً (user_id)'
-      }),
-      // يُحسب لاحقاً من (organization_id, department_id, role_id) في الخدمة
-      to_organization_department_roles_id: Joi.number().integer().positive().optional(),
-      to_camunda_group_key: Joi.string().trim().max(64).optional(),
-      to_organization_department_roles_camunda_group_key: Joi.string().trim().max(64).optional()
-    })
-      .or(
-        'to',
-        'role_id',
-        'to_organization_department_roles_id',
-        'to_camunda_group_key',
-        'to_organization_department_roles_camunda_group_key'
-      )
-      .and('organization_id', 'department_id', 'role_id')
-      .messages({
-        'object.missing':
-          'SEND_NOTIFICATION يحتاج إما to (user_id) أو (organization_id, department_id, role_id) أو to_camunda_group_key (مثل AUTH لصاحب المعاملة)',
-        'object.and':
-          'SEND_NOTIFICATION: عند تحديد المُستلِم بالدور يجب إرسال organization_id و department_id و role_id معاً'
-      }),
+    switch: [
+      {
+        is: 'SEND_NOTIFICATION',
+        then: Joi.object({
+          message: Joi.string().trim().min(1).max(2000).required(),
+          title: Joi.string().trim().max(255).allow('', null).optional(),
+          subject: Joi.string().trim().max(255).allow('', null).optional(),
+          type: Joi.string().trim().max(100).default('workflow_notification'),
+          organization_id: Joi.number().integer().positive().optional(),
+          department_id: Joi.number().integer().positive().optional(),
+          role_id: Joi.number().integer().positive().optional(),
+          to: Joi.number().integer().positive().optional(),
+          to_organization_department_roles_id: Joi.number().integer().positive().optional(),
+          to_camunda_group_key: Joi.string().trim().max(64).optional(),
+          to_organization_department_roles_camunda_group_key: Joi.string().trim().max(64).optional()
+        })
+          .or(
+            'to',
+            'role_id',
+            'to_organization_department_roles_id',
+            'to_camunda_group_key',
+            'to_organization_department_roles_camunda_group_key'
+          )
+          .and('organization_id', 'department_id', 'role_id')
+      },
+      {
+        is: 'GENERATE_PDF',
+        then: Joi.object({
+          template_id: Joi.number().integer().positive().required()
+        }).unknown(false)
+      },
+      {
+        is: 'SYNC_SELF_CARD',
+        then: Joi.object({
+          target: Joi.string()
+            .valid(
+              'profile_header',
+              'training_course',
+              'employment_status',
+              'irregular_absence',
+              'leave',
+              'reward',
+              'sanction'
+            )
+            .required(),
+          employee_user_id_from: Joi.string().valid('WIDGET').default('WIDGET'),
+          employee_user_id_widget: Joi.string().trim().max(128).default('employee_user_id'),
+          source_stage: Joi.string().trim().max(128).default('PREVIOUS_USER_TASK'),
+          field_map: Joi.object()
+            .pattern(
+              Joi.string().trim().min(1).max(64),
+              Joi.string().trim().min(1).max(128)
+            )
+            .min(1)
+            .required()
+        }).unknown(false)
+      }
+    ],
     otherwise: Joi.object().default({})
   }).default({})
 }).unknown(true)

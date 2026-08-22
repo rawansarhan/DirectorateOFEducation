@@ -7,7 +7,8 @@ const FIELD_WIDGET_TYPES = new Set([
   'date_picker',
   'dropdown',
   'radio_group',
-  'check_list'
+  'check_list',
+  'employee_picker'
 ])
 
 function buildFieldMap (payload = {}, configJson = null) {

@@ -9,7 +9,8 @@ const {
   getEmployeeById,
   getEmployeesByDepartments,
   getUsersByOrgRoleDept,
-  updateEmployee
+  updateEmployee,
+  getEmployeeSelfCard
 } = require('../controllers/EmployeeController')
 
 const { authMiddleware, authorize } = require('../../../../core/middleware/authMiddleware')
@@ -551,6 +552,36 @@ router.get(
   authMiddleware,
   authorize('ORGANIZATIONAL_STRUCTURE_CREATE'),
   getEmployeeById
+)
+
+/**
+ * @swagger
+ * /api/employees/{id}/self-card:
+ *   get:
+ *     summary: جلب البطاقة الذاتية لموظف إداري
+ *     description: |
+ *       يعيد رأس البطاقة + الدورات/الوضع الوظيفي/الغياب/المكافآت/العقوبات.
+ *       للمواطنين لا تُنشأ بطاقة ذاتية.
+ *     tags: [Employee]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: البطاقة الذاتية
+ *       404:
+ *         description: غير موجود
+ */
+router.get(
+  '/:id/self-card',
+  authMiddleware,
+  authorize('GET_ORGANIZATIONAL_STRUCTURE', 'ORGANIZATIONAL_STRUCTURE_CREATE'),
+  getEmployeeSelfCard
 )
 
 /**

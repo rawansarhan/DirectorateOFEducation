@@ -156,6 +156,25 @@ async function registerEmployee (userData, auditContext = {}) {
     is_active: true,
   })
 
+  try {
+    const {
+      ensureSelfCardForUser
+    } = require('../../../organization/selfCard/services/employeeSelfCardService')
+
+    await ensureSelfCardForUser(user.id, {
+      organization_id: data.organization_id,
+      national_id: user.national_id,
+      father_name: user.father_name,
+      mother_name: user.mother_name,
+      full_name: [user.first_name, user.last_name].filter(Boolean).join(' ').trim() || null
+    })
+  } catch (selfCardErr) {
+    console.warn(
+      `[registerEmployee] تعذّر إنشاء البطاقة الذاتية للمستخدم #${user.id}:`,
+      selfCardErr.message
+    )
+  }
+
   const {
     auditSuccess
   } = require('../../../../core/security/safeAudit')

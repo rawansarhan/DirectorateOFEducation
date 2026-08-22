@@ -15,7 +15,8 @@ const FIELD_WIDGET_TYPES = new Set([
   'date_picker',
   'dropdown',
   'radio_group',
-  'check_list'
+  'check_list',
+  'employee_picker'
 ])
 
 const TEXT_INPUT_TYPES = new Set([
@@ -265,6 +266,20 @@ function validateWidgetValue (widget, value) {
       return validateCheckListValue(data, value, label)
     case 'file_picker':
       return validateFilePickerValue(data, value, label)
+    case 'employee_picker': {
+      if (isEmptyValue(value)) {
+        return null
+      }
+      const userId = Number(
+        value && typeof value === 'object'
+          ? (value.user_id ?? value.id ?? value.value ?? value.key)
+          : value
+      )
+      if (!Number.isInteger(userId) || userId < 1) {
+        return `"${label}" يجب أن يكون معرّف موظف (user_id)`
+      }
+      return null
+    }
     default:
       return `نوع الودجت "${widget.widget_type}" غير مدعوم`
   }

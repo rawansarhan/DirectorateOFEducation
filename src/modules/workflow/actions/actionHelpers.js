@@ -105,6 +105,37 @@ const generatePdfPayloadSchema = Joi.object({
   'object.unknown': 'GENERATE_PDF payload يقبل فقط template_id — الحقل {#label} غير مسموح'
 })
 
+const syncSelfCardPayloadSchema = Joi.object({
+  target: Joi.string()
+    .valid(
+      'profile_header',
+      'training_course',
+      'employment_status',
+      'irregular_absence',
+      'leave',
+      'reward',
+      'sanction'
+    )
+    .required()
+    .messages({
+      'any.required': 'SYNC_SELF_CARD payload.target مطلوب',
+      'any.only':
+        'SYNC_SELF_CARD payload.target يجب أن يكون أحد: profile_header, training_course, employment_status, irregular_absence, leave, reward, sanction'
+    }),
+  employee_user_id_from: Joi.string()
+    .valid('WIDGET')
+    .default('WIDGET'),
+  employee_user_id_widget: Joi.string().trim().max(128).default('employee_user_id'),
+  source_stage: Joi.string().trim().max(128).default('PREVIOUS_USER_TASK'),
+  field_map: Joi.object()
+    .pattern(Joi.string().trim().min(1).max(64), Joi.string().trim().min(1).max(128))
+    .min(1)
+    .required()
+    .messages({
+      'any.required': 'SYNC_SELF_CARD payload.field_map مطلوب'
+    })
+}).unknown(false)
+
 function normalizeActionPayload (action = {}) {
   const payload = action.payload || {}
 
@@ -183,7 +214,20 @@ function validateGeneratePdfPayload (payload = {}) {
   return error || null
 }
 
-const ALLOWED_ACTION_NAMES = ['SEND_NOTIFICATION', 'GENERATE_PDF']
+function validateSyncSelfCardPayload (payload = {}) {
+  const { error } = syncSelfCardPayloadSchema.validate(payload, {
+    abortEarly: false,
+    stripUnknown: false
+  })
+
+  return error || null
+}
+
+const ALLOWED_ACTION_NAMES = [
+  'SEND_NOTIFICATION',
+  'GENERATE_PDF',
+  'SYNC_SELF_CARD'
+]
 
 function validateStageAction (action = {}, stageId = null) {
   if (!action?.name) {
@@ -205,12 +249,20 @@ function validateStageAction (action = {}, stageId = null) {
   }
 
   if (action.name === 'GENERATE_PDF') {
-    // يُعرّف في stage_config: { name: "GENERATE_PDF", payload: { template_id: 1 } }
     const validationError = validateGeneratePdfPayload(action.payload || {})
 
     if (validationError) {
       const details = validationError.details.map(item => item.message).join(' | ')
       return `المرحلة ${stageId}: GENERATE_PDF — ${details}`
+    }
+  }
+
+  if (action.name === 'SYNC_SELF_CARD') {
+    const validationError = validateSyncSelfCardPayload(action.payload || {})
+
+    if (validationError) {
+      const details = validationError.details.map(item => item.message).join(' | ')
+      return `المرحلة ${stageId}: SYNC_SELF_CARD — ${details}`
     }
   }
 
@@ -229,6 +281,7 @@ module.exports = {
   resolveActionsFromStageConfig,
   validateSendNotificationPayload,
   validateGeneratePdfPayload,
+  validateSyncSelfCardPayload,
   validateStageAction,
   sendNotificationPayloadSchema
 }

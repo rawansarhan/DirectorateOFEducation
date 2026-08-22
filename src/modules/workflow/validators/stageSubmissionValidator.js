@@ -11,7 +11,8 @@ const FIELD_WIDGET_TYPES = new Set([
   'date_picker',
   'dropdown',
   'radio_group',
-  'check_list'
+  'check_list',
+  'employee_picker'
 ])
 
 function collectConfigWidgets (configJson = {}) {
@@ -173,6 +174,30 @@ function assertWidgetRules (widgets, fieldMap, fileMap) {
 
     if (widget.widget_type === 'date_picker') {
       assertDatePickerValue(widget, normalizeFieldValue(fieldMap[widgetId]))
+      continue
+    }
+
+    if (widget.widget_type === 'employee_picker') {
+      const value = normalizeFieldValue(fieldMap[widgetId])
+      const userId = Number(
+        value && typeof value === 'object'
+          ? (value.user_id ?? value.id ?? value.value ?? value.key)
+          : value
+      )
+
+      if (data.is_required && (!Number.isInteger(userId) || userId < 1)) {
+        throw new Error(`الحقل "${label}" مطلوب ويجب اختيار موظف`)
+      }
+
+      if (
+        value !== null &&
+        value !== undefined &&
+        value !== '' &&
+        (!Number.isInteger(userId) || userId < 1)
+      ) {
+        throw new Error(`الحقل "${label}" يجب أن يكون معرّف موظف (user_id)`)
+      }
+
       continue
     }
 

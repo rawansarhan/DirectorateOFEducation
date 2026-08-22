@@ -27,7 +27,7 @@ fs.readdirSync(__dirname)
     }
 
     fs.readdirSync(folderPath)
-      .filter(file => file.endsWith('.js'))
+      .filter(file => file.endsWith('.js') && !file.startsWith('_'))
       .forEach(file => {
 
         const defineModel =

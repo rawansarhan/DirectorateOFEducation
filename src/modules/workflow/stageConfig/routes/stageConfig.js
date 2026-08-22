@@ -56,7 +56,8 @@ const {
  *                         عقد الاستمارة: form_id, form_name, widgets, template, actions, is_assignment, …
  *                         is_assignment يُحفظ داخل config_json فقط (مثل widgets/template) ولا يغيّر سلوك assignments.
  *                         type_doc_id مطلوب فقط داخل file_picker.
- *                         لمرحلة SERVICE_TASK أضف actions (GENERATE_PDF، SEND_EMAIL، …) — بدون assignments.
+ *                         employee_picker: اختيار موظف إداري؛ الخيارات من GET /api/employees/search والقيمة = user_id.
+ *                         لمرحلة SERVICE_TASK أضف actions (GENERATE_PDF، SEND_NOTIFICATION، SYNC_SELF_CARD، …) — بدون assignments.
  *                       example:
  *                         form_id: civil_transaction_55
  *                         form_name: استمارة معاملة المواطن
