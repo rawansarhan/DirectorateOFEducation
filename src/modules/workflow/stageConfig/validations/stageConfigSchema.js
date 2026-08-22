@@ -133,17 +133,17 @@ const filePickerDataSchema = Joi.object({
 }).unknown(false)
 
 /**
- * اختيار موظف إداري — الخيارات تُجلب ديناميكياً من:
- * GET /api/employees/search
- * القيمة عند الإرسال: user_id (رقم).
+ * اختيار بطاقة ذاتية — الخيارات من:
+ * GET /api/self-cards/search
+ * القيمة عند الإرسال: self_card_id (رقم employee_self_cards.id).
  */
 const employeePickerDataSchema = Joi.object({
   id: widgetIdSchema,
   label: widgetLabelSchema,
   is_required: Joi.boolean().default(true),
   options_source: Joi.string()
-    .valid('employees_search')
-    .default('employees_search')
+    .valid('self_cards_search', 'employees_search')
+    .default('self_cards_search')
 }).unknown(false)
 
 const widgetSchema = Joi.object({
@@ -215,7 +215,8 @@ const stageActionSchema = Joi.object({
             )
             .required(),
           employee_user_id_from: Joi.string().valid('WIDGET').default('WIDGET'),
-          employee_user_id_widget: Joi.string().trim().max(128).default('employee_user_id'),
+          self_card_id_widget: Joi.string().trim().max(128).default('self_card_id'),
+          employee_user_id_widget: Joi.string().trim().max(128).optional(),
           source_stage: Joi.string().trim().max(128).default('PREVIOUS_USER_TASK'),
           field_map: Joi.object()
             .pattern(

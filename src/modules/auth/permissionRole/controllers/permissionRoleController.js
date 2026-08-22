@@ -7,6 +7,7 @@ const {
   listPermissions,
   listPermissionsByAudience,
   getRolePermissions,
+  getUserPermissions,
   createRolePermissions,
   updateRolePermissions
 } = require('../services/permissionRoleService')
@@ -72,6 +73,19 @@ const getRolePermissionsController = asyncHandler(async (req, res) => {
   }
 })
 
+const getUserPermissionsController = asyncHandler(async (req, res) => {
+  try {
+    const result = await getUserPermissions(req.params.userId)
+    return ApiResponder.okResponse(res, result.data, result.message)
+  } catch (err) {
+    return ApiResponder.error(res, {
+      message: err.message,
+      statusCode: err.statusCode || 400,
+      error: err.code || null
+    })
+  }
+})
+
 const createRolePermissionsController = asyncHandler(async (req, res) => {
   try {
     const result = await createRolePermissions(req.body, buildAuditContext(req))
@@ -103,6 +117,7 @@ module.exports = {
   listEmployeePermissionsController,
   listAdminPermissionsController,
   getRolePermissionsController,
+  getUserPermissionsController,
   createRolePermissionsController,
   updateRolePermissionsController
 }

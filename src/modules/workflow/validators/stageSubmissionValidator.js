@@ -179,23 +179,23 @@ function assertWidgetRules (widgets, fieldMap, fileMap) {
 
     if (widget.widget_type === 'employee_picker') {
       const value = normalizeFieldValue(fieldMap[widgetId])
-      const userId = Number(
+      const selfCardId = Number(
         value && typeof value === 'object'
-          ? (value.user_id ?? value.id ?? value.value ?? value.key)
+          ? (value.self_card_id ?? value.id ?? value.value ?? value.key ?? value.user_id)
           : value
       )
 
-      if (data.is_required && (!Number.isInteger(userId) || userId < 1)) {
-        throw new Error(`الحقل "${label}" مطلوب ويجب اختيار موظف`)
+      if (data.is_required && (!Number.isInteger(selfCardId) || selfCardId < 1)) {
+        throw new Error(`الحقل "${label}" مطلوب ويجب اختيار بطاقة ذاتية`)
       }
 
       if (
         value !== null &&
         value !== undefined &&
         value !== '' &&
-        (!Number.isInteger(userId) || userId < 1)
+        (!Number.isInteger(selfCardId) || selfCardId < 1)
       ) {
-        throw new Error(`الحقل "${label}" يجب أن يكون معرّف موظف (user_id)`)
+        throw new Error(`الحقل "${label}" يجب أن يكون معرّف بطاقة ذاتية (self_card_id)`)
       }
 
       continue

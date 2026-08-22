@@ -1,5 +1,6 @@
 'use strict'
 
+const { Op } = require('sequelize')
 const {
   EmployeeSelfCard,
   EmployeeTrainingCourse,
@@ -38,11 +39,60 @@ const PROFILE_FIELDS = [
   'education_degree',
   'current_residence'
 ]
-//to build the full name for user
+
+const HISTORY_INCLUDES = [
+  {
+    model: EmployeeTrainingCourse,
+    as: 'training_courses',
+    separate: true,
+    order: [['created_at', 'DESC']]
+  },
+  {
+    model: EmployeeEmploymentStatus,
+    as: 'employment_statuses',
+    separate: true,
+    order: [['created_at', 'DESC']]
+  },
+  {
+    model: EmployeeIrregularAbsence,
+    as: 'irregular_absences',
+    separate: true,
+    order: [['created_at', 'DESC']]
+  },
+  {
+    model: EmployeeLeave,
+    as: 'leaves',
+    separate: true,
+    order: [['created_at', 'DESC']]
+  },
+  {
+    model: EmployeeReward,
+    as: 'rewards',
+    separate: true,
+    order: [['created_at', 'DESC']]
+  },
+  {
+    model: EmployeeSanction,
+    as: 'sanctions',
+    separate: true,
+    order: [['created_at', 'DESC']]
+  }
+]
+
 function buildFullName (user = {}) {
   return [user.first_name, user.last_name].filter(Boolean).join(' ').trim() || null
 }
-// to ensure the self card for user 
+
+function pickProfileExtras (extras = {}) {
+  const patch = {}
+  for (const key of PROFILE_FIELDS) {
+    if (extras[key] !== undefined) {
+      patch[key] = extras[key]
+    }
+  }
+  return patch
+}
+
 async function ensureSelfCardForUser (userId, extras = {}, options = {}) {
   const numericUserId = Number(userId)
 
@@ -51,7 +101,7 @@ async function ensureSelfCardForUser (userId, extras = {}, options = {}) {
     err.code = 'VALIDATION_ERROR'
     throw err
   }
-// to check if the self card already exists
+
   const existing = await EmployeeSelfCard.findOne({
     where: { user_id: numericUserId },
     transaction: options.transaction
@@ -74,66 +124,107 @@ async function ensureSelfCardForUser (userId, extras = {}, options = {}) {
   return EmployeeSelfCard.create(
     {
       user_id: numericUserId,
+      is_active: extras.is_active !== undefined ? Boolean(extras.is_active) : true,
       national_id: extras.national_id ?? user.national_id ?? null,
       full_name: extras.full_name ?? buildFullName(user),
       father_name: extras.father_name ?? user.father_name ?? null,
       mother_name: extras.mother_name ?? user.mother_name ?? null,
       organization_id: extras.organization_id ?? null,
-      ...Object.fromEntries(
-        PROFILE_FIELDS
-          .filter(key => extras[key] !== undefined && !['national_id', 'full_name', 'father_name', 'mother_name', 'organization_id'].includes(key))
-          .map(key => [key, extras[key]])
-      )
+      ...pickProfileExtras(extras)
     },
     { transaction: options.transaction }
   )
 }
-// to find the self card by user id 
-async function findSelfCardByUserId (userId) {
-  return EmployeeSelfCard.findOne({
-    where: { user_id: Number(userId) },
-    include: [
-      {
-        model: EmployeeTrainingCourse,
-        as: 'training_courses',
-        separate: true,
-        order: [['created_at', 'DESC']]
-      },
-      {
-        model: EmployeeEmploymentStatus,
-        as: 'employment_statuses',
-        separate: true,
-        order: [['created_at', 'DESC']]
-      },
-      {
-        model: EmployeeIrregularAbsence,
-        as: 'irregular_absences',
-        separate: true,
-        order: [['created_at', 'DESC']]
-      },
-      {
-        model: EmployeeLeave,
-        as: 'leaves',
-        separate: true,
-        order: [['created_at', 'DESC']]
-      },
-      {
-        model: EmployeeReward,
-        as: 'rewards',
-        separate: true,
-        order: [['created_at', 'DESC']]
-      },
-      {
-        model: EmployeeSanction,
-        as: 'sanctions',
-        separate: true,
-        order: [['created_at', 'DESC']]
-      }
-    ]
+
+async function createSelfCard (payload = {}, options = {}) {
+  const data = pickProfileExtras(payload)
+
+  if (payload.user_id != null && payload.user_id !== '') {
+    const numericUserId = Number(payload.user_id)
+    if (!Number.isInteger(numericUserId) || numericUserId < 1) {
+      const err = new Error('user_id غير صالح')
+      err.code = 'VALIDATION_ERROR'
+      throw err
+    }
+    data.user_id = numericUserId
+  }
+
+  if (payload.is_active !== undefined) {
+    data.is_active = Boolean(payload.is_active)
+  } else {
+    data.is_active = true
+  }
+
+  if (!data.full_name && !data.national_id) {
+    const err = new Error('full_name أو national_id مطلوب لإنشاء البطاقة الذاتية')
+    err.code = 'VALIDATION_ERROR'
+    throw err
+  }
+
+  return EmployeeSelfCard.create(data, { transaction: options.transaction })
+}
+
+async function findSelfCardById (selfCardId, { withHistory = true } = {}) {
+  return EmployeeSelfCard.findByPk(Number(selfCardId), {
+    include: withHistory ? HISTORY_INCLUDES : undefined
   })
 }
 
-//to find the history by source
+async function findSelfCardByUserId (userId, { withHistory = true } = {}) {
+  return EmployeeSelfCard.findOne({
+    where: { user_id: Number(userId) },
+    include: withHistory ? HISTORY_INCLUDES : undefined
+  })
+}
+
+async function searchSelfCards ({ search, limit = 20, cursorId = null, activeOnly = true } = {}) {
+  const and = []
+
+  if (activeOnly) {
+    and.push({ is_active: true })
+  }
+
+  if (search) {
+    const { likeContains } = require('../../../../core/utils/escapeLike')
+    const like = likeContains(search)
+    and.push({
+      [Op.or]: [
+        { full_name: like },
+        { national_id: like },
+        { self_number: like },
+        { father_name: like },
+        { mother_name: like }
+      ]
+    })
+  }
+
+  if (cursorId != null && Number.isFinite(Number(cursorId))) {
+    and.push({ id: { [Op.gt]: Number(cursorId) } })
+  }
+
+  const rows = await EmployeeSelfCard.findAll({
+    where: and.length ? { [Op.and]: and } : {},
+    attributes: [
+      'id',
+      'user_id',
+      'organization_id',
+      'self_number',
+      'national_id',
+      'full_name',
+      'father_name',
+      'mother_name',
+      'is_active',
+      'created_at',
+      'updated_at'
+    ],
+    order: [['id', 'ASC']],
+    limit: limit + 1
+  })
+
+  const hasNext = rows.length > limit
+  return { rows: hasNext ? rows.slice(0, limit) : rows, hasNext }
+}
+
 async function findHistoryBySource ({
   target,
   sourceTransactionId,
@@ -154,7 +245,7 @@ async function findHistoryBySource ({
     transaction
   })
 }
-// to create the history row 
+
 async function createHistoryRow ({
   target,
   payload,
@@ -192,7 +283,10 @@ module.exports = {
   HISTORY_MODELS,
   PROFILE_FIELDS,
   ensureSelfCardForUser,
+  createSelfCard,
+  findSelfCardById,
   findSelfCardByUserId,
+  searchSelfCards,
   findHistoryBySource,
   createHistoryRow,
   updateProfileHeader

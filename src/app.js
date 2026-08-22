@@ -97,6 +97,9 @@ app.use('/api/location', locationRoutes)
 const employeeRoutes = require('./modules/organization/employee/routes/employee')
 app.use('/api/employees', employeeRoutes)
 
+const selfCardRoutes = require('./modules/organization/selfCard/routes/selfCard')
+app.use('/api/self-cards', selfCardRoutes)
+
 // organization client 
 
 const organizationClientRoutes =

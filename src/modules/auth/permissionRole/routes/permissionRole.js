@@ -8,6 +8,7 @@ const {
   listEmployeePermissionsController,
   listAdminPermissionsController,
   getRolePermissionsController,
+  getUserPermissionsController,
   createRolePermissionsController,
   updateRolePermissionsController
 } = require('../controllers/permissionRoleController')
@@ -100,6 +101,45 @@ router.get(
   authMiddleware,
   authorize('PERMISSION_MANAGE'),
   listAdminPermissionsController
+)
+
+/**
+ * @swagger
+ * /api/auth/permissions/user/{userId}:
+ *   get:
+ *     tags: [Permissions]
+ *     summary: صلاحيات مستخدم عبر role_permissions
+ *     description: |
+ *       يجمع كل الصلاحيات المرتبطة بالمستخدم من خلال:
+ *       `user_role_assignments` (فعّالة) → `organization_department_roles` (فعّالة)
+ *       → `role_permissions` → `permissions`.
+ *
+ *       النتيجة قائمة فريدة من الصلاحيات + `permission_codes`.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *         description: معرّف المستخدم
+ *     responses:
+ *       200:
+ *         description: صلاحيات المستخدم
+ *       401:
+ *         description: غير مصرح
+ *       403:
+ *         description: لا يملك صلاحية PERMISSION_MANAGE
+ *       404:
+ *         description: المستخدم غير موجود
+ */
+router.get(
+  '/permissions/user/:userId',
+  authMiddleware,
+  authorize('PERMISSION_MANAGE'),
+  getUserPermissionsController
 )
 
 /**

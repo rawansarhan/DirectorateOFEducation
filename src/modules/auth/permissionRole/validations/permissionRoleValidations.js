@@ -74,10 +74,21 @@ function parseOrgDeptRoleQuery (query = {}) {
   }
 }
 
+function parseUserIdParam (raw) {
+  const userId = Number(raw)
+
+  if (!Number.isInteger(userId) || userId < 1) {
+    throw createHttpError('user_id يجب أن يكون رقماً صحيحاً موجباً')
+  }
+
+  return userId
+}
+
 module.exports = {
   createHttpError,
   normalizeNullableId,
   parseOrgDeptRoleBody,
   parseOrgDeptRoleQuery,
-  parsePermissionIds
+  parsePermissionIds,
+  parseUserIdParam
 }

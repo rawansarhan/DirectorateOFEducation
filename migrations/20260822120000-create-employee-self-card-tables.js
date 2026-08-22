@@ -1,8 +1,9 @@
 'use strict'
 
 /**
- * جداول البطاقة الذاتية (CV) للموظفين الإداريين فقط.
+ * جداول البطاقة الذاتية (ملف شؤون الموظفين).
  * الكتابة تتم عبر SYNC_SELF_CARD بعد ختم مرحلة المعاملة.
+ * الربط مع users اختياري (انظر migration decouple).
  */
 module.exports = {
   async up (queryInterface, Sequelize) {

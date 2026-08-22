@@ -47,6 +47,14 @@ async function findActiveOrgDeptRoleIdsByUserId (userId) {
  * يفلتر مرة أخرى على is_active لأن المعرّفات قد تصل من مصدر غير مفلتر.
  */
 async function findPermissionNamesByOrgDeptRoleIds (orgDeptRoleIds = []) {
+  const permissions = await findPermissionsByOrgDeptRoleIds(orgDeptRoleIds)
+  return permissions.map(p => p.code).filter(Boolean)
+}
+
+/**
+ * تفاصيل الصلاحيات (فريدة) لمجموعة ODRs عبر role_permissions.
+ */
+async function findPermissionsByOrgDeptRoleIds (orgDeptRoleIds = []) {
   if (!orgDeptRoleIds.length) {
     return []
   }
@@ -59,7 +67,7 @@ async function findPermissionNamesByOrgDeptRoleIds (orgDeptRoleIds = []) {
       {
         model: Permission,
         as: 'permissions',
-        attributes: ['code'],
+        attributes: ['id', 'name', 'code', 'type', 'created_at', 'updated_at'],
         required: true
       },
       {
@@ -72,13 +80,22 @@ async function findPermissionNamesByOrgDeptRoleIds (orgDeptRoleIds = []) {
     ]
   })
 
-  return [
-    ...new Set(
-      rows
-        .map(row => row.permissions?.code)
-        .filter(Boolean)
-    )
-  ]
+  const byId = new Map()
+
+  for (const row of rows) {
+    const permission =
+      typeof row.permissions?.get === 'function'
+        ? row.permissions.get({ plain: true })
+        : row.permissions
+
+    if (!permission?.id || byId.has(permission.id)) {
+      continue
+    }
+
+    byId.set(permission.id, permission)
+  }
+
+  return [...byId.values()].sort((a, b) => a.id - b.id)
 }
 
 /**
@@ -109,5 +126,6 @@ async function findUserIdsByOrgDeptRoleId (organizationDepartmentRolesId) {
 module.exports = {
   findActiveOrgDeptRoleIdsByUserId,
   findPermissionNamesByOrgDeptRoleIds,
+  findPermissionsByOrgDeptRoleIds,
   findUserIdsByOrgDeptRoleId
 }

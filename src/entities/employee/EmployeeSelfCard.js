@@ -6,7 +6,7 @@ module.exports = (sequelize, DataTypes) => {
       EmployeeSelfCard.belongsTo(models.User, {
         foreignKey: 'user_id',
         as: 'user',
-        onDelete: 'CASCADE'
+        onDelete: 'SET NULL'
       })
 
       EmployeeSelfCard.belongsTo(models.Organization, {
@@ -51,7 +51,7 @@ module.exports = (sequelize, DataTypes) => {
     {
       user_id: {
         type: DataTypes.INTEGER,
-        allowNull: false,
+        allowNull: true,
         unique: true
       },
       organization_id: {
@@ -117,6 +117,11 @@ module.exports = (sequelize, DataTypes) => {
       current_residence: {
         type: DataTypes.STRING(512),
         allowNull: true
+      },
+      is_active: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: true
       }
     },
     {

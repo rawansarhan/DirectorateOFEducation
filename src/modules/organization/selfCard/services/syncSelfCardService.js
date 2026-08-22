@@ -2,14 +2,12 @@
 
 const processInstanceStageRepository =
   require('../../../transaction/process_instance_stage/repositories/processInstanceStageRepository')
-const employeeRepository = require('../../employee/repositories/employeeRepository')
 const {
-  ensureSelfCardForUser,
+  findSelfCardById,
   findHistoryBySource,
   createHistoryRow,
   updateProfileHeader,
-  HISTORY_MODELS,
-  PROFILE_FIELDS
+  HISTORY_MODELS
 } = require('../repositories/employeeSelfCardRepository')
 
 const VALID_TARGETS = new Set([
@@ -113,49 +111,58 @@ async function resolveSourceStageData ({
   return candidates[0]
 }
 
-async function resolveEmployeeUserId ({
-  payload,
-  valueMap
-}) {
+/**
+ * يقرأ self_card_id من employee_picker / self_card_picker.
+ * يدعم الحقل الجديد self_card_id_widget والقديم employee_user_id_widget.
+ */
+async function resolveSelfCardId ({ payload, valueMap }) {
   const mode = String(payload.employee_user_id_from || 'WIDGET').toUpperCase()
 
   if (mode !== 'WIDGET') {
     throw createSyncError(
-      'employee_user_id_from يجب أن يكون WIDGET فقط (اختيار الموظف عبر employee_picker)'
+      'employee_user_id_from يجب أن يكون WIDGET فقط (اختيار البطاقة عبر employee_picker)'
     )
   }
 
-  const widgetId = payload.employee_user_id_widget || 'employee_user_id'
+  const widgetId =
+    payload.self_card_id_widget ||
+    payload.employee_user_id_widget ||
+    'self_card_id'
+
   const raw = valueMap[String(widgetId)]
-  const userId = Number(
+  const selfCardId = Number(
     raw && typeof raw === 'object'
-      ? (raw.user_id ?? raw.id ?? raw.value ?? raw.key)
+      ? (raw.self_card_id ?? raw.id ?? raw.value ?? raw.key ?? raw.user_id)
       : raw
   )
 
-  if (!Number.isInteger(userId) || userId < 1) {
+  if (!Number.isInteger(selfCardId) || selfCardId < 1) {
     throw createSyncError(
-      `قيمة employee_picker (${widgetId}) مطلوبة ويجب أن تكون user_id موجباً`
+      `قيمة employee_picker (${widgetId}) مطلوبة ويجب أن تكون self_card_id موجباً`
     )
   }
 
-  return userId
+  return selfCardId
 }
 
-async function assertAdministrativeEmployee (userId) {
-  const employee = await employeeRepository.findEmployeeById(userId)
-  const assignments = employee?.role_assignments || []
-  const isAdminEmployee = assignments.some(assignment => {
-    const key = assignment?.org_department_role?.camunda_group_key
-    return key && key !== 'CITIZEN'
-  })
+async function assertSelfCardWritable (selfCardId) {
+  const selfCard = await findSelfCardById(selfCardId, { withHistory: false })
 
-  if (!employee || !isAdminEmployee) {
+  if (!selfCard) {
     throw createSyncError(
-      `المستخدم #${userId} ليس موظفاً إدارياً — البطاقة الذاتية للموظفين فقط`,
+      `البطاقة الذاتية #${selfCardId} غير موجودة`,
+      'NOT_FOUND'
+    )
+  }
+
+  if (selfCard.is_active === false) {
+    throw createSyncError(
+      `البطاقة الذاتية #${selfCardId} غير نشطة`,
       'FORBIDDEN'
     )
   }
+
+  return selfCard
 }
 
 /**
@@ -188,15 +195,9 @@ async function syncSelfCardFromSealedStage ({
   })
 
   const valueMap = widgetsToValueMap(sourceRow.data || {})
-  const employeeUserId = await resolveEmployeeUserId({
-    payload,
-    valueMap
-  })
-
-  await assertAdministrativeEmployee(employeeUserId)
-
+  const selfCardId = await resolveSelfCardId({ payload, valueMap })
+  const selfCard = await assertSelfCardWritable(selfCardId)
   const mapped = pickMappedFields(valueMap, payload.field_map || {})
-  const selfCard = await ensureSelfCardForUser(employeeUserId)
 
   if (target === 'profile_header') {
     const updated = await updateProfileHeader(selfCard, mapped)
@@ -204,7 +205,7 @@ async function syncSelfCardFromSealedStage ({
       status: 'updated',
       target,
       self_card_id: updated.id,
-      employee_user_id: employeeUserId,
+      employee_user_id: updated.user_id ?? null,
       source_stage_code: sourceRow.stage_code,
       source_content_hash: sourceRow.content_hash || null
     }
@@ -221,7 +222,7 @@ async function syncSelfCardFromSealedStage ({
       status: 'skipped_duplicate',
       target,
       self_card_id: selfCard.id,
-      employee_user_id: employeeUserId,
+      employee_user_id: selfCard.user_id ?? null,
       history_id: existing.id,
       source_stage_code: sourceRow.stage_code,
       source_content_hash: sourceRow.content_hash || null
@@ -273,7 +274,7 @@ async function syncSelfCardFromSealedStage ({
     status: 'created',
     target,
     self_card_id: selfCard.id,
-    employee_user_id: employeeUserId,
+    employee_user_id: selfCard.user_id ?? null,
     history_id: created.id,
     source_stage_code: sourceRow.stage_code,
     source_content_hash: sourceRow.content_hash || null
@@ -283,7 +284,6 @@ async function syncSelfCardFromSealedStage ({
 module.exports = {
   VALID_TARGETS,
   syncSelfCardFromSealedStage,
-  ensureSelfCardForUser,
   widgetsToValueMap,
   pickMappedFields
 }

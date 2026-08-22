@@ -125,7 +125,8 @@ const syncSelfCardPayloadSchema = Joi.object({
   employee_user_id_from: Joi.string()
     .valid('WIDGET')
     .default('WIDGET'),
-  employee_user_id_widget: Joi.string().trim().max(128).default('employee_user_id'),
+  self_card_id_widget: Joi.string().trim().max(128).default('self_card_id'),
+  employee_user_id_widget: Joi.string().trim().max(128).optional(),
   source_stage: Joi.string().trim().max(128).default('PREVIOUS_USER_TASK'),
   field_map: Joi.object()
     .pattern(Joi.string().trim().min(1).max(64), Joi.string().trim().min(1).max(128))

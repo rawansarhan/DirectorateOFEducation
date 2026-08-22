@@ -9,7 +9,8 @@ const {
 const {
   createHttpError,
   parseOrgDeptRoleBody,
-  parseOrgDeptRoleQuery
+  parseOrgDeptRoleQuery,
+  parseUserIdParam
 } = require('../validations/permissionRoleValidations')
 const {
   KEYS,
@@ -18,6 +19,11 @@ const {
   invalidateRolePermissionsByOrgDeptRole,
   invalidateUserPermissionCaches
 } = require('../../../../core/cache/apiCacheService')
+const {
+  findActiveOrgDeptRoleIdsByUserId,
+  findPermissionsByOrgDeptRoleIds
+} = require('../../../../core/repositories/userAccessRepository')
+const { User } = require('../../../../entities')
 //هذه اللدالة لتحديد الدور و المنصب و المراد تحديده
 async function resolveOrgDeptRole ({ organizationId, departmentId, roleId }) {
   const orgDeptRole = await rolePermissionRepository.findOrgDeptRoleByOrgDeptRole({
@@ -121,6 +127,43 @@ async function getRolePermissions (query) {
     })
   }
 }
+
+/**
+ * كل صلاحيات المستخدم عبر تعييناته الفعّالة → role_permissions.
+ */
+async function getUserPermissions (userIdRaw) {
+  const userId = parseUserIdParam(userIdRaw)
+
+  const user = await User.findByPk(userId, {
+    attributes: ['id', 'userName', 'first_name', 'last_name', 'is_active']
+  })
+
+  if (!user) {
+    throw createHttpError('المستخدم غير موجود', 404, 'NOT_FOUND')
+  }
+
+  const orgDeptRoleIds = await findActiveOrgDeptRoleIdsByUserId(userId)
+  const permissions = orgDeptRoleIds.length
+    ? await findPermissionsByOrgDeptRoleIds(orgDeptRoleIds)
+    : []
+
+  const plainUser = typeof user.get === 'function' ? user.get({ plain: true }) : user
+
+  return {
+    message: 'تم جلب صلاحيات المستخدم بنجاح',
+    data: {
+      user_id: plainUser.id,
+      userName: plainUser.userName ?? null,
+      first_name: plainUser.first_name ?? null,
+      last_name: plainUser.last_name ?? null,
+      is_active: plainUser.is_active !== false,
+      organization_department_roles_ids: orgDeptRoleIds,
+      permissions: toPermissionDTOList(permissions),
+      permission_codes: permissions.map(p => p.code).filter(Boolean)
+    }
+  }
+}
+
 //انشاء صلاحية لرول معين 
 async function createRolePermissions (body, auditContext = {}) {
   const { organizationId, departmentId, roleId, permissionIds } =
@@ -243,6 +286,7 @@ module.exports = {
   listPermissions,
   listPermissionsByAudience,
   getRolePermissions,
+  getUserPermissions,
   createRolePermissions,
   updateRolePermissions
 }

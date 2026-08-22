@@ -270,13 +270,13 @@ function validateWidgetValue (widget, value) {
       if (isEmptyValue(value)) {
         return null
       }
-      const userId = Number(
+      const selfCardId = Number(
         value && typeof value === 'object'
-          ? (value.user_id ?? value.id ?? value.value ?? value.key)
+          ? (value.self_card_id ?? value.id ?? value.value ?? value.key ?? value.user_id)
           : value
       )
-      if (!Number.isInteger(userId) || userId < 1) {
-        return `"${label}" يجب أن يكون معرّف موظف (user_id)`
+      if (!Number.isInteger(selfCardId) || selfCardId < 1) {
+        return `"${label}" يجب أن يكون معرّف بطاقة ذاتية (self_card_id)`
       }
       return null
     }
