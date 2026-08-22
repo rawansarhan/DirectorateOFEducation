@@ -46,6 +46,20 @@ function findTemplateValuesInTransactionData (data, templateId) {
   return null
 }
 
+function pickTemplateDisplayName (documentTemplate) {
+  if (typeof documentTemplate?.name !== 'string') {
+    return null
+  }
+
+  const trimmed = documentTemplate.name.trim()
+  return trimmed ? trimmed.slice(0, 256) : null
+}
+
+async function resolveTemplateDisplayName (templateId) {
+  const documentTemplate = await documentTemplateRepository.findById(templateId)
+  return pickTemplateDisplayName(documentTemplate)
+}
+
 async function resolveDocumentInstance ({
   transactionId,
   templateId,
@@ -205,6 +219,16 @@ async function executeGeneratePdfJob ({
   })
 
   if (documentInstance?.generated_pdf_path) {
+    if (!documentInstance.name) {
+      const templateName = await resolveTemplateDisplayName(numericTemplateId)
+      if (templateName) {
+        await documentInstanceRepository
+          .updateInstance(documentInstance, { name: templateName })
+          .catch(() => null)
+        documentInstance.name = templateName
+      }
+    }
+
     if (persistHistory) {
       await applyGeneratedPdfToTransactionHistory({
         transactionId: numericTransactionId,
@@ -221,6 +245,7 @@ async function executeGeneratePdfJob ({
       skipped: true,
       template_id: numericTemplateId,
       document_instance_id: documentInstance.id,
+      name: documentInstance.name || null,
       transaction_id: numericTransactionId,
       generated_pdf_path: documentInstance.generated_pdf_path
     }
@@ -268,9 +293,7 @@ async function executeGeneratePdfJob ({
     }
   }
 
-  const templateName = typeof documentTemplate?.name === 'string'
-    ? documentTemplate.name.trim().slice(0, 256)
-    : null
+  const templateName = pickTemplateDisplayName(documentTemplate)
 
   if (!documentInstance) {
     documentInstance = await documentInstanceRepository.create({
@@ -283,7 +306,7 @@ async function executeGeneratePdfJob ({
     })
   } else {
     await documentInstanceRepository.updateInstance(documentInstance, {
-      name: templateName || documentInstance.name,
+      name: templateName || documentInstance.name || null,
       data_json: dataJsonWithSealMeta
     })
   }
@@ -324,6 +347,7 @@ async function executeGeneratePdfJob ({
       status: 'generated',
       template_id: numericTemplateId,
       document_instance_id: documentInstance.id,
+      name: templateName || documentInstance.name || null,
       transaction_id: numericTransactionId,
       generated_pdf_path: generation.generated_pdf_path,
       content_hash: generation.content_hash,

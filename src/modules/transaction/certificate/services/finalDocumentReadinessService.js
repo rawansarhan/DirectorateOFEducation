@@ -61,6 +61,7 @@ function buildCheck ({ id, ok, message, details = null }) {
 function summarizeGeneratePdfInstances (instances = []) {
   return instances.map(instance => ({
     id: instance.id,
+    name: instance.name ?? null,
     template_id: instance.document_template_id,
     generated_pdf_path: instance.generated_pdf_path,
     file_on_disk: instance.generated_pdf_path

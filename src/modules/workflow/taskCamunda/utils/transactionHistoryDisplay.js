@@ -309,6 +309,7 @@ function enrichHistoryTemplatesWithDocumentInstances (
 
       const pdfMeta = {
         id_document_instance: Number(matched.id),
+        name: matched.name ?? null,
         generated_pdf_path: matched.generated_pdf_path,
         generated_pdf_url: toPublicFileUrl(matched.generated_pdf_path)
       }
