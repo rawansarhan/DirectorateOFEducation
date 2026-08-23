@@ -9,6 +9,8 @@ const {
   updateProfileHeader,
   HISTORY_MODELS
 } = require('../repositories/employeeSelfCardRepository')
+const { invalidateSelfCards } = require('../../../../core/cache/apiCacheService')
+const { extractSelfCardId } = require('../../../../core/utils/employeePickerValue')
 
 const VALID_TARGETS = new Set([
   'profile_header',
@@ -130,15 +132,11 @@ async function resolveSelfCardId ({ payload, valueMap }) {
     'self_card_id'
 
   const raw = valueMap[String(widgetId)]
-  const selfCardId = Number(
-    raw && typeof raw === 'object'
-      ? (raw.self_card_id ?? raw.id ?? raw.value ?? raw.key ?? raw.user_id)
-      : raw
-  )
+  const selfCardId = extractSelfCardId(raw)
 
   if (!Number.isInteger(selfCardId) || selfCardId < 1) {
     throw createSyncError(
-      `قيمة employee_picker (${widgetId}) مطلوبة ويجب أن تكون self_card_id موجباً`
+      `قيمة employee_picker (${widgetId}) مطلوبة ويجب أن تحتوي self_card_id موجباً`
     )
   }
 
@@ -201,6 +199,7 @@ async function syncSelfCardFromSealedStage ({
 
   if (target === 'profile_header') {
     const updated = await updateProfileHeader(selfCard, mapped)
+    await invalidateSelfCards(updated.id)
     return {
       status: 'updated',
       target,
@@ -269,6 +268,8 @@ async function syncSelfCardFromSealedStage ({
     target,
     payload: rowPayload
   })
+
+  await invalidateSelfCards(selfCard.id)
 
   return {
     status: 'created',

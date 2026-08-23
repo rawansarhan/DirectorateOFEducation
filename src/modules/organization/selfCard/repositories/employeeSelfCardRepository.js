@@ -133,7 +133,11 @@ async function ensureSelfCardForUser (userId, extras = {}, options = {}) {
       ...pickProfileExtras(extras)
     },
     { transaction: options.transaction }
-  )
+  ).then(async (created) => {
+    const { invalidateSelfCards } = require('../../../../core/cache/apiCacheService')
+    await invalidateSelfCards(created.id)
+    return created
+  })
 }
 
 async function createSelfCard (payload = {}, options = {}) {
@@ -225,6 +229,56 @@ async function searchSelfCards ({ search, limit = 20, cursorId = null, activeOnl
   return { rows: hasNext ? rows.slice(0, limit) : rows, hasNext }
 }
 
+/**
+ * بطاقات نشطة + دوراتها (للترشيح حسب غياب دورة بعنوان معيّن).
+ */
+async function findActiveSelfCardsWithCourses ({ organizationId = null } = {}) {
+  const where = { is_active: true }
+
+  if (organizationId != null) {
+    where.organization_id = Number(organizationId)
+  }
+
+  const cards = await EmployeeSelfCard.findAll({
+    where,
+    attributes: [
+      'id',
+      'user_id',
+      'organization_id',
+      'self_number',
+      'national_id',
+      'full_name',
+      'father_name',
+      'mother_name',
+      'is_active'
+    ],
+    order: [['id', 'ASC']]
+  })
+
+  if (!cards.length) {
+    return { cards: [], coursesByCardId: new Map() }
+  }
+
+  const cardIds = cards.map(card => card.id)
+  const courses = await EmployeeTrainingCourse.findAll({
+    where: { self_card_id: { [Op.in]: cardIds } },
+    attributes: ['id', 'self_card_id', 'title', 'normalized_title', 'provider', 'topic'],
+    order: [['id', 'ASC']]
+  })
+
+  const coursesByCardId = new Map()
+
+  for (const course of courses) {
+    const plain =
+      typeof course.get === 'function' ? course.get({ plain: true }) : course
+    const list = coursesByCardId.get(plain.self_card_id) || []
+    list.push(plain)
+    coursesByCardId.set(plain.self_card_id, list)
+  }
+
+  return { cards, coursesByCardId }
+}
+
 async function findHistoryBySource ({
   target,
   sourceTransactionId,
@@ -287,6 +341,7 @@ module.exports = {
   findSelfCardById,
   findSelfCardByUserId,
   searchSelfCards,
+  findActiveSelfCardsWithCourses,
   findHistoryBySource,
   createHistoryRow,
   updateProfileHeader

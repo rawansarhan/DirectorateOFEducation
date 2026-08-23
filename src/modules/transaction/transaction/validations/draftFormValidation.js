@@ -3,6 +3,11 @@
 const Joi = require('joi')
 const { assertDateWithinBounds } = require('../../../../core/utils/dateBound')
 const {
+  normalizeEmployeePickerValue,
+  validateEmployeePickerValue,
+  isEmployeePickerEmpty
+} = require('../../../../core/utils/employeePickerValue')
+const {
   WIDGET_TYPES,
   validateWidgetsBusinessRules,
   buildStageFormSnapshot
@@ -250,6 +255,10 @@ function validateWidgetValue (widget, value) {
   const data = widget.data || {}
   const label = data.label || data.id
 
+  if (widget.widget_type === 'employee_picker') {
+    return validateEmployeePickerValue(data, value, label)
+  }
+
   if (data.is_required && isEmptyValue(value)) {
     return `"${label}" مطلوب`
   }
@@ -266,20 +275,6 @@ function validateWidgetValue (widget, value) {
       return validateCheckListValue(data, value, label)
     case 'file_picker':
       return validateFilePickerValue(data, value, label)
-    case 'employee_picker': {
-      if (isEmptyValue(value)) {
-        return null
-      }
-      const selfCardId = Number(
-        value && typeof value === 'object'
-          ? (value.self_card_id ?? value.id ?? value.value ?? value.key ?? value.user_id)
-          : value
-      )
-      if (!Number.isInteger(selfCardId) || selfCardId < 1) {
-        return `"${label}" يجب أن يكون معرّف بطاقة ذاتية (self_card_id)`
-      }
-      return null
-    }
     default:
       return `نوع الودجت "${widget.widget_type}" غير مدعوم`
   }
@@ -356,7 +351,17 @@ function validateDraftFormAgainstConfig (formData, stageConfig = {}) {
       return valueError
     }
 
-    valueById.set(widgetId, submitted.value)
+    let storedValue = submitted.value
+    if (configWidget.widget_type === 'employee_picker') {
+      if (isEmployeePickerEmpty(submitted.value)) {
+        storedValue = null
+      } else {
+        const { value: normalized } = normalizeEmployeePickerValue(submitted.value)
+        storedValue = normalized
+      }
+    }
+
+    valueById.set(widgetId, storedValue)
   }
 
   return buildStageFormSnapshot(stageConfig, { value_by_id: valueById })
