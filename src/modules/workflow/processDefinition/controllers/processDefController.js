@@ -251,7 +251,9 @@ const getAllProcessDefinitionStatsController = asyncHandler(async (req, res) => 
 
     return ApiResponder.okResponse(res, result.data, result.message)
   } catch (err) {
-    const statusCode = err.code === 'VALIDATION_ERROR' ? 400 : 500
+    const statusCode =
+      err.statusCode ||
+      (err.code === 'VALIDATION_ERROR' ? 400 : 500)
     return ApiResponder.error(res, { message: err.message, statusCode })
   }
 })

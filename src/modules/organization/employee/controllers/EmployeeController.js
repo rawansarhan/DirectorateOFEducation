@@ -16,8 +16,7 @@ const {
 } = require('../services/departmentEmployeeService')
 
 const {
-  parseCursorPaginationQuery,
-  decodeCursor
+  parseCursorPaginationQuery
 } = require('../../../../core/utils/pagination')
 
 // ================= GET ALL (paginated + search) =================
@@ -52,15 +51,18 @@ const getEmployeeById = asyncHandler(async (req, res) => {
 // ================= GET BY DEPARTMENTS (workload) =================
 const getEmployeesByDepartments = asyncHandler(async (req, res) => {
   try {
-    const { limit, cursor } = parseCursorPaginationQuery(req.query)
+    const { limit, cursor, decodedCursor } = parseCursorPaginationQuery(req.query)
     const departmentIds = parseDepartmentIds({ query: req.query })
+    const rawSearch = String(req.query.q ?? req.query.search ?? '').trim()
+    const search = rawSearch.length ? rawSearch.slice(0, 100) : null
 
     const result = await getDepartmentEmployeesService({
       userId: req.user.id,
       departmentIds,
       cursor,
-      decodedCursor: cursor ? decodeCursor(cursor) : null,
-      limit
+      decodedCursor,
+      limit,
+      search
     })
 
     return ApiResponder.okResponse(res, result, 'تم جلب موظفي الدوائر بنجاح')

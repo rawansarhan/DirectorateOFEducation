@@ -25,10 +25,11 @@ const KEYS = {
   documentTemplates: () => 'document-templates:active',
   documentTemplateById: (id) => `document-templates:id:${id}`,
   departmentOverview: (departmentId) => `department:overview:${departmentId}`,
-  employeesByDepartments: (userId, departmentIds, cursor, limit) => {
+  employeesByDepartments: (userId, departmentIds, cursor, limit, search = null) => {
     const deptKey = [...departmentIds].sort((a, b) => a - b).join('-')
     const cursorKey = cursor ? encodeURIComponent(cursor) : 'start'
-    return `employees:by-depts:${userId}:${deptKey}:c${cursorKey}:l${limit}`
+    const searchKey = search ? encodeURIComponent(search) : 'all'
+    return `employees:by-depts:${userId}:${deptKey}:q${searchKey}:c${cursorKey}:l${limit}`
   },
   employeesByOrgDeptRole: (orgDeptRoleId) => `employees:by-odr:${orgDeptRoleId}`,
   employeesByOrgRoleDept: (organizationId, roleId, departmentId) =>
