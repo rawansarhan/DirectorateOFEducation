@@ -10,6 +10,7 @@ const {
 } = require('../../../actions/actionHelpers')
 const { extractPdfFieldsFromActionResults, attachGeneratedPdfsFromActionResults } = require('../../utils/generatedPdfHistory')
 const { logStep } = require('./completeTaskHelpers')
+const { createProcessStage } = require('../../../../transaction/public')
 
 const { SERVICE_TASK_SYNC_STALE_MS } = require('../../../../../core/config/env')
 
@@ -286,7 +287,7 @@ async function executePendingServiceTasks ({
 
     const pdfFields = extractPdfFieldsFromActionResults(actionResults) || {}
 
-    transactionData[serviceStage.code] = {
+    const stageSnapshot = {
       ...(transactionData[serviceStage.code] || {}),
       stage_name: serviceStage.name,
       form_id: stageConfig?.config_json?.form_id ?? serviceStage.code,
@@ -301,6 +302,32 @@ async function executePendingServiceTasks ({
       completed_at: new Date(),
       last_activity_instance_id: activityInstanceId,
       ...pdfFields
+    }
+
+    transactionData[serviceStage.code] = stageSnapshot
+
+    // سجّل اكتمال SERVICE_TASK في process_instance_stage حتى يدخل في progress_percent
+    try {
+      await createProcessStage({
+        transactionId: transaction.id,
+        stageCode: serviceStage.code,
+        stageName: serviceStage.name,
+        status: 'completed',
+        data: stageSnapshot,
+        assigned_to: null,
+        sealed: true
+      })
+      logStep('SERVICE_TASK_STAGE_SEALED', {
+        stageCode: serviceStage.code,
+        transactionId: transaction.id
+      })
+    } catch (sealErr) {
+      logStep('SERVICE_TASK_STAGE_SEAL_FAILED', {
+        stageCode: serviceStage.code,
+        transactionId: transaction.id,
+        message: sealErr?.message || String(sealErr)
+      })
+      throw sealErr
     }
 
     // خزّن PDF داخل templates[] لمرحلة USER_TASK المرتبطة بنفس template_id

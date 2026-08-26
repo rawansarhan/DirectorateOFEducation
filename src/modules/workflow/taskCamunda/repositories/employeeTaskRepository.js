@@ -1004,6 +1004,10 @@ async function getTerminalInstancesByDepartments ({
   return { rows: hasNext ? rows.slice(0, limit) : rows, hasNext }
 }
 
+/**
+ * عدد كل مراحل العملية (USER_TASK + SERVICE_TASK) للتقدّم %.
+ * اكتمال SERVICE_TASK يُسجَّل في process_instance_stage عند التنفيذ.
+ */
 async function countStagesByProcessDefinitionIds (processDefinitionIds = []) {
   if (!processDefinitionIds.length) {
     return new Map()
