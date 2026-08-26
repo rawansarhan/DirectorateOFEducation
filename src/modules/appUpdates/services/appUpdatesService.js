@@ -141,6 +141,27 @@ async function createVersionService (appId, data) {
   const application = await Application.findByPk(appId)
   if (!application) notFound('التطبيق غير موجود')
 
+  // version_code مكرَّر يكسر الميزة بصمت: استعلام getSettings يرتّب بـ
+  // version_code DESC بلا فاصل تعادل، فصفّان بنفس الرقم يجعلان الإصدار
+  // المعروض غير محدَّد — ومستخدم على الرقم نفسه لا يُعرض له تحديث إطلاقاً.
+  // (حدث فعلاً: 1.0.3 و 1.0.4 سُجِّلا كلاهما بـ version_code=4.)
+  const duplicate = await AppVersion.findOne({
+    where: {
+      application_id: appId,
+      platform: value.platform,
+      version_code: value.version_code
+    }
+  })
+
+  if (duplicate) {
+    const err = new Error(
+      `رقم الإصدار ${value.version_code} مستخدَم مسبقاً على منصة ${value.platform} ` +
+      `(الإصدار ${duplicate.version_name}) — استخدم رقماً أكبر.`
+    )
+    err.statusCode = 409
+    throw err
+  }
+
   // إصدار جديد يُنشأ inactive افتراضياً — يُفعَّل يدوياً بعد التأكد أن الملف مرفوع والرابط يعمل.
   return AppVersion.create({
     application_id: appId,
