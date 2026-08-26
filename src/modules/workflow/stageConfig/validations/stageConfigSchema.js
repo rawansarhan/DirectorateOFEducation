@@ -210,6 +210,7 @@ const stageActionSchema = Joi.object({
           target: Joi.string()
             .valid(
               'profile_header',
+              'update_profile_header',
               'training_course',
               'employment_status',
               'irregular_absence',
