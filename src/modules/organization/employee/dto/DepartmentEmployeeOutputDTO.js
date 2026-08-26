@@ -21,7 +21,8 @@ class DepartmentEmployeeOutputDTO {
     this.father_name = user.father_name
     this.mother_name = user.mother_name
     this.national_id = user.national_id
-    this.organization_department_roles_id = odr.id
+    this.organization_department_roles_id =
+      plain.organization_department_roles_id ?? odr.id ?? null
     this.department = odr.department
       ? { id: odr.department.id, name: odr.department.name }
       : null

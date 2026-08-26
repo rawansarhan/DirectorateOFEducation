@@ -146,6 +146,8 @@ router.get(
  *       - الدوائر المرتبطة عبر stage_assignments → organization_department_roles → department
  *
  *       فلترة بتاريخ إنشاء المعاملة: from_date / to_date
+ *       بحث شامل (`q` / `search`): اسم العملية، الكود، نوع المعاملة، أسماء الدوائر.
+ *       **Cursor Pagination:** `cursor` + `limit` (افتراضي 20، أقصى 70) — استخدم `pagination.next_cursor`.
  *       الكاش: قائمة العمليات الموافق عليها + الدوائر (ثابتة)؛ أعداد المعاملات تُحسب طازجة كل طلب.
  *     tags: [Process Definition]
  *     security:
@@ -157,6 +159,19 @@ router.get(
  *       - in: query
  *         name: to_date
  *         schema: { type: string, format: date, example: '2026-01-31' }
+ *       - in: query
+ *         name: q
+ *         schema: { type: string, maxLength: 100 }
+ *         description: بحث شامل (أو استخدم search)
+ *       - in: query
+ *         name: search
+ *         schema: { type: string, maxLength: 100 }
+ *       - in: query
+ *         name: cursor
+ *         schema: { type: string }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, minimum: 1, maximum: 70, default: 20 }
  *     responses:
  *       200:
  *         description: تم جلب الإحصائيات بنجاح
@@ -207,8 +222,14 @@ router.get(
  *                 period:
  *                   from_date: '2026-01-01'
  *                   to_date: '2026-01-31'
+ *                 pagination:
+ *                   limit: 20
+ *                   cursor: null
+ *                   next_cursor: eyJrIjoicHJvY2Vzc19zdGF0cyIsImlkIjo4fQ==
+ *                   has_next: true
+ *                   has_prev: false
  *       400:
- *         description: تواريخ غير صالحة
+ *         description: تواريخ غير صالحة أو cursor غير صالح
  *       403:
  *         description: PROCESS_VIEW_STATS مطلوب
  */

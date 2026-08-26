@@ -7,6 +7,13 @@ const {
   getOrLoad
 } = require('../../../../core/cache/apiCacheService')
 const { API_CACHE_TTL_SECONDS } = require('../../../../core/config/env')
+const { arabicIncludes } = require('../../../../core/utils/escapeLike')
+const {
+  parseCursorPaginationQuery,
+  encodeCursor,
+  buildCursorPaginationMeta,
+  emptyCursorPaginatedResult
+} = require('../../../../core/utils/pagination')
 
 const EMPTY_TRANSACTION_COUNTS = Object.freeze({
   pending_pickup: 0,
@@ -14,6 +21,13 @@ const EMPTY_TRANSACTION_COUNTS = Object.freeze({
   completed: 0,
   rejected: 0
 })
+
+function fail (message, statusCode = 400, code = 'VALIDATION_ERROR') {
+  const err = new Error(message)
+  err.statusCode = statusCode
+  err.code = code
+  return err
+}
 
 function formatDateOnly (date) {
   if (!date) {
@@ -28,6 +42,11 @@ function buildPeriodMeta ({ fromDate, toDate }) {
     from_date: formatDateOnly(fromDate),
     to_date: formatDateOnly(toDate)
   }
+}
+
+function parseSearchTerm (query = {}) {
+  const raw = String(query.q ?? query.search ?? '').trim()
+  return raw.length ? raw.slice(0, 100) : null
 }
 
 /** كاش ثابت: قائمة كل process definitions + type_trans */
@@ -99,7 +118,39 @@ function shapeProcessDefinitionStats ({
     departments
   }
 }
-// بناء قائمة الاحصائيات المرتبطة بالمعاملة 
+
+function matchesProcessStatsSearch (item, search) {
+  if (!search) {
+    return true
+  }
+
+  const haystacks = [
+    item.process_name,
+    item.process_code,
+    item.transaction_type_name,
+    item.transaction_type_code,
+    String(item.process_definition_id),
+    ...(item.departments || []).map(dept => dept?.name)
+  ]
+
+  return haystacks.some(text => arabicIncludes(text, search))
+}
+
+function applyCursorPage (items, { limit, cursorId = null }) {
+  let filtered = items
+
+  if (cursorId != null && Number.isFinite(Number(cursorId))) {
+    const id = Number(cursorId)
+    filtered = filtered.filter(item => item.process_definition_id > id)
+  }
+
+  const hasNext = filtered.length > limit
+  const pageItems = hasNext ? filtered.slice(0, limit) : filtered
+
+  return { pageItems, hasNext }
+}
+
+// بناء قائمة الاحصائيات المرتبطة بالمعاملة
 async function buildProcessDefinitionStatsList ({ fromDate, toDate }) {
   const [processDefinitions, transactionCountMap] = await Promise.all([
     loadCachedProcessDefinitions(),
@@ -134,15 +185,59 @@ async function buildProcessDefinitionStatsList ({ fromDate, toDate }) {
     period: buildPeriodMeta({ fromDate, toDate })
   }
 }
-// الدالة الرئيسية المسؤولة عن جلب جميع الاحصائيات المرتبطة ب process 
+
+// الدالة الرئيسية المسؤولة عن جلب جميع الاحصائيات المرتبطة ب process
 async function getAllProcessDefinitionStatsService ({ query = {} } = {}) {
   const { fromDate, toDate } = parseDateRange({ query })
+  const search = parseSearchTerm(query)
 
-  const data = await buildProcessDefinitionStatsList({ fromDate, toDate })
+  const { limit, cursor, decodedCursor } = parseCursorPaginationQuery(query, {
+    defaultLimit: 20
+  })
+
+  if (decodedCursor && decodedCursor.k !== 'process_stats') {
+    throw fail('cursor غير صالح لهذا البحث')
+  }
+
+  const built = await buildProcessDefinitionStatsList({ fromDate, toDate })
+
+  let items = built.items.filter(item => matchesProcessStatsSearch(item, search))
+
+  items.sort((a, b) => a.process_definition_id - b.process_definition_id)
+
+  if (!items.length) {
+    return {
+      message: 'تم جلب إحصائيات العمليات بنجاح',
+      data: {
+        ...emptyCursorPaginatedResult({ limit, cursor }),
+        period: built.period
+      }
+    }
+  }
+
+  const { pageItems, hasNext } = applyCursorPage(items, {
+    limit,
+    cursorId: decodedCursor?.id ?? null
+  })
+
+  const last = pageItems[pageItems.length - 1]
+  const nextCursor =
+    hasNext && last
+      ? encodeCursor({ k: 'process_stats', id: Number(last.process_definition_id) })
+      : null
 
   return {
     message: 'تم جلب إحصائيات العمليات بنجاح',
-    data
+    data: {
+      items: pageItems,
+      period: built.period,
+      pagination: buildCursorPaginationMeta({
+        limit,
+        cursor,
+        nextCursor,
+        hasNext
+      })
+    }
   }
 }
 

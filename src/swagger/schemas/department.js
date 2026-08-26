@@ -966,6 +966,33 @@ module.exports = {
                 "example": "2026-01-31"
               }
             }
+          },
+          "pagination": {
+            "type": "object",
+            "properties": {
+              "limit": {
+                "type": "integer",
+                "example": 20
+              },
+              "cursor": {
+                "type": "string",
+                "nullable": true,
+                "example": null
+              },
+              "next_cursor": {
+                "type": "string",
+                "nullable": true,
+                "example": "eyJrIjoicHJvY2Vzc19zdGF0cyIsImlkIjo4fQ=="
+              },
+              "has_next": {
+                "type": "boolean",
+                "example": true
+              },
+              "has_prev": {
+                "type": "boolean",
+                "example": false
+              }
+            }
           }
         }
       }
@@ -1030,6 +1057,13 @@ module.exports = {
         "period": {
           "from_date": "2026-01-01",
           "to_date": "2026-01-31"
+        },
+        "pagination": {
+          "limit": 20,
+          "cursor": null,
+          "next_cursor": "eyJrIjoicHJvY2Vzc19zdGF0cyIsImlkIjo4fQ==",
+          "has_next": true,
+          "has_prev": false
         }
       }
     }

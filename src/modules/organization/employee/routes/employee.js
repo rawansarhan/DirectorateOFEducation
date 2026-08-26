@@ -152,6 +152,7 @@ router.get(
  *       - `active` (نشط): أكثر من 20% حتى 60%
  *       - `overloaded` (مثقل): أكثر من 60% حتى 100%
  *
+ *       **بحث شامل (`q` / `search`):** الاسم، اسم الأب/الأم، الرقم الوطني، اسم الدائرة، اسم/كود الدور.
  *       **Cursor Pagination:** استخدم `pagination.next_cursor` للصفحة التالية.
  *     tags: [Employee]
  *     security:
@@ -161,6 +162,13 @@ router.get(
  *         name: department_ids
  *         required: true
  *         schema: { type: string, example: '1,2,3' }
+ *       - in: query
+ *         name: q
+ *         schema: { type: string, maxLength: 100 }
+ *         description: بحث شامل (أو استخدم search)
+ *       - in: query
+ *         name: search
+ *         schema: { type: string, maxLength: 100 }
  *       - in: query
  *         name: cursor
  *         schema: { type: string }

@@ -5,6 +5,7 @@ const ApiResponder = require('../../../../core/utils/apiResponder')
 const {
   getSelfCardById,
   searchSelfCardsService,
+  recommendByMissingTrainingService,
   createSelfCardService
 } = require('../services/employeeSelfCardService')
 
@@ -12,6 +13,26 @@ const searchSelfCards = asyncHandler(async (req, res) => {
   try {
     const result = await searchSelfCardsService(req.query)
     return ApiResponder.okResponse(res, result, 'تم جلب نتائج البحث')
+  } catch (err) {
+    return ApiResponder.error(res, {
+      message: err.message,
+      statusCode: err.statusCode || 400,
+      error: err.code || undefined
+    })
+  }
+})
+
+const recommendByMissingTraining = asyncHandler(async (req, res) => {
+  try {
+    const result = await recommendByMissingTrainingService({
+      ...req.query,
+      ...req.body
+    })
+    return ApiResponder.okResponse(
+      res,
+      result,
+      'تم ترشيح البطاقات التي لم تحضر الدورة المطلوبة'
+    )
   } catch (err) {
     return ApiResponder.error(res, {
       message: err.message,
@@ -49,6 +70,7 @@ const createSelfCard = asyncHandler(async (req, res) => {
 
 module.exports = {
   searchSelfCards,
+  recommendByMissingTraining,
   getSelfCard,
   createSelfCard
 }

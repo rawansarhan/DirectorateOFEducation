@@ -109,6 +109,7 @@ const syncSelfCardPayloadSchema = Joi.object({
   target: Joi.string()
     .valid(
       'profile_header',
+      'update_profile_header',
       'training_course',
       'employment_status',
       'irregular_absence',
@@ -120,7 +121,7 @@ const syncSelfCardPayloadSchema = Joi.object({
     .messages({
       'any.required': 'SYNC_SELF_CARD payload.target مطلوب',
       'any.only':
-        'SYNC_SELF_CARD payload.target يجب أن يكون أحد: profile_header, training_course, employment_status, irregular_absence, leave, reward, sanction'
+        'SYNC_SELF_CARD payload.target يجب أن يكون أحد: profile_header, update_profile_header, training_course, employment_status, irregular_absence, leave, reward, sanction'
     }),
   employee_user_id_from: Joi.string()
     .valid('WIDGET')

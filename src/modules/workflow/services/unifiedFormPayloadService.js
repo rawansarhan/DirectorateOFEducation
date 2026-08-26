@@ -157,6 +157,10 @@ function emptyWidgetValue (widget) {
     return []
   }
 
+  if (widget?.widget_type === 'employee_picker') {
+    return null
+  }
+
   return ''
 }
 

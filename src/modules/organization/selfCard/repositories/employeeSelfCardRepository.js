@@ -22,7 +22,7 @@ const HISTORY_MODELS = {
 }
 
 const PROFILE_FIELDS = [
-  'organization_id',
+  'public_entity',
   'self_number',
   'national_id',
   'insurance_number',
@@ -129,11 +129,15 @@ async function ensureSelfCardForUser (userId, extras = {}, options = {}) {
       full_name: extras.full_name ?? buildFullName(user),
       father_name: extras.father_name ?? user.father_name ?? null,
       mother_name: extras.mother_name ?? user.mother_name ?? null,
-      organization_id: extras.organization_id ?? null,
+      public_entity: extras.public_entity ?? null,
       ...pickProfileExtras(extras)
     },
     { transaction: options.transaction }
-  )
+  ).then(async (created) => {
+    const { invalidateSelfCards } = require('../../../../core/cache/apiCacheService')
+    await invalidateSelfCards(created.id)
+    return created
+  })
 }
 
 async function createSelfCard (payload = {}, options = {}) {
@@ -207,7 +211,7 @@ async function searchSelfCards ({ search, limit = 20, cursorId = null, activeOnl
     attributes: [
       'id',
       'user_id',
-      'organization_id',
+      'public_entity',
       'self_number',
       'national_id',
       'full_name',
@@ -223,6 +227,56 @@ async function searchSelfCards ({ search, limit = 20, cursorId = null, activeOnl
 
   const hasNext = rows.length > limit
   return { rows: hasNext ? rows.slice(0, limit) : rows, hasNext }
+}
+
+/**
+ * بطاقات نشطة + دوراتها (للترشيح حسب غياب دورة بعنوان معيّن).
+ */
+async function findActiveSelfCardsWithCourses ({ publicEntity = null } = {}) {
+  const where = { is_active: true }
+
+  if (publicEntity != null && String(publicEntity).trim() !== '') {
+    where.public_entity = String(publicEntity).trim()
+  }
+
+  const cards = await EmployeeSelfCard.findAll({
+    where,
+    attributes: [
+      'id',
+      'user_id',
+      'public_entity',
+      'self_number',
+      'national_id',
+      'full_name',
+      'father_name',
+      'mother_name',
+      'is_active'
+    ],
+    order: [['id', 'ASC']]
+  })
+
+  if (!cards.length) {
+    return { cards: [], coursesByCardId: new Map() }
+  }
+
+  const cardIds = cards.map(card => card.id)
+  const courses = await EmployeeTrainingCourse.findAll({
+    where: { self_card_id: { [Op.in]: cardIds } },
+    attributes: ['id', 'self_card_id', 'title', 'normalized_title', 'provider', 'topic'],
+    order: [['id', 'ASC']]
+  })
+
+  const coursesByCardId = new Map()
+
+  for (const course of courses) {
+    const plain =
+      typeof course.get === 'function' ? course.get({ plain: true }) : course
+    const list = coursesByCardId.get(plain.self_card_id) || []
+    list.push(plain)
+    coursesByCardId.set(plain.self_card_id, list)
+  }
+
+  return { cards, coursesByCardId }
 }
 
 async function findHistoryBySource ({
@@ -287,6 +341,7 @@ module.exports = {
   findSelfCardById,
   findSelfCardByUserId,
   searchSelfCards,
+  findActiveSelfCardsWithCourses,
   findHistoryBySource,
   createHistoryRow,
   updateProfileHeader

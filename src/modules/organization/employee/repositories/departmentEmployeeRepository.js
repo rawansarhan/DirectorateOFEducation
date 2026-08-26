@@ -46,26 +46,41 @@ const ASSIGNMENT_INCLUDES = [
 async function findAssignmentsByDepartments ({
   departmentIds,
   cursor = null,
-  limit
+  limit,
+  search = null
 }) {
-  const baseWhere = {
-    is_active: true,
-    '$org_department_role.department_id$': {
-      [Op.in]: departmentIds
+  const and = [
+    { is_active: true },
+    {
+      '$org_department_role.department_id$': {
+        [Op.in]: departmentIds
+      }
     }
+  ]
+
+  if (cursor?.id != null && Number.isFinite(Number(cursor.id))) {
+    and.push({ id: { [Op.gt]: Number(cursor.id) } })
   }
 
-  const where = cursor
-    ? {
-        [Op.and]: [
-          baseWhere,
-          { id: { [Op.gt]: cursor.id } }
-        ]
-      }
-    : baseWhere
+  if (search) {
+    const { likeContains } = require('../../../../core/utils/escapeLike')
+    const like = likeContains(search)
+    and.push({
+      [Op.or]: [
+        { '$user.first_name$': like },
+        { '$user.last_name$': like },
+        { '$user.father_name$': like },
+        { '$user.mother_name$': like },
+        { '$user.national_id$': like },
+        { '$org_department_role.department.name$': like },
+        { '$org_department_role.role.name$': like },
+        { '$org_department_role.role.code$': like }
+      ]
+    })
+  }
 
   const rows = await db.UserRoleAssignment.findAll({
-    where,
+    where: { [Op.and]: and },
     attributes: ['id', 'user_id', 'organization_department_roles_id'],
     include: ASSIGNMENT_INCLUDES,
     order: [['id', 'ASC']],

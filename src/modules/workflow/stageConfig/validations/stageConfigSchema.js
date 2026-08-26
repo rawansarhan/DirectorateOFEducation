@@ -135,7 +135,11 @@ const filePickerDataSchema = Joi.object({
 /**
  * اختيار بطاقة ذاتية — الخيارات من:
  * GET /api/self-cards/search
- * القيمة عند الإرسال: self_card_id (رقم employee_self_cards.id).
+ * القيمة عند الإرسال:
+ *   {
+ *     self_card_id: number,     // إلزامي = employee_self_cards.id
+ *     path_self_card?: string   // اختياري — مسار CV بلاحقة .pdf
+ *   }
  */
 const employeePickerDataSchema = Joi.object({
   id: widgetIdSchema,
@@ -206,6 +210,7 @@ const stageActionSchema = Joi.object({
           target: Joi.string()
             .valid(
               'profile_header',
+              'update_profile_header',
               'training_course',
               'employment_status',
               'irregular_absence',

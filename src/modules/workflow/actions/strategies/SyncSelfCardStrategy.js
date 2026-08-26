@@ -2,6 +2,11 @@
 
 /**
  * SYNC_SELF_CARD — يكتب على جداول البطاقة الذاتية من لقطة مرحلة مختومة.
+ *
+ * targets:
+ * - profile_header         → إنشاء بطاقة جديدة (بدون self_card_id)
+ * - update_profile_header  → تعديل بطاقة موجودة (يتطلب employee_picker)
+ * - history targets        → سجلات تاريخية على بطاقة موجودة
  */
 
 const {

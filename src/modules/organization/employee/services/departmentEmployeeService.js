@@ -12,7 +12,7 @@ const {
   getOrLoad,
   KEYS
 } = require('../../../../core/cache/apiCacheService')
-const { API_CACHE_TTL_SECONDS } = require('../../../../core/config/env')
+const { EMPLOYEE_TASKS_CACHE_TTL_SECONDS } = require('../../../../core/config/env')
 
 function fail (message, statusCode = 400, code = 'VALIDATION_ERROR') {
   const err = new Error(message)
@@ -106,7 +106,8 @@ async function loadDepartmentEmployees ({
   departmentIds,
   cursor = null,
   decodedCursor = null,
-  limit
+  limit,
+  search = null
 }) {
   const access = await employeeTaskRepository.userHasDepartmentsAccess(
     userId,
@@ -121,11 +122,16 @@ async function loadDepartmentEmployees ({
     )
   }
 
+  if (decodedCursor && decodedCursor.k !== 'dept_emp') {
+    throw fail('cursor غير صالح لهذا البحث')
+  }
+
   const { rows, hasNext } =
     await departmentEmployeeRepository.findAssignmentsByDepartments({
       departmentIds,
       cursor: decodedCursor,
-      limit
+      limit,
+      search
     })
 
   if (!rows.length) {
@@ -202,13 +208,15 @@ async function getDepartmentEmployeesService ({
   departmentIds,
   cursor = null,
   decodedCursor = null,
-  limit
+  limit,
+  search = null
 }) {
   const cacheKey = KEYS.employeesByDepartments(
     userId,
     departmentIds,
     cursor,
-    limit
+    limit,
+    search
   )
 
   return getOrLoad(
@@ -218,11 +226,13 @@ async function getDepartmentEmployeesService ({
       departmentIds,
       cursor,
       decodedCursor,
-      limit
+      limit,
+      search
     }),
     {
       label: `employees:by-depts:${userId}`,
-      ttlSeconds: API_CACHE_TTL_SECONDS
+      // عبء العمل حيّ — لا نستخدم API_CACHE_TTL الطويل (ساعة)
+      ttlSeconds: EMPLOYEE_TASKS_CACHE_TTL_SECONDS
     }
   )
 }

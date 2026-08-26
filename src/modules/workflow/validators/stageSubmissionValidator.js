@@ -3,6 +3,10 @@
 const {
   assertDateWithinBounds
 } = require('../../../core/utils/dateBound')
+const {
+  isEmployeePickerEmpty,
+  normalizeEmployeePickerValue
+} = require('../../../core/utils/employeePickerValue')
 
 const FILE_WIDGET_TYPES = new Set(['file_picker'])
 
@@ -179,23 +183,18 @@ function assertWidgetRules (widgets, fieldMap, fileMap) {
 
     if (widget.widget_type === 'employee_picker') {
       const value = normalizeFieldValue(fieldMap[widgetId])
-      const selfCardId = Number(
-        value && typeof value === 'object'
-          ? (value.self_card_id ?? value.id ?? value.value ?? value.key ?? value.user_id)
-          : value
-      )
 
-      if (data.is_required && (!Number.isInteger(selfCardId) || selfCardId < 1)) {
-        throw new Error(`الحقل "${label}" مطلوب ويجب اختيار بطاقة ذاتية`)
+      if (data.is_required && isEmployeePickerEmpty(value)) {
+        throw new Error(
+          `الحقل "${label}" مطلوب — أرسل value.self_card_id`
+        )
       }
 
-      if (
-        value !== null &&
-        value !== undefined &&
-        value !== '' &&
-        (!Number.isInteger(selfCardId) || selfCardId < 1)
-      ) {
-        throw new Error(`الحقل "${label}" يجب أن يكون معرّف بطاقة ذاتية (self_card_id)`)
+      if (!isEmployeePickerEmpty(value)) {
+        const { error } = normalizeEmployeePickerValue(value)
+        if (error) {
+          throw new Error(`الحقل "${label}" ${error}`)
+        }
       }
 
       continue

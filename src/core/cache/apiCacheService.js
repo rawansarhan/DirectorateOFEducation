@@ -25,10 +25,11 @@ const KEYS = {
   documentTemplates: () => 'document-templates:active',
   documentTemplateById: (id) => `document-templates:id:${id}`,
   departmentOverview: (departmentId) => `department:overview:${departmentId}`,
-  employeesByDepartments: (userId, departmentIds, cursor, limit) => {
+  employeesByDepartments: (userId, departmentIds, cursor, limit, search = null) => {
     const deptKey = [...departmentIds].sort((a, b) => a - b).join('-')
     const cursorKey = cursor ? encodeURIComponent(cursor) : 'start'
-    return `employees:by-depts:${userId}:${deptKey}:c${cursorKey}:l${limit}`
+    const searchKey = search ? encodeURIComponent(search) : 'all'
+    return `employees:by-depts:${userId}:${deptKey}:q${searchKey}:c${cursorKey}:l${limit}`
   },
   employeesByOrgDeptRole: (orgDeptRoleId) => `employees:by-odr:${orgDeptRoleId}`,
   employeesByOrgRoleDept: (organizationId, roleId, departmentId) =>
@@ -88,7 +89,13 @@ const KEYS = {
   permissionsAll: () => 'auth:permissions:all',
   permissionsByAudience: (audience) => `auth:permissions:audience:${audience}`,
   rolePermissionsByOrgDeptRole: (orgDeptRoleId) =>
-    `auth:role-permissions:odr:${orgDeptRoleId}`
+    `auth:role-permissions:odr:${orgDeptRoleId}`,
+  selfCardsSearch: (search, activeOnly, cursor, limit) => {
+    const qKey = search ? encodeURIComponent(search) : 'all'
+    const cursorKey = cursor ? encodeURIComponent(cursor) : 'start'
+    return `self-cards:search:q${qKey}:a${activeOnly ? 1 : 0}:c${cursorKey}:l${limit}`
+  },
+  selfCardById: (id) => `self-cards:id:${id}`
 }
 
 let redisClient = null
@@ -818,6 +825,23 @@ async function invalidateRolePermissionsByOrgDeptRole (orgDeptRoleId = null) {
   )
 }
 
+async function invalidateSelfCards (selfCardId = null) {
+  let deleted = 0
+
+  if (selfCardId != null) {
+    deleted += await deleteKey(KEYS.selfCardById(selfCardId))
+  } else {
+    deleted += await deleteKeysByPattern('self-cards:id:*')
+  }
+
+  deleted += await deleteKeysByPattern('self-cards:search:*')
+  console.log(
+    `${LOG_PREFIX} invalidate self-cards` +
+    (selfCardId != null ? ` — id ${selfCardId}` : ' — all') +
+    ` (${deleted} key(s)) — redis: ${redisStatusLabel()}`
+  )
+}
+
 module.exports = {
   KEYS,
   deleteKeysByPattern,
@@ -864,5 +888,6 @@ module.exports = {
   invalidateUserPermissions,
   invalidateUserPermissionCaches,
   invalidatePermissionsAll,
-  invalidateRolePermissionsByOrgDeptRole
+  invalidateRolePermissionsByOrgDeptRole,
+  invalidateSelfCards
 }

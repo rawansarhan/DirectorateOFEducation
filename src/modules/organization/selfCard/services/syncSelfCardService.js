@@ -6,18 +6,23 @@ const {
   findSelfCardById,
   findHistoryBySource,
   createHistoryRow,
+  createSelfCard,
   updateProfileHeader,
   HISTORY_MODELS
 } = require('../repositories/employeeSelfCardRepository')
+const { invalidateSelfCards } = require('../../../../core/cache/apiCacheService')
+const { extractSelfCardId } = require('../../../../core/utils/employeePickerValue')
 
 const VALID_TARGETS = new Set([
   'profile_header',
+  'update_profile_header',
   ...Object.keys(HISTORY_MODELS)
 ])
 
-function createSyncError (message, code = 'VALIDATION_ERROR') {
+function createSyncError (message, code = 'VALIDATION_ERROR', statusCode = 400) {
   const err = new Error(message)
   err.code = code
+  err.statusCode = statusCode
   return err
 }
 
@@ -53,6 +58,55 @@ function pickMappedFields (valueMap, fieldMap = {}) {
   }
 
   return mapped
+}
+
+/**
+ * يحوّل قيمة widget (نص / مصفوفة / {key,value}) إلى قيمة مناسبة لأعمدة البطاقة.
+ */
+function scalarizeWidgetValue (value) {
+  if (value === undefined) {
+    return undefined
+  }
+
+  if (value === null || value === '') {
+    return null
+  }
+
+  if (Array.isArray(value)) {
+    const parts = value
+      .map(item => scalarizeWidgetValue(item))
+      .filter(item => item != null && item !== '')
+    return parts.length ? parts.join(', ') : null
+  }
+
+  if (typeof value === 'object') {
+    if (value.value != null && value.value !== '') {
+      return String(value.value)
+    }
+    if (value.key != null && value.key !== '') {
+      return String(value.key)
+    }
+    if (value.label != null && value.label !== '') {
+      return String(value.label)
+    }
+    return null
+  }
+
+  return value
+}
+
+/**
+ * يحوّل قيم check_list / dropdown إلى نص مناسب لأعمدة البطاقة الذاتية.
+ */
+function normalizeProfileMappedFields (mapped = {}) {
+  const out = {}
+
+  for (const [key, value] of Object.entries(mapped)) {
+    if (value === undefined) continue
+    out[key] = scalarizeWidgetValue(value)
+  }
+
+  return out
 }
 
 function normalizeTitle (title) {
@@ -130,15 +184,11 @@ async function resolveSelfCardId ({ payload, valueMap }) {
     'self_card_id'
 
   const raw = valueMap[String(widgetId)]
-  const selfCardId = Number(
-    raw && typeof raw === 'object'
-      ? (raw.self_card_id ?? raw.id ?? raw.value ?? raw.key ?? raw.user_id)
-      : raw
-  )
+  const selfCardId = extractSelfCardId(raw)
 
   if (!Number.isInteger(selfCardId) || selfCardId < 1) {
     throw createSyncError(
-      `قيمة employee_picker (${widgetId}) مطلوبة ويجب أن تكون self_card_id موجباً`
+      `قيمة employee_picker (${widgetId}) مطلوبة ويجب أن تحتوي self_card_id موجباً`
     )
   }
 
@@ -151,22 +201,55 @@ async function assertSelfCardWritable (selfCardId) {
   if (!selfCard) {
     throw createSyncError(
       `البطاقة الذاتية #${selfCardId} غير موجودة`,
-      'NOT_FOUND'
+      'NOT_FOUND',
+      404
     )
   }
 
   if (selfCard.is_active === false) {
     throw createSyncError(
       `البطاقة الذاتية #${selfCardId} غير نشطة`,
-      'FORBIDDEN'
+      'FORBIDDEN',
+      403
     )
   }
 
   return selfCard
 }
 
+async function createProfileHeaderFromMapped (mapped) {
+  if (!mapped.full_name && !mapped.national_id) {
+    throw createSyncError(
+      'لإنشاء بطاقة ذاتية (profile_header) يلزم full_name أو national_id في field_map'
+    )
+  }
+
+  try {
+    return await createSelfCard(mapped)
+  } catch (err) {
+    if (err?.name === 'SequelizeUniqueConstraintError') {
+      throw createSyncError(
+        'يوجد بطاقة ذاتية بنفس الرقم الوطني أو user_id',
+        'CONFLICT',
+        409
+      )
+    }
+
+    if (err?.code === 'VALIDATION_ERROR') {
+      throw createSyncError(err.message, 'VALIDATION_ERROR')
+    }
+
+    throw err
+  }
+}
+
 /**
  * يزامن البطاقة الذاتية من لقطة مرحلة مختومة.
+ *
+ * targets:
+ * - profile_header         → إنشاء بطاقة جديدة (بدون self_card_id)
+ * - update_profile_header  → تعديل بطاقة موجودة (يتطلب employee_picker / self_card_id)
+ * - باقي الـ targets       → سجلات تاريخية على بطاقة موجودة
  */
 async function syncSelfCardFromSealedStage ({
   payload = {},
@@ -195,21 +278,51 @@ async function syncSelfCardFromSealedStage ({
   })
 
   const valueMap = widgetsToValueMap(sourceRow.data || {})
-  const selfCardId = await resolveSelfCardId({ payload, valueMap })
-  const selfCard = await assertSelfCardWritable(selfCardId)
-  const mapped = pickMappedFields(valueMap, payload.field_map || {})
+  const mapped = normalizeProfileMappedFields(
+    pickMappedFields(valueMap, payload.field_map || {})
+  )
 
+  // إنشاء بطاقة ذاتية للمرة الأولى — بدون self_card_id
   if (target === 'profile_header') {
-    const updated = await updateProfileHeader(selfCard, mapped)
+    const created = await createProfileHeaderFromMapped(mapped)
+    const plain =
+      typeof created?.get === 'function' ? created.get({ plain: true }) : created
+
+    await invalidateSelfCards(plain.id)
+
     return {
-      status: 'updated',
+      status: 'created',
       target,
-      self_card_id: updated.id,
-      employee_user_id: updated.user_id ?? null,
+      self_card_id: plain.id,
+      employee_user_id: plain.user_id ?? null,
       source_stage_code: sourceRow.stage_code,
       source_content_hash: sourceRow.content_hash || null
     }
   }
+
+  // تعديل البيانات الأساسية — يتطلب self_card_id من employee_picker
+  if (target === 'update_profile_header') {
+    const selfCardId = await resolveSelfCardId({ payload, valueMap })
+    const selfCard = await assertSelfCardWritable(selfCardId)
+    const updated = await updateProfileHeader(selfCard, mapped)
+    const plain =
+      typeof updated?.get === 'function' ? updated.get({ plain: true }) : updated
+
+    await invalidateSelfCards(plain.id)
+
+    return {
+      status: 'updated',
+      target,
+      self_card_id: plain.id,
+      employee_user_id: plain.user_id ?? null,
+      source_stage_code: sourceRow.stage_code,
+      source_content_hash: sourceRow.content_hash || null
+    }
+  }
+
+  // سجلات تاريخية — تتطلب بطاقة موجودة
+  const selfCardId = await resolveSelfCardId({ payload, valueMap })
+  const selfCard = await assertSelfCardWritable(selfCardId)
 
   const existing = await findHistoryBySource({
     target,
@@ -270,6 +383,8 @@ async function syncSelfCardFromSealedStage ({
     payload: rowPayload
   })
 
+  await invalidateSelfCards(selfCard.id)
+
   return {
     status: 'created',
     target,
@@ -285,5 +400,6 @@ module.exports = {
   VALID_TARGETS,
   syncSelfCardFromSealedStage,
   widgetsToValueMap,
-  pickMappedFields
+  pickMappedFields,
+  normalizeProfileMappedFields
 }
