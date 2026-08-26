@@ -44,7 +44,7 @@ function toSearchItem (row) {
   return {
     id: plain.id,
     user_id: plain.user_id ?? null,
-    organization_id: plain.organization_id ?? null,
+    public_entity: plain.public_entity ?? null,
     self_number: plain.self_number ?? null,
     national_id: plain.national_id ?? null,
     full_name: plain.full_name ?? null,
@@ -142,20 +142,17 @@ async function recommendByMissingTrainingService (query = {}) {
     defaultLimit: 20,
     maxLimit: 100
   })
-  const organizationId =
-    query.organization_id != null && query.organization_id !== ''
-      ? Number(query.organization_id)
+  const publicEntity =
+    query.public_entity != null && String(query.public_entity).trim() !== ''
+      ? String(query.public_entity).trim()
       : null
 
-  if (
-    organizationId != null &&
-    (!Number.isInteger(organizationId) || organizationId < 1)
-  ) {
-    throw fail('organization_id غير صالح')
+  if (publicEntity != null && publicEntity.length > 256) {
+    throw fail('public_entity طويل جداً (الحد 256)')
   }
 
   const { cards, coursesByCardId } = await findActiveSelfCardsWithCourses({
-    organizationId
+    publicEntity
   })
 
   const candidates = []
@@ -191,7 +188,7 @@ async function recommendByMissingTrainingService (query = {}) {
       title,
       normalized_title: normalizeSearchText(title),
       limit,
-      organization_id: organizationId,
+      public_entity: publicEntity,
       match_threshold: ATTENDED_MATCH_THRESHOLD
     },
     total_candidates: candidates.length,

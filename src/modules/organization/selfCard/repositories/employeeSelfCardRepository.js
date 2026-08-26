@@ -22,7 +22,7 @@ const HISTORY_MODELS = {
 }
 
 const PROFILE_FIELDS = [
-  'organization_id',
+  'public_entity',
   'self_number',
   'national_id',
   'insurance_number',
@@ -129,7 +129,7 @@ async function ensureSelfCardForUser (userId, extras = {}, options = {}) {
       full_name: extras.full_name ?? buildFullName(user),
       father_name: extras.father_name ?? user.father_name ?? null,
       mother_name: extras.mother_name ?? user.mother_name ?? null,
-      organization_id: extras.organization_id ?? null,
+      public_entity: extras.public_entity ?? null,
       ...pickProfileExtras(extras)
     },
     { transaction: options.transaction }
@@ -211,7 +211,7 @@ async function searchSelfCards ({ search, limit = 20, cursorId = null, activeOnl
     attributes: [
       'id',
       'user_id',
-      'organization_id',
+      'public_entity',
       'self_number',
       'national_id',
       'full_name',
@@ -232,11 +232,11 @@ async function searchSelfCards ({ search, limit = 20, cursorId = null, activeOnl
 /**
  * بطاقات نشطة + دوراتها (للترشيح حسب غياب دورة بعنوان معيّن).
  */
-async function findActiveSelfCardsWithCourses ({ organizationId = null } = {}) {
+async function findActiveSelfCardsWithCourses ({ publicEntity = null } = {}) {
   const where = { is_active: true }
 
-  if (organizationId != null) {
-    where.organization_id = Number(organizationId)
+  if (publicEntity != null && String(publicEntity).trim() !== '') {
+    where.public_entity = String(publicEntity).trim()
   }
 
   const cards = await EmployeeSelfCard.findAll({
@@ -244,7 +244,7 @@ async function findActiveSelfCardsWithCourses ({ organizationId = null } = {}) {
     attributes: [
       'id',
       'user_id',
-      'organization_id',
+      'public_entity',
       'self_number',
       'national_id',
       'full_name',

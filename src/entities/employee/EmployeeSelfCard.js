@@ -9,12 +9,6 @@ module.exports = (sequelize, DataTypes) => {
         onDelete: 'SET NULL'
       })
 
-      EmployeeSelfCard.belongsTo(models.Organization, {
-        foreignKey: 'organization_id',
-        as: 'organization',
-        onDelete: 'SET NULL'
-      })
-
       EmployeeSelfCard.hasMany(models.EmployeeTrainingCourse, {
         foreignKey: 'self_card_id',
         as: 'training_courses'
@@ -54,9 +48,10 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: true,
         unique: true
       },
-      organization_id: {
-        type: DataTypes.INTEGER,
-        allowNull: true
+      public_entity: {
+        type: DataTypes.STRING(256),
+        allowNull: true,
+        comment: 'الجهة العامة'
       },
       self_number: {
         type: DataTypes.STRING(64),

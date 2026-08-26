@@ -21,11 +21,10 @@ module.exports = {
         references: { model: 'users', key: 'id' },
         onDelete: 'CASCADE'
       },
-      organization_id: {
-        type: Sequelize.INTEGER,
+      public_entity: {
+        type: Sequelize.STRING(256),
         allowNull: true,
-        references: { model: 'organizations', key: 'id' },
-        onDelete: 'SET NULL'
+        comment: 'الجهة العامة'
       },
       self_number: {
         type: Sequelize.STRING(64),

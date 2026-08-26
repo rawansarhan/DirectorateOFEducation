@@ -90,8 +90,9 @@ router.get(
  *         schema: { type: integer, default: 20, maximum: 100 }
  *         description: عدد النتائج المطلوبة
  *       - in: query
- *         name: organization_id
- *         schema: { type: integer }
+ *         name: public_entity
+ *         schema: { type: string, maxLength: 256 }
+ *         description: الجهة العامة
  *     responses:
  *       200:
  *         description: قائمة مرشّحة مرتّبة
@@ -110,7 +111,7 @@ router.get(
  *             properties:
  *               title: { type: string }
  *               limit: { type: integer, default: 20 }
- *               organization_id: { type: integer }
+ *               public_entity: { type: string, maxLength: 256, description: الجهة العامة }
  *     responses:
  *       200:
  *         description: قائمة مرشّحة مرتّبة
@@ -152,7 +153,7 @@ router.post(
  *               self_number: { type: string }
  *               father_name: { type: string }
  *               mother_name: { type: string }
- *               organization_id: { type: integer }
+ *               public_entity: { type: string, maxLength: 256, description: الجهة العامة }
  *               user_id: { type: integer, nullable: true }
  *               is_active: { type: boolean, default: true }
  *     responses:
