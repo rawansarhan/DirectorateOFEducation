@@ -81,8 +81,13 @@ function prepareServiceTaskWork ({
     trackingChanged = true
   }
 
-  // معاملات قديمة بلا watermark: سجّل كل history الحالي مرة واحدة بدون إعادة إشعارات
-  if (!parseEndTimeMs(transactionData._serviceTaskSyncWatermark)) {
+  // معاملات قديمة بلا watermark: سجّل كل history الحالي مرة واحدة بدون إعادة إشعارات.
+  //
+  // مقصور على مسار الـ sync: معاملة جديدة تصل هنا أيضاً بلا watermark، فلو
+  // طُبّق الـ bootstrap على مسار الإكمال لاعتُبرت الـ service tasks «منفّذة»
+  // قبل تنفيذها فعلاً — فلا يُستدعى أي action ولو مرة (لا SEND_NOTIFICATION
+  // ولا SYNC_SELF_CARD). فلتر الـ stale أدناه محمي بنفس الشرط.
+  if (source === 'sync' && !parseEndTimeMs(transactionData._serviceTaskSyncWatermark)) {
     let bootstrapped = 0
 //ه
     for (const item of completedServiceTasks) {
