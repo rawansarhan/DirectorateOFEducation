@@ -94,6 +94,9 @@ app.use('/api/role', roleRoutes)
 const locationRoutes = require('./modules/organization/location/routes/location')
 app.use('/api/location', locationRoutes)
 
+const typeLocationRoutes = require('./modules/organization/typeLocation/routes/typeLocation')
+app.use('/api/type-location', typeLocationRoutes)
+
 const employeeRoutes = require('./modules/organization/employee/routes/employee')
 app.use('/api/employees', employeeRoutes)
 

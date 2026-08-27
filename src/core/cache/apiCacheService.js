@@ -22,6 +22,7 @@ const KEYS = {
   rolesByDepartment: (departmentId) => `role:by-dept:${departmentId}`,
   stageAssignments: (stageId) => `stage-assignments:${stageId}`,
   locations: () => 'location:all',
+  typeLocations: () => 'typeLocation:all',
   documentTemplates: () => 'document-templates:active',
   documentTemplateById: (id) => `document-templates:id:${id}`,
   departmentOverview: (departmentId) => `department:overview:${departmentId}`,
@@ -408,6 +409,11 @@ async function invalidateRolesByDepartment (departmentId = null) {
 async function invalidateLocations () {
   const count = await deleteKey(KEYS.locations())
   console.log(`${LOG_PREFIX} invalidate locations (${count ? 1 : 0} key)`)
+}
+
+async function invalidateTypeLocations () {
+  const count = await deleteKey(KEYS.typeLocations())
+  console.log(`${LOG_PREFIX} invalidate type locations (${count ? 1 : 0} key)`)
 }
 
 async function invalidateDocumentTemplates (templateId = null) {
@@ -854,6 +860,7 @@ module.exports = {
   invalidateDepartmentLeaves,
   invalidateRolesByDepartment,
   invalidateLocations,
+  invalidateTypeLocations,
   invalidateDocumentTemplates,
   invalidateDepartmentOverview,
   invalidateEmployeesByDepartments,
