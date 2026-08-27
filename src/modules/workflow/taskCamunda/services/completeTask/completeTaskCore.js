@@ -109,7 +109,8 @@ async function completeTaskCore ({
     isAutoComplete,
     requireSignature,
     idempotencyKey,
-    acquireOperationGuard
+    acquireOperationGuard,
+    processDefinitionId: processInstance?.process_definition_id || null
   })
 
   let sideEffects = initCompleteSideEffects({

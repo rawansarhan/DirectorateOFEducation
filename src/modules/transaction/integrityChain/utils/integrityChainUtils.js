@@ -28,8 +28,9 @@ const STAGE_HASH_EXCLUDED_KEYS = new Set([
 function hashValue (value) {
   return createHash('sha256').update(String(value)).digest('hex')
 }
-
+//يحول القيمة الى سلسلة مستقرة بحيث لا تتغيير بعد التوقيع 
 function stableStringify (value) {
+  //اذا كانت القيمة فارغة او ليست كائن يقوم بتحويلها لسلسلة مستقرة 
   if (value == null || typeof value !== 'object') {
     return JSON.stringify(value)
   }
@@ -37,9 +38,9 @@ function stableStringify (value) {
   if (Array.isArray(value)) {
     return `[${value.map(item => stableStringify(item)).join(',')}]`
   }
-
+//
   const keys = Object.keys(value).sort()
-
+//
   return `{${keys
     .map(key => `${JSON.stringify(key)}:${stableStringify(value[key])}`)
     .join(',')}}`
@@ -62,7 +63,7 @@ function sanitizeStageDataForHashLegacy (stageData = {}) {
 
   return sanitized
 }
-
+//
 function sanitizeStageDataForHash (stageData = {}, extras = {}) {
   return buildCanonicalStageSnapshot(stageData, extras)
 }
@@ -74,7 +75,7 @@ function sanitizeStageDataForHash (stageData = {}, extras = {}) {
  */
 function resolveStageDataForIntegrity (transactionData = {}, stageCode = null) {
   const nested = stageCode ? transactionData?.[stageCode] : null
-
+//اذا كان 
   if (
     nested &&
     typeof nested === 'object' &&
@@ -83,7 +84,7 @@ function resolveStageDataForIntegrity (transactionData = {}, stageCode = null) {
   ) {
     return nested
   }
-
+//اذا كان 
   if (
     transactionData &&
     typeof transactionData === 'object' &&
@@ -101,6 +102,7 @@ function resolveStageDataForIntegrity (transactionData = {}, stageCode = null) {
       'files',
       'fields'
     ]) {
+
       if (Object.prototype.hasOwnProperty.call(transactionData, key)) {
         rootSnapshot[key] = transactionData[key]
       }

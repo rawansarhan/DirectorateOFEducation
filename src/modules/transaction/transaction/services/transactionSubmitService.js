@@ -318,7 +318,7 @@ async function submitTransaction (
 
       assertSubmitIdentityComplete(current)
 
-      const { stage, configJson } =
+      const { stage, configJson, processDefinitionId } =
         await loadAuthStageByProcessCode(current.code)
 
       const normalized = await validateSubmitTransactionRequest(
@@ -331,6 +331,26 @@ async function submitTransaction (
           validation: err.validation
         })
       })
+
+      // قبل قبول التقديم: إن كانت العملية تنشئ بطاقة ذاتية، امنع التكرار
+      try {
+        const {
+          assertUpcomingSelfCardCreateUniqueness
+        } = require('../../../workflow/services/selfCardCreatePreValidation')
+
+        await assertUpcomingSelfCardCreateUniqueness({
+          processDefinitionId,
+          formPayload: normalized
+        })
+      } catch (conflictErr) {
+        if (conflictErr?.code === 'CONFLICT') {
+          throw createTransactionError('CONFLICT', conflictErr.message, {
+            data: conflictErr.data || null,
+            statusCode: 409
+          })
+        }
+        throw conflictErr
+      }
 
       const requiresSignature =
         requireSignature || (await userRequiresSubmitSignature(userId))

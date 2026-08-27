@@ -165,6 +165,14 @@ async function createSelfCard (payload = {}, options = {}) {
     throw err
   }
 
+  const {
+    assertSelfCardUniqueFields
+  } = require('../services/selfCardUniquenessService')
+
+  await assertSelfCardUniqueFields(data, {
+    transaction: options.transaction
+  })
+
   return EmployeeSelfCard.create(data, { transaction: options.transaction })
 }
 
@@ -328,6 +336,15 @@ async function updateProfileHeader (selfCard, mappedFields = {}, options = {}) {
   if (!Object.keys(patch).length) {
     return selfCard
   }
+
+  const {
+    assertSelfCardUniqueFields
+  } = require('../services/selfCardUniquenessService')
+
+  await assertSelfCardUniqueFields(patch, {
+    excludeId: selfCard.id,
+    transaction: options.transaction
+  })
 
   await selfCard.update(patch, options)
   return selfCard.reload(options)

@@ -20,6 +20,7 @@ const MESSAGES = {
   SIGNATURE_REQUIRED: 'التوقيع الرقمي مطلوب للموظف — أنشئ تحدي التوقيع أولاً',
   TRANSACTION_IN_PROGRESS: 'لديك معاملة قيد التنفيذ لهذه العملية — لا يمكن إنشاء تقديم جديد',
   VALIDATION_ERROR: 'بيانات الطلب غير صالحة',
+  CONFLICT: 'تعارض في البيانات',
   WORKFLOW_UNAVAILABLE: 'تعذّر الاتصال بخدمة سير العمل، حاول لاحقاً',
   WORKFLOW_START_FAILED: 'فشل بدء سير العمل — لم يُحفظ التقديم، أعد المحاولة',
   INTERNAL_ERROR: 'حدث خطأ أثناء معالجة المعاملة، حاول لاحقاً',
@@ -58,6 +59,14 @@ function createTransactionError (code, detail, meta = null) {
 
   if (meta?.validation) {
     err.validation = meta.validation
+  }
+
+  if (meta?.data) {
+    err.data = meta.data
+  }
+
+  if (meta?.statusCode) {
+    err.statusCode = meta.statusCode
   }
 
   return err
@@ -158,6 +167,7 @@ function httpStatusForError (error) {
 
   if (
     error?.code === 'GENERATE_PDF_NOT_READY' ||
+    error?.code === 'CONFLICT' ||
     error?.statusCode === 409
   ) {
     return 409

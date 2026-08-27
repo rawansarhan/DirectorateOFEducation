@@ -63,7 +63,8 @@ const createSelfCard = asyncHandler(async (req, res) => {
     return ApiResponder.error(res, {
       message: err.message,
       statusCode: err.statusCode || 400,
-      error: err.code || undefined
+      error: err.code || undefined,
+      data: err.data || null
     })
   }
 })

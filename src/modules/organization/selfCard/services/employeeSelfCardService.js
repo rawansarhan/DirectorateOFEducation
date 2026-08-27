@@ -28,10 +28,13 @@ const { API_CACHE_TTL_SECONDS } = require('../../../../core/config/env')
 /** فوق هذا الحد نعتبر أن الشخص حضر دورة بنفس العنوان/المعنى */
 const ATTENDED_MATCH_THRESHOLD = 0.62
 
-function fail (message, statusCode = 400, code = 'VALIDATION_ERROR') {
+function fail (message, statusCode = 400, code = 'VALIDATION_ERROR', data = null) {
   const err = new Error(message)
   err.statusCode = statusCode
   err.code = code
+  if (data) {
+    err.data = data
+  }
   return err
 }
 
@@ -313,8 +316,15 @@ async function createSelfCardService (body = {}) {
       data: toPlain(created)
     }
   } catch (err) {
+    if (err?.code === 'CONFLICT') {
+      throw fail(err.message, err.statusCode || 409, 'CONFLICT', err.data || null)
+    }
     if (err?.name === 'SequelizeUniqueConstraintError') {
-      throw fail('يوجد بطاقة ذاتية بنفس الرقم الوطني أو user_id', 409, 'CONFLICT')
+      throw fail(
+        'قد تم إنشاء بطاقة ذاتية بنفس الحقل الفريد (user_id / الرقم الوطني / الرقم الذاتي / الرقم التأميني)',
+        409,
+        'CONFLICT'
+      )
     }
     throw err
   }

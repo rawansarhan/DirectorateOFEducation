@@ -95,7 +95,8 @@ async function loadAuthStageByProcessCode (processCode) {
 
   return {
     stage,
-    configJson: stageConfig.config_json
+    configJson: stageConfig.config_json,
+    processDefinitionId: process.id
   }
 }
 

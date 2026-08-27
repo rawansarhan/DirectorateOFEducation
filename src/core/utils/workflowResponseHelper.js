@@ -206,6 +206,14 @@ function enrichWorkflowError (error = {}) {
     }
   }
 
+  if (error.code === 'CONFLICT') {
+    return {
+      message: error.message || 'تعارض في البيانات',
+      code: 'CONFLICT',
+      status: HTTP_STATUS.CONFLICT
+    }
+  }
+
   if (error.code && CONFLICT_ERROR_MESSAGES[error.code]) {
     return {
       message: CONFLICT_ERROR_MESSAGES[error.code],
@@ -311,7 +319,9 @@ function sendWorkflowError (res, error, defaultStatus = HTTP_STATUS.BAD_REQUEST)
   return ApiResponder.error(res, {
     message,
     statusCode,
-    data: error?.details && typeof error.details === 'object' ? error.details : null,
+    data:
+      (error?.data && typeof error.data === 'object' ? error.data : null) ||
+      (error?.details && typeof error.details === 'object' ? error.details : null),
     error: errorCode
   })
 }
