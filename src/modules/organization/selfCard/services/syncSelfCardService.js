@@ -227,9 +227,17 @@ async function createProfileHeaderFromMapped (mapped) {
   try {
     return await createSelfCard(mapped)
   } catch (err) {
+    if (err?.code === 'CONFLICT') {
+      throw createSyncError(
+        err.message,
+        'CONFLICT',
+        err.statusCode || 409
+      )
+    }
+
     if (err?.name === 'SequelizeUniqueConstraintError') {
       throw createSyncError(
-        'يوجد بطاقة ذاتية بنفس الرقم الوطني أو user_id',
+        'قد تم إنشاء بطاقة ذاتية بنفس الحقل الفريد (user_id / الرقم الوطني / الرقم الذاتي / الرقم التأميني)',
         'CONFLICT',
         409
       )

@@ -20,6 +20,9 @@ const {
   buildAutoCompleteAuthPayload,
   logStep
 } = require('./completeTaskHelpers')
+const {
+  assertUpcomingSelfCardCreateUniqueness
+} = require('../../../services/selfCardCreatePreValidation')
 
 async function resolveDecisionAndValidateComplete ({
   payload,
@@ -31,7 +34,8 @@ async function resolveDecisionAndValidateComplete ({
   isAutoComplete = false,
   requireSignature = false,
   idempotencyKey = null,
-  acquireOperationGuard = null
+  acquireOperationGuard = null,
+  processDefinitionId = null
 }) {
   logStep('PHASE_6_RESOLVE_DECISION')
 
@@ -115,6 +119,32 @@ async function resolveDecisionAndValidateComplete ({
     const error = new Error(assignmentsValidationError)
     error.code = 'VALIDATION_ERROR'
     throw error
+  }
+
+  // قبل قبول الإكمال: إن كانت العملية تنشئ بطاقة ذاتية، امنع التكرار
+  if (!isReject) {
+    const resolvedProcessDefinitionId =
+      processDefinitionId ||
+      transaction?.process_instance?.process_definition_id ||
+      null
+
+    if (resolvedProcessDefinitionId) {
+      try {
+        await assertUpcomingSelfCardCreateUniqueness({
+          processDefinitionId: resolvedProcessDefinitionId,
+          formPayload: normalizedPayload
+        })
+      } catch (conflictErr) {
+        if (conflictErr?.code === 'CONFLICT') {
+          const error = new Error(conflictErr.message)
+          error.code = 'CONFLICT'
+          error.statusCode = 409
+          error.data = conflictErr.data || null
+          throw error
+        }
+        throw conflictErr
+      }
+    }
   }
 
   let overrideTarget = null

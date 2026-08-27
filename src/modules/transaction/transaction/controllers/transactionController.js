@@ -36,7 +36,9 @@ function handleTransactionError (res, err) {
 
   let data = null
 
-  if (Array.isArray(err.details) && err.details.length) {
+  if (err.data && typeof err.data === 'object') {
+    data = err.data
+  } else if (Array.isArray(err.details) && err.details.length) {
     data = {
       details: err.details,
       ...(err.validation || {})
