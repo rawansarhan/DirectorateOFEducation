@@ -138,7 +138,6 @@ router.get(
 router.get(
   '/permissions/user/:userId',
   authMiddleware,
-  authorize('PERMISSION_MANAGE'),
   getUserPermissionsController
 )
 
