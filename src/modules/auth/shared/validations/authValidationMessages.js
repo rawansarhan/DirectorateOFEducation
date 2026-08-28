@@ -29,6 +29,18 @@ const passwordMessages = {
   'any.required': 'كلمة المرور مطلوبة'
 }
 
+const STRONG_PASSWORD_MIN_LENGTH = 8
+const STRONG_PASSWORD_PATTERN = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/
+
+const strongPasswordMessages = {
+  'string.base': 'كلمة المرور يجب أن تكون نصاً',
+  'string.empty': 'كلمة المرور مطلوبة',
+  'string.min': 'كلمة المرور يجب أن تكون 8 أحرف على الأقل',
+  'string.pattern.base':
+    'كلمة المرور يجب أن تحتوي على أحرف وأرقام ورموز (مثل !@#$%)',
+  'any.required': 'كلمة المرور مطلوبة'
+}
+
 const idMessages = (label) => ({
   'number.base': `${label} يجب أن يكون رقماً`,
   'number.integer': `${label} يجب أن يكون رقماً صحيحاً`,
@@ -60,6 +72,9 @@ module.exports = {
   emailMessages,
   phoneMessages,
   passwordMessages,
+  STRONG_PASSWORD_MIN_LENGTH,
+  STRONG_PASSWORD_PATTERN,
+  strongPasswordMessages,
   idMessages,
   ARABIC_NAME_PATTERN,
   personNameMessages,

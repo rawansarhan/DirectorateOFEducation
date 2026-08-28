@@ -9,6 +9,9 @@ const {
   emailMessages,
   phoneMessages,
   passwordMessages,
+  STRONG_PASSWORD_MIN_LENGTH,
+  STRONG_PASSWORD_PATTERN,
+  strongPasswordMessages,
   idMessages,
   ARABIC_NAME_PATTERN,
   personNameMessages,
@@ -76,9 +79,10 @@ function validateRegisterEmp (data) {
       .messages(phoneMessages),
 
     password: Joi.string()
-      .min(6)
+      .min(STRONG_PASSWORD_MIN_LENGTH)
+      .pattern(STRONG_PASSWORD_PATTERN)
       .required()
-      .messages(passwordMessages),
+      .messages(strongPasswordMessages),
 
     pin: Joi.string()
       .length(6)

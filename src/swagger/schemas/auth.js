@@ -123,9 +123,10 @@ module.exports = {
       },
       "password": {
         "type": "string",
-        "minLength": 6,
-        "example": "Test123",
-        "description": "كلمة مرور الموظف — مطلوبة لتسجيل الدخول (الخطوة 1)"
+        "minLength": 8,
+        "pattern": "^(?=.*[A-Za-z])(?=.*\\d)(?=.*[^A-Za-z0-9]).+$",
+        "example": "Test123!",
+        "description": "كلمة مرور الموظف — 8 أحرف على الأقل، وتتضمن أحرفاً وأرقاماً ورموزاً"
       },
       "pin": {
         "type": "string",

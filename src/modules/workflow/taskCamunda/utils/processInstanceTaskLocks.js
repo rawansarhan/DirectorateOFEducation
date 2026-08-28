@@ -79,6 +79,28 @@ function hasAnyActiveTaskLock (instance, now = new Date()) {
   )
 }
 
+function resolveActiveLockUserId (instance, now = new Date()) {
+  const locks = normalizeTaskLocks(instance?.task_locks)
+
+  for (const entry of Object.values(locks)) {
+    if (entry?.user_id && !isTaskLockExpired(entry, now)) {
+      return Number(entry.user_id)
+    }
+  }
+
+  if (
+    instance?.task_lock_user_id &&
+    !isTaskLockExpired(
+      { expires_at: instance.task_lock_expires_at },
+      now
+    )
+  ) {
+    return Number(instance.task_lock_user_id)
+  }
+
+  return null
+}
+
 function buildTaskLocksPayload (instance, taskId, userId, now = new Date()) {
   const locks = {
     ...normalizeTaskLocks(instance?.task_locks)
@@ -135,6 +157,7 @@ module.exports = {
   isTaskLockedByOther,
   isTaskLockedByUser,
   hasAnyActiveTaskLock,
+  resolveActiveLockUserId,
   buildTaskLocksPayload,
   removeTaskLockEntry,
   clearAllTaskLocksPayload,
