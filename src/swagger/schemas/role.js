@@ -77,25 +77,31 @@ module.exports = {
   },
   "RoleCreate": {
     "type": "object",
+    "description": "إمّا role_id لربط دور موجود، أو name و code معاً لتعريف دور جديد — لا يجوز إرسال الاثنين.",
     "required": [
-      "name",
-      "code",
       "organization_id",
       "department_id"
     ],
     "properties": {
+      "role_id": {
+        "type": "integer",
+        "example": 3,
+        "description": "معرّف دور موجود في جدول roles. يُرسَل بدل name و code."
+      },
       "name": {
         "type": "string",
         "example": "مدير دائرة",
         "minLength": 2,
-        "maxLength": 100
+        "maxLength": 100,
+        "description": "اسم الدور الجديد — يُرسَل مع code فقط عند تعريف دور غير موجود."
       },
       "code": {
         "type": "string",
         "example": "DEPARTMENT_DIRECTOR",
         "minLength": 2,
         "maxLength": 100,
-        "pattern": "^[A-Z0-9_]+$"
+        "pattern": "^[A-Z0-9_]+$",
+        "description": "كود الدور الجديد — فريد؛ تكراره يُرجع 409."
       },
       "organization_id": {
         "type": "integer",
@@ -184,6 +190,50 @@ module.exports = {
           "id": {
             "type": "integer",
             "example": 1
+          }
+        }
+      }
+    }
+  },
+  "RoleCatalogEnvelope": {
+    "type": "object",
+    "description": "استجابة GET /api/role/catalog — كل الأدوار المعرّفة في جدول roles",
+    "required": [
+      "success",
+      "status_code",
+      "message",
+      "data"
+    ],
+    "properties": {
+      "success": {
+        "type": "boolean",
+        "example": true
+      },
+      "status_code": {
+        "type": "integer",
+        "example": 200
+      },
+      "message": {
+        "type": "string",
+        "example": "تم جلب البيانات بنجاح"
+      },
+      "data": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "integer",
+              "example": 2
+            },
+            "name": {
+              "type": "string",
+              "example": "مدير المحاسبة"
+            },
+            "code": {
+              "type": "string",
+              "example": "ACCOUNTING_MANAGER"
+            }
           }
         }
       }

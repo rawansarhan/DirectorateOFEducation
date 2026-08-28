@@ -17,7 +17,8 @@ const {
   toUpdatePayload,
   toDTO,
   toDTOList,
-  toByDepartmentDTOList
+  toByDepartmentDTOList,
+  toCatalogDTOList
 } = require('../mappers/roleMapper')
 const {
   getOrLoad,
@@ -35,7 +36,9 @@ const { API_CACHE_TTL_SECONDS } = require('../../../../core/config/env')
 const { retryWithBackoff } = require('../../../../core/utils/retryWithBackoff')
 
 function formatValidationError (error) {
-  return error.details.map(d => d.message).join(' | ')
+  // نفس القاعدة قد تُطلق على أكثر من زوج حقول (مثل oxor على role_id/name
+  // و role_id/code)، فنعرض كل رسالة مرة واحدة.
+  return [...new Set(error.details.map(d => d.message))].join(' | ')
 }
 
 async function invalidateDepartmentRoleCaches (departmentId, { includeOverview = true } = {}) {
@@ -110,10 +113,33 @@ async function createRoleService (data, auditContext = {}) {
     }
   }
 
+  // وضع «دور موجود»: نتحقق منه هنا لنُرجع 404 واضحاً قبل فتح المعاملة.
+  let existingRole = null
+  if (input.usesExistingRole) {
+    existingRole = await roleRepository.findById(input.role_id)
+    if (!existingRole) {
+      const err = new Error('الدور غير موجود')
+      err.statusCode = 404
+      throw err
+    }
+  }
+
   const result = await sequelize.transaction(async (t) => {
-    let role = await roleRepository.findByCode(input.code, { transaction: t })
+    let role = existingRole
 
     if (!role) {
+      // وضع «دور جديد»: الكود مفتاح فريد، فوجوده يعني أن الدور معرّف سلفاً
+      // ويجب اختياره من القائمة بدل إعادة تعريفه باسم مختلف.
+      const clash = await roleRepository.findByCode(input.code, { transaction: t })
+
+      if (clash) {
+        const err = new Error(
+          `الكود «${input.code}» مستخدم مسبقاً للدور «${clash.name}» — اختره من قائمة الأدوار الموجودة`
+        )
+        err.statusCode = 409
+        throw err
+      }
+
       role = await roleRepository.create(
         {
           name: input.name,
@@ -398,6 +424,16 @@ async function getAllRolesService (organizationId) {
   return toDTOList(rows)
 }
 
+// ================= GET ROLE CATALOG =================
+/**
+ * كل الأدوار المعرّفة في `roles`، بلا ارتباط بمؤسسة أو قسم — مصدر قائمة
+ * اختيار الدور عند إنشاء سجل ربط جديد.
+ */
+async function getRoleCatalogService () {
+  const rows = await roleRepository.findAllRoles()
+  return toCatalogDTOList(rows)
+}
+
 // ================= GET BY ID =================
 async function getRoleByIdService (id) {
   const orgDeptRoleId = parseInt(id, 10)
@@ -472,6 +508,7 @@ module.exports = {
   updateRoleService,
   deleteRoleService,
   getAllRolesService,
+  getRoleCatalogService,
   getRoleByIdService,
   getRolesByDepartmentService,
   toggleRoleStatusService

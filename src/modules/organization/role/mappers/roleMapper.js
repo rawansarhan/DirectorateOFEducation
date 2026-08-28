@@ -4,6 +4,7 @@ const { RoleInputDTO } = require('../dto/RoleInputDTO')
 const { RoleUpdateInputDTO } = require('../dto/RoleUpdateInputDTO')
 const { OrgDeptRoleOutputDTO } = require('../dto/OrgDeptRoleOutputDTO')
 const { RoleByDepartmentOutputDTO } = require('../dto/RoleByDepartmentOutputDTO')
+const { RoleCatalogOutputDTO } = require('../dto/RoleCatalogOutputDTO')
 
 function toCreateInput (data) {
   return new RoleInputDTO(data)
@@ -38,6 +39,14 @@ function toByDepartmentDTOList (rows = []) {
   return rows.map(row => toByDepartmentDTO(row))
 }
 
+function toCatalogDTO (row) {
+  return new RoleCatalogOutputDTO(row)
+}
+
+function toCatalogDTOList (rows = []) {
+  return rows.map(row => toCatalogDTO(row))
+}
+
 module.exports = {
   toCreateInput,
   toUpdateInput,
@@ -45,5 +54,7 @@ module.exports = {
   toDTO,
   toDTOList,
   toByDepartmentDTO,
-  toByDepartmentDTOList
+  toByDepartmentDTOList,
+  toCatalogDTO,
+  toCatalogDTOList
 }

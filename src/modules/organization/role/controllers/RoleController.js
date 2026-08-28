@@ -6,6 +6,7 @@ const {
   updateRoleService,
   deleteRoleService,
   getAllRolesService,
+  getRoleCatalogService,
   getRoleByIdService,
   getRolesByDepartmentService,
   toggleRoleStatusService
@@ -67,6 +68,16 @@ const getAllRoles = asyncHandler(async (req, res) => {
   }
 })
 
+// ================= GET ROLE CATALOG =================
+const getRoleCatalog = asyncHandler(async (req, res) => {
+  try {
+    const result = await getRoleCatalogService()
+    return ApiResponder.okResponse(res, result, 'تم جلب البيانات بنجاح')
+  } catch (err) {
+    return ApiResponder.error(res, { message: err.message, statusCode: err.statusCode || 400 })
+  }
+})
+
 // ================= GET BY ID =================
 const getRoleById = asyncHandler(async (req, res) => {
   try {
@@ -92,6 +103,7 @@ module.exports = {
   updateRole,
   deleteRole,
   getAllRoles,
+  getRoleCatalog,
   getRoleById,
   getRolesByDepartment,
   toggleRoleStatus

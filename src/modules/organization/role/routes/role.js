@@ -6,6 +6,7 @@ const {
   updateRole,
   deleteRole,
   getAllRoles,
+  getRoleCatalog,
   getRoleById,
   getRolesByDepartment,
   toggleRoleStatus
@@ -333,6 +334,44 @@ router.patch(
   authMiddleware,
   authorize('ORGANIZATIONAL_STRUCTURE_CREATE'),
   toggleRoleStatus
+)
+
+/**
+ * @swagger
+ * /api/role/catalog:
+ *   get:
+ *     summary: جلب كل الأدوار المعرّفة في النظام (جدول roles)
+ *     description: |
+ *       يعيد كل صفوف جدول `roles` مجرّدة عن أي ربط بمؤسسة أو قسم.
+ *       يُستخدم لملء قائمة اختيار الدور عند إنشاء سجل ربط جديد، حتى لا
+ *       يُعاد تعريف دور موجود مسبقاً بكود مكرّر.
+ *     tags: [Role]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: قائمة الأدوار
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/RoleCatalogEnvelope'
+ *             example:
+ *               success: true
+ *               status_code: 200
+ *               message: تم جلب البيانات بنجاح
+ *               data:
+ *                 - id: 2
+ *                   name: مدير المحاسبة
+ *                   code: ACCOUNTING_MANAGER
+ *                 - id: 4
+ *                   name: موظف معاملات
+ *                   code: TRANSACTION_CLERK
+ */
+router.get(
+  '/catalog',
+  authMiddleware,
+  authorize('ORGANIZATIONAL_STRUCTURE_CREATE'),
+  getRoleCatalog
 )
 
 /**
