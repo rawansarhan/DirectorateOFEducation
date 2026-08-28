@@ -68,7 +68,7 @@ function computeWorkloadPercent ({
 }) {
   const inProgress = inProgressByOdrUser.get(`${orgDeptRoleId}:${userId}`) || 0
   const pendingPool = pendingByOdr.get(orgDeptRoleId) || 0
-  const employeeCount = employeesPerOdr.get(orgDeptRoleId) || 1
+  const employeeCount = Math.max(1, employeesPerOdr.get(orgDeptRoleId) || 1)
 
   let totalInProgress = 0
 
@@ -81,12 +81,13 @@ function computeWorkloadPercent ({
   const pendingShare = pendingPool / employeeCount
   const employeeActive = inProgress + pendingShare
   const totalActive = totalInProgress + pendingPool
+  const activeTotal = Math.round((inProgress + pendingShare) * 10) / 10
 
   if (totalActive <= 0) {
     return {
       in_progress: inProgress,
       pending_pickup: pendingPool,
-      active_total: inProgress + pendingPool,
+      active_total: 0,
       workload_percent: 0
     }
   }
@@ -96,7 +97,7 @@ function computeWorkloadPercent ({
   return {
     in_progress: inProgress,
     pending_pickup: pendingPool,
-    active_total: inProgress + pendingPool,
+    active_total: activeTotal,
     workload_percent: Math.min(100, Math.max(0, workloadPercent))
   }
 }

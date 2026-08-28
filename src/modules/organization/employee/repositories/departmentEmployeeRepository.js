@@ -2,7 +2,9 @@
 
 const { Op } = require('sequelize')
 const db = require('../../../../entities')
-const { isLockExpired } = require('../../../workflow/taskCamunda/utils/employeeTaskStatus')
+const {
+  resolveActiveLockUserId
+} = require('../../../workflow/taskCamunda/utils/processInstanceTaskLocks')
 
 const ASSIGNMENT_INCLUDES = [
   {
@@ -181,7 +183,9 @@ async function getRunningInstancesForStageIds (stageIds = []) {
       'id',
       'current_stage_id',
       'task_lock_user_id',
-      'task_lock_expires_at'
+      'task_lock_task_id',
+      'task_lock_expires_at',
+      'task_locks'
     ],
     include: [
       {
@@ -227,13 +231,10 @@ function aggregateActiveTasks ({
       continue
     }
 
-    const lockUserId = instance.task_lock_user_id
-    const hasValidLock =
-      lockUserId &&
-      !isLockExpired(instance, now)
+    const lockUserId = resolveActiveLockUserId(instance, now)
 
     for (const odrId of odrIds) {
-      if (hasValidLock) {
+      if (lockUserId) {
         const key = `${odrId}:${lockUserId}`
         inProgressByOdrUser.set(key, (inProgressByOdrUser.get(key) || 0) + 1)
       } else {
@@ -268,11 +269,20 @@ async function countEmployeesByOrgDeptRoleIds (orgDeptRoleIds = []) {
         [Op.in]: orgDeptRoleIds
       }
     },
+    include: [
+      {
+        model: db.User,
+        as: 'user',
+        required: true,
+        where: { is_active: true },
+        attributes: []
+      }
+    ],
     attributes: [
       'organization_department_roles_id',
-      [db.sequelize.fn('COUNT', db.sequelize.col('id')), 'employee_count']
+      [db.sequelize.fn('COUNT', db.sequelize.col('UserRoleAssignment.id')), 'employee_count']
     ],
-    group: ['organization_department_roles_id'],
+    group: ['UserRoleAssignment.organization_department_roles_id'],
     raw: true
   })
 

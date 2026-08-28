@@ -357,29 +357,11 @@ async function userHasDepartmentsAccess (userId, departmentIds = []) {
     return { allowed: false, accessibleIds: [], deniedIds: departmentIds }
   }
 
-  const roleIds = await getUserRoleIds(userId)
+  const { getAccessibleDepartmentIdsForUser } = require(
+    '../../../organization/department/services/userAccessibleDepartmentsService'
+  )
 
-  if (!roleIds.length) {
-    return { allowed: false, accessibleIds: [], deniedIds: departmentIds }
-  }
-
-  const rows = await db.OrgDeptRole.findAll({
-    where: {
-      id: {
-        [Op.in]: roleIds
-      },
-      department_id: {
-        [Op.in]: departmentIds
-      },
-      is_active: true
-    },
-    attributes: ['department_id'],
-    raw: true
-  })
-
-  const accessibleIds = [
-    ...new Set(rows.map(row => Number(row.department_id)))
-  ]
+  const accessibleIds = await getAccessibleDepartmentIdsForUser(userId)
 
   const deniedIds = departmentIds.filter(
     id => !accessibleIds.includes(id)
@@ -396,7 +378,7 @@ async function userHasDepartmentsAccess (userId, departmentIds = []) {
 
     return {
       allowed: false,
-      accessibleIds,
+      accessibleIds: departmentIds.filter(id => accessibleIds.includes(id)),
       deniedIds,
       hint:
         mistakenOrgDeptRoles > 0
@@ -407,7 +389,7 @@ async function userHasDepartmentsAccess (userId, departmentIds = []) {
 
   return {
     allowed: true,
-    accessibleIds,
+    accessibleIds: departmentIds,
     deniedIds: []
   }
 }

@@ -16,7 +16,7 @@ const ROLE_CODE = 'TECHNICAL_OFFICER'
 const CAMUNDA_GROUP_KEY = 'TECHNICAL_OFFICER'
 const EMAIL = 'sarhrawan@gmail.com'
 const PHONE = '0984545282'
-const PASSWORD = 'Test123'
+const PASSWORD = 'Test123!'
 const USER_NAME = 'technical_officer'
 
 module.exports = {

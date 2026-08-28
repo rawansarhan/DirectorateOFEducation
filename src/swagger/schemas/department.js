@@ -450,12 +450,12 @@ module.exports = {
           "pending_pickup": {
             "type": "integer",
             "example": 6,
-            "description": "مهام بانتظار الالتقاط في الدائرة"
+            "description": "معاملات بانتظار الاستلام ضمن OrgDepRole (مجموع الدائرة — نفس الرقم لكل موظفي نفس الدور)"
           },
           "active_total": {
-            "type": "integer",
-            "example": 8,
-            "description": "in_progress + pending_pickup للموظف"
+            "type": "number",
+            "example": 4,
+            "description": "عبء الموظف التقديري = in_progress + (pending_pickup ÷ عدد الموظفين النشطين في OrgDepRole)"
           },
           "completed": {
             "type": "integer",
@@ -574,10 +574,10 @@ module.exports = {
             "tasks": {
               "in_progress": 2,
               "pending_pickup": 6,
-              "active_total": 8,
+              "active_total": 4,
               "completed": 34
             },
-            "workload_percent": 45,
+            "workload_percent": 44,
             "status": "active",
             "status_label": "نشط"
           },
@@ -601,13 +601,13 @@ module.exports = {
             },
             "tasks": {
               "in_progress": 0,
-              "pending_pickup": 0,
-              "active_total": 0,
+              "pending_pickup": 6,
+              "active_total": 2,
               "completed": 12
             },
-            "workload_percent": 0,
-            "status": "inactive",
-            "status_label": "غير نشط"
+            "workload_percent": 22,
+            "status": "active",
+            "status_label": "نشط"
           },
           {
             "assignment_id": 115,
