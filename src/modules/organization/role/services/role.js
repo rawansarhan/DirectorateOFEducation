@@ -124,6 +124,15 @@ async function createRoleService (data, auditContext = {}) {
     }
   }
 
+  // أدوار النظام مخفيّة من قائمة الاختيار، لكن الإخفاء في الواجهة ليس حماية:
+  // نمنعها هنا أيضاً سواء وصلت بـ role_id أو بكودها في وضع «دور جديد».
+  const requestedCode = existingRole ? existingRole.code : input.code
+  if (roleRepository.INTERNAL_ROLE_CODES.includes(requestedCode)) {
+    const err = new Error('هذا دور نظام ولا يمكن إسناده إلى قسم')
+    err.statusCode = 400
+    throw err
+  }
+
   const result = await sequelize.transaction(async (t) => {
     let role = existingRole
 
