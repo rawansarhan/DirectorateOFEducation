@@ -143,8 +143,10 @@ router.get(
  *     summary: موظفو دوائر/شعب (واحدة أو أكثر) مع عبء العمل
  *     description: |
  *       يعيد صفاً لكل تعيين موظف في دائرة (organization_department_role) مع:
- *       بيانات الهوية، اسم الدائرة والدور، عدد المهام النشطة (in_progress / pending_pickup)،
- *       عدد المراحل المكتملة، نسبة عبء العمل وحالة النشاط.
+ *       - `tasks.in_progress`: معاملات **مقفولة/مستلمة** من هذا الموظف على مراحل OrgDepRole
+ *       - `tasks.pending_pickup`: معاملات **بانتظار الاستلام** ضمن نفس OrgDepRole (مجموع الدائرة)
+ *       - `tasks.active_total`: عبء الموظف التقديري = in_progress + (pending_pickup ÷ عدد الموظفين النشطين)
+ *       - `workload_percent`: نسبة عبء الموظف من إجمالي العبء النشط في OrgDepRole
  *
  *       **حالات عبء العمل:**
  *       - `inactive` (غير نشط): 0%

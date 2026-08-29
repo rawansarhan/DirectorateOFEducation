@@ -191,8 +191,8 @@ function decodeCursor (rawValue) {
       }
     }
 
-    // id-only ASC (employee search / org-dept-role search)
-    if (kind === 'emp' || kind === 'odr') {
+    // id-only ASC (employee search / org-dept-role search / process stats)
+    if (kind === 'emp' || kind === 'odr' || kind === 'process_stats') {
       if (!Number.isFinite(id)) {
         throw new Error(`invalid ${kind} cursor fields`)
       }
