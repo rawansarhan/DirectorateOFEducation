@@ -529,7 +529,7 @@ router.get(
  *               data: null
  */
 router.get(
-  'admin/by-org-dept-role',
+  '/admin/by-org-dept-role',
   authMiddleware,
   authorize('ORGANIZATIONAL_STRUCTURE_CREATE'),
   getUsersByOrgRoleDept
@@ -556,7 +556,7 @@ router.get(
  *         description: الموظف غير موجود
  */
 router.get(
-  'admin/:id',
+  '/admin/:id',
   authMiddleware,
   authorize('ORGANIZATIONAL_STRUCTURE_CREATE'),
   getEmployeeById
@@ -675,7 +675,7 @@ router.get(
  *         description: تعارض في حقل فريد (بريد/اسم مستخدم/رقم وطني)
  */
 router.put(
-  'admin/:id',
+  '/admin/:id',
   authMiddleware,
   authorize('ORGANIZATIONAL_STRUCTURE_CREATE'),
   updateEmployee
